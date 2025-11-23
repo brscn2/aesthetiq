@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Playfair_Display } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { Toaster } from "sonner"
+import { Providers } from "./providers"
 import "./globals.css"
 
 // <CHANGE> Using Inter for UI and Playfair Display for elegant headings
@@ -46,7 +48,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`}>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
+        <Toaster position="top-right" theme="dark" />
         <Analytics />
       </body>
     </html>
