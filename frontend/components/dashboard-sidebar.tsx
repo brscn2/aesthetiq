@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils"
 const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "My Color Analysis", href: "/color-analysis", icon: Palette },
-  { name: "Virtual Wardrobe", href: "/wardrobe", icon: Shirt },
-  { name: "Style Profile", href: "/profile", icon: User },
+  { name: "Virtual Wardrobe", href: "/virtual-wardrobe", icon: Shirt },
+  { name: "Style Profile", href: "/style-profile", icon: User },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
