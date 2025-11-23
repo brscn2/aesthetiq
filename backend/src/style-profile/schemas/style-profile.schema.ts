@@ -1,0 +1,46 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
+
+export type StyleProfileDocument = StyleProfile & Document;
+
+@Schema({ timestamps: true })
+export class StyleProfile {
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
+  userId: Types.ObjectId;
+
+  @Prop({ required: true })
+  archetype: string;
+
+  @Prop({
+    type: Map,
+    of: Number,
+    default: {},
+  })
+  sliders: Map<string, number>;
+
+  @Prop({ type: [String], default: [] })
+  inspirationImageUrls: string[];
+
+  @Prop({ type: [String], default: [] })
+  negativeConstraints: string[];
+
+  @Prop({
+    type: {
+      top: { type: String },
+      bottom: { type: String },
+      shoe: { type: String },
+    },
+    default: {},
+  })
+  sizes: {
+    top?: string;
+    bottom?: string;
+    shoe?: string;
+  };
+}
+
+export const StyleProfileSchema = SchemaFactory.createForClass(StyleProfile);
+
+// Create index for efficient queries
+StyleProfileSchema.index({ userId: 1 });
+

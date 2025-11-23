@@ -1,0 +1,48 @@
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
+
+export type WardrobeItemDocument = WardrobeItem & Document;
+
+export enum Category {
+  TOP = 'TOP',
+  BOTTOM = 'BOTTOM',
+  SHOE = 'SHOE',
+  ACCESSORY = 'ACCESSORY',
+}
+
+@Schema({ timestamps: true })
+export class WardrobeItem {
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
+
+  @Prop({ required: true })
+  imageUrl: string;
+
+  @Prop()
+  processedImageUrl?: string;
+
+  @Prop({ enum: Category, required: true })
+  category: Category;
+
+  @Prop()
+  subCategory?: string;
+
+  @Prop()
+  brand?: string;
+
+  @Prop()
+  colorHex?: string;
+
+  @Prop({ default: false })
+  isFavorite: boolean;
+
+  @Prop()
+  lastWorn?: Date;
+}
+
+export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
+
+// Create indexes for efficient queries
+WardrobeItemSchema.index({ userId: 1, category: 1 });
+WardrobeItemSchema.index({ userId: 1, colorHex: 1 });
+
