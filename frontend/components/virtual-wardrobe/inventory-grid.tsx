@@ -1,7 +1,13 @@
+"use client"
+
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { wardrobeApi } from "@/lib/api"
+import { Category, WardrobeItem } from "@/types/api"
+import { formatDistanceToNow } from "date-fns"
 
 interface ClothingItem {
   id: string
@@ -12,91 +18,22 @@ interface ClothingItem {
   isProcessing?: boolean
 }
 
-const tops: ClothingItem[] = [
-  {
-    id: "1",
-    image: "/white-silk-blouse-flat-lay-minimal.jpg",
-    brand: "Totême",
-    lastWorn: "2 days ago",
-  },
-  {
-    id: "2",
-    image: "/black-turtleneck-sweater-luxury.jpg",
-    brand: "The Row",
-    lastWorn: "1 week ago",
-  },
-  {
-    id: "3",
-    image: "/oversized-beige-blazer-minimalist.jpg",
-    brand: "Frankie Shop",
-    lastWorn: "Yesterday",
-  },
-  {
-    id: "4",
-    image: "/striped-button-down-shirt.jpg",
-    brand: "Zara",
-    lastWorn: "3 weeks ago",
-    isProcessing: true,
-  },
-]
+// Temporary userId - in production, get from auth context
+const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
 
-const bottoms: ClothingItem[] = [
-  {
-    id: "5",
-    image: "/black-tailored-trousers-flat-lay.jpg",
-    brand: "COS",
-    lastWorn: "4 days ago",
-  },
-  {
-    id: "6",
-    image: "/vintage-blue-jeans-levis.jpg",
-    brand: "Levi's",
-    lastWorn: "2 weeks ago",
-  },
-  {
-    id: "7",
-    image: "/silk-midi-skirt-champagne.jpg",
-    brand: "Anine Bing",
-    lastWorn: "1 month ago",
-    isNew: true,
-  },
-]
+function ItemCard({ item }: { item: WardrobeItem }) {
+  const lastWornText = item.lastWorn
+    ? formatDistanceToNow(new Date(item.lastWorn), { addSuffix: true })
+    : "Never"
 
-const footwear: ClothingItem[] = [
-  {
-    id: "8",
-    image: "/minimalist-white-sneakers.jpg",
-    brand: "Common Projects",
-    lastWorn: "Yesterday",
-  },
-  {
-    id: "9",
-    image: "/black-leather-boots.png",
-    brand: "Acne Studios",
-    lastWorn: "5 days ago",
-  },
-]
-
-function ItemCard({ item }: { item: ClothingItem }) {
   return (
     <Card className="group relative overflow-hidden border-white/5 bg-white/5 transition-all hover:border-purple-500/30 hover:bg-white/10">
       <CardContent className="p-4">
-        {item.isNew && (
-          <Badge className="absolute right-3 top-3 z-10 bg-purple-500 text-[10px] text-white hover:bg-purple-600">
-            NEW
-          </Badge>
-        )}
-        {item.isProcessing && (
-          <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
-            <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
-            Scanning
-          </div>
-        )}
         <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-[#1a1a1a]">
           <div className="absolute inset-0 flex items-center justify-center p-4 opacity-90 transition-transform duration-500 group-hover:scale-105">
             <Image
-              src={item.image || "/placeholder.svg"}
-              alt={item.brand}
+              src={item.processedImageUrl || item.imageUrl || "/placeholder.svg"}
+              alt={item.brand || "Clothing item"}
               width={200}
               height={200}
               className="h-full w-full object-contain mix-blend-screen"
@@ -104,43 +41,131 @@ function ItemCard({ item }: { item: ClothingItem }) {
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <span className="font-serif text-sm font-medium text-white">{item.brand}</span>
-          <span className="text-[10px] text-muted-foreground">{item.lastWorn}</span>
+          <span className="font-serif text-sm font-medium text-white">
+            {item.brand || "Unknown Brand"}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{lastWornText}</span>
         </div>
       </CardContent>
     </Card>
   )
 }
 
+function LoadingSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {[...Array(5)].map((_, i) => (
+        <Card key={i} className="border-white/5 bg-white/5">
+          <CardContent className="p-4">
+            <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-[#1a1a1a]">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+              </div>
+            </div>
+            <div className="h-4 w-20 rounded bg-white/10" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export function InventoryGrid() {
+  const { data: wardrobeItems, isLoading, error } = useQuery({
+    queryKey: ["wardrobe", TEMP_USER_ID],
+    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="space-y-10 pb-10">
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">Loading...</h2>
+          <LoadingSkeleton />
+        </section>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-10 pb-10">
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">
+            Error loading wardrobe
+          </h2>
+          <p className="text-muted-foreground">
+            {error instanceof Error ? error.message : "Failed to load wardrobe items"}
+          </p>
+        </section>
+      </div>
+    )
+  }
+
+  // Group items by category
+  const tops = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.TOP) || []
+  const bottoms = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.BOTTOM) || []
+  const footwear = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.SHOE) || []
+  const accessories = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.ACCESSORY) || []
+
   return (
     <div className="space-y-10 pb-10">
-      <section>
-        <h2 className="mb-6 font-serif text-2xl font-light text-white">Tops</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {tops.map((item) => (
-            <ItemCard key={item.id} item={item} />
-          ))}
-        </div>
-      </section>
+      {tops.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">Tops</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {tops.map((item: WardrobeItem) => (
+              <ItemCard key={item._id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section>
-        <h2 className="mb-6 font-serif text-2xl font-light text-white">Bottoms</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {bottoms.map((item) => (
-            <ItemCard key={item.id} item={item} />
-          ))}
-        </div>
-      </section>
+      {bottoms.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">Bottoms</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {bottoms.map((item: WardrobeItem) => (
+              <ItemCard key={item._id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section>
-        <h2 className="mb-6 font-serif text-2xl font-light text-white">Footwear</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {footwear.map((item) => (
-            <ItemCard key={item.id} item={item} />
-          ))}
-        </div>
-      </section>
+      {footwear.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">Footwear</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {footwear.map((item: WardrobeItem) => (
+              <ItemCard key={item._id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {accessories.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-white">Accessories</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {accessories.map((item: WardrobeItem) => (
+              <ItemCard key={item._id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {wardrobeItems?.length === 0 && (
+        <section>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="mb-4 font-serif text-xl text-muted-foreground">
+              Your wardrobe is empty
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Add your first item to get started
+            </p>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
