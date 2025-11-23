@@ -44,22 +44,29 @@ export function ArchetypeHero() {
               config={{
                 value: {
                   label: "Score",
-                  color: "hsl(var(--primary))",
+                  color: "var(--chart-1)",
                 },
               }}
               className="h-full w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-                  <PolarGrid stroke="hsl(var(--muted-foreground))" strokeOpacity={0.2} />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                  <PolarGrid stroke="var(--muted-foreground)" strokeOpacity={0.3} />
+                  <PolarAngleAxis
+                    dataKey="subject"
+                    tick={{
+                      fill: "var(--card-foreground)",
+                      fontSize: 12,
+                      fontWeight: 500
+                    }}
+                  />
                   <Radar
                     name="Style Score"
                     dataKey="A"
-                    stroke="hsl(var(--primary))"
+                    stroke="var(--chart-1)"
                     strokeWidth={3}
-                    fill="hsl(var(--primary))"
-                    fillOpacity={0.3}
+                    fill="var(--chart-1)"
+                    fillOpacity={0.25}
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                 </RadarChart>
