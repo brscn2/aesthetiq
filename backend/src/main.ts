@@ -7,12 +7,50 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
-  // Allow frontend URL from environment variable, or allow all origins for testing
+  // Allow localhost for local dev, Vercel deployments, and any additional frontend URLs from env
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://v0-fashion-advisory-dashboard-prdv4qk99-brscn2s-projects.vercel.app',
+    /\.vercel\.app$/, // Allows ANY Vercel app subdomain
+  ];
+
+  // Add FRONTEND_URL from environment if provided
   const frontendUrl = process.env.FRONTEND_URL;
+  if (frontendUrl) {
+    // Check if it's already in the array (as a string)
+    const isAlreadyIncluded = allowedOrigins.some(
+      (origin) => typeof origin === 'string' && origin === frontendUrl
+    );
+    if (!isAlreadyIncluded) {
+      allowedOrigins.push(frontendUrl);
+    }
+  }
+
   app.enableCors({
-    origin: frontendUrl || '*', // Use '*' for testing, set FRONTEND_URL in production
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Check if origin matches any allowed origin
+      for (const allowedOrigin of allowedOrigins) {
+        if (typeof allowedOrigin === 'string') {
+          if (origin === allowedOrigin) {
+            return callback(null, true);
+          }
+        } else if (allowedOrigin instanceof RegExp) {
+          if (allowedOrigin.test(origin)) {
+            return callback(null, true);
+          }
+        }
+      }
+
+      // Origin not allowed
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
