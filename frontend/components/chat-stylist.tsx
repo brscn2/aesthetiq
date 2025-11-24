@@ -54,19 +54,19 @@ export function ChatStylist() {
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex-shrink-0 bg-background p-6">
-        <div className="mb-4">
-          <h2 className="flex items-center gap-2 font-serif text-2xl font-bold text-foreground">
-            <Sparkles className="h-6 w-6 text-primary" />
+      <div className="flex-shrink-0 bg-background p-4 sm:p-6">
+        <div className="mb-3 sm:mb-4">
+          <h2 className="flex items-center gap-2 font-serif text-xl sm:text-2xl font-bold text-foreground">
+            <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             Your AI Stylist
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
             Ask me anything about fashion, styling, or outfit recommendations
           </p>
         </div>
 
         {/* Context Chips */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {contextChips.map((chip) => (
             <Badge
               key={chip}
@@ -81,7 +81,7 @@ export function ChatStylist() {
 
       {/* Chat Messages */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
           {messages.map((message) => (
             <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" && (
@@ -144,24 +144,24 @@ export function ChatStylist() {
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-border bg-background p-6">
-        <div className="flex gap-2">
+      <div className="flex-shrink-0 border-t border-border bg-background p-3 sm:p-6">
+        <div className="flex gap-1.5 sm:gap-2">
           <div className="relative flex-1">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask your stylist anything..."
-              className="h-12 bg-card pr-12 text-foreground placeholder:text-muted-foreground"
+              className="h-10 sm:h-12 bg-card pr-10 sm:pr-12 text-sm sm:text-base text-foreground placeholder:text-muted-foreground"
             />
           </div>
-          <Button size="icon" variant="outline" className="h-12 w-12 border-border/50 bg-transparent">
-            <ImageIcon className="h-5 w-5" />
+          <Button size="icon" variant="outline" className="h-10 w-10 sm:h-12 sm:w-12 border-border/50 bg-transparent">
+            <ImageIcon className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <Button size="icon" variant="outline" className="h-12 w-12 border-border/50 bg-transparent">
-            <Mic className="h-5 w-5" />
+          <Button size="icon" variant="outline" className="h-10 w-10 sm:h-12 sm:w-12 border-border/50 bg-transparent hidden sm:flex">
+            <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
-          <Button size="icon" className="gradient-ai h-12 w-12 text-white">
-            <Send className="h-5 w-5" />
+          <Button size="icon" className="gradient-ai h-10 w-10 sm:h-12 sm:w-12 text-white">
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
         </div>
       </div>

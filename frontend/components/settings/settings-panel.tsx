@@ -10,30 +10,31 @@ import { AlertTriangle, Sparkles, Eye, History, Share2 } from "lucide-react"
 
 export function SettingsPanel() {
   return (
-    <div className="mx-auto max-w-3xl space-y-8 p-6 lg:p-10">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="font-playfair text-3xl font-medium tracking-tight text-foreground">Account & Privacy</h1>
-        <p className="text-muted-foreground">Manage your subscription, privacy settings, and global preferences.</p>
+      <div className="space-y-1">
+        <h1 className="font-playfair text-2xl sm:text-3xl font-medium tracking-tight text-foreground">Account & Privacy</h1>
+        <p className="text-sm text-muted-foreground">Manage your subscription, privacy settings, and global preferences.</p>
       </div>
 
       {/* Zone A: Membership & Status */}
       <Card className="relative overflow-hidden border-none bg-gradient-to-br from-[#2D1B36] to-[#1A1025]">
         {/* Decorative background glow */}
-        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
+        <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-purple-500/10 blur-3xl" />
 
-        <CardContent className="relative flex flex-col justify-between gap-6 p-8 sm:flex-row sm:items-center">
-          <div className="space-y-2">
+        <CardContent className="relative flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center sm:p-6">
+          <div className="space-y-1">
             <div className="flex items-center gap-2 text-rose-300">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-medium uppercase tracking-wider">Current Plan</span>
+              <Sparkles className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wider">Current Plan</span>
             </div>
-            <h3 className="font-playfair text-3xl text-white">AesthetIQ Pro</h3>
-            <p className="text-purple-200/80">Your next billing date is Nov 24, 2025</p>
+            <h3 className="font-playfair text-xl sm:text-2xl text-white">AesthetIQ Pro</h3>
+            <p className="text-xs sm:text-sm text-purple-200/80">Next billing: Nov 24, 2025</p>
           </div>
           <Button
             variant="outline"
-            className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+            size="sm"
+            className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white w-full sm:w-auto"
           >
             Manage Subscription
           </Button>
@@ -43,72 +44,72 @@ export function SettingsPanel() {
       <Separator />
 
       {/* Zone B: Biometric & Data Privacy */}
-      <section className="space-y-6">
+      <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="font-playfair text-2xl font-medium">Data & Privacy</h2>
-          <p className="text-sm text-muted-foreground">Control how your biometric data and preferences are used.</p>
+          <h2 className="font-playfair text-xl sm:text-2xl font-medium">Data & Privacy</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">Control how your biometric data and preferences are used.</p>
         </div>
 
-        <div className="grid gap-6">
-          <div className="flex items-center justify-between space-x-4 rounded-lg border border-border bg-card/50 p-4">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 rounded-full bg-primary/10 p-2">
-                <Eye className="h-5 w-5 text-primary" />
+        <div className="grid gap-4">
+          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
+                <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-base">Allow Facial Feature Analysis</Label>
-                <p className="text-sm text-muted-foreground">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <Label className="text-sm sm:text-base">Allow Facial Feature Analysis</Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Enables AI to analyze your face shape and skin tone for personalized recommendations.
                 </p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="flex-shrink-0" />
           </div>
 
-          <div className="flex items-center justify-between space-x-4 rounded-lg border border-border bg-card/50 p-4">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 rounded-full bg-primary/10 p-2">
-                <History className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
+                <History className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-base">Store Color Palette History</Label>
-                <p className="text-sm text-muted-foreground">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <Label className="text-sm sm:text-base">Store Color Palette History</Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Keep a record of your seasonal color analysis results over time.
                 </p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="flex-shrink-0" />
           </div>
 
-          <div className="flex items-center justify-between space-x-4 rounded-lg border border-border bg-card/50 p-4">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 rounded-full bg-primary/10 p-2">
-                <Share2 className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
+                <Share2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-base">Contribute to Trend Learning</Label>
-                <p className="text-sm text-muted-foreground">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <Label className="text-sm sm:text-base">Contribute to Trend Learning</Label>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Anonymously share style preferences to help improve trend forecasting.
                 </p>
               </div>
             </div>
-            <Switch />
+            <Switch className="flex-shrink-0" />
           </div>
         </div>
 
         {/* Danger Zone */}
-        <div className="mt-6 rounded-lg border border-red-900/30 bg-red-950/10 p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
+        <div className="mt-4 rounded-lg border border-red-900/30 bg-red-950/10 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1 flex-1">
               <div className="flex items-center gap-2 text-red-400">
                 <AlertTriangle className="h-4 w-4" />
-                <h3 className="font-medium">Delete Biometric Data</h3>
+                <h3 className="text-sm sm:text-base font-medium">Delete Biometric Data</h3>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Permanently remove all facial scans and color analysis data. This action cannot be undone.
               </p>
             </div>
-            <Button variant="ghost" className="text-red-400 hover:bg-red-950/30 hover:text-red-300">
+            <Button variant="ghost" size="sm" className="text-red-400 hover:bg-red-950/30 hover:text-red-300 w-full sm:w-auto">
               Delete All Data
             </Button>
           </div>
@@ -118,13 +119,13 @@ export function SettingsPanel() {
       <Separator />
 
       {/* Zone C: Global Preferences */}
-      <section className="space-y-6">
+      <section className="space-y-4">
         <div className="space-y-1">
-          <h2 className="font-playfair text-2xl font-medium">Global Preferences</h2>
-          <p className="text-sm text-muted-foreground">Customize your regional and measurement settings.</p>
+          <h2 className="font-playfair text-xl sm:text-2xl font-medium">Global Preferences</h2>
+          <p className="text-xs sm:text-sm text-muted-foreground">Customize your regional and measurement settings.</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Measurement Units</Label>
             <Select defaultValue="imperial">
