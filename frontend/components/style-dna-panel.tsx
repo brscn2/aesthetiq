@@ -20,14 +20,7 @@ const styleStats = [
 
 export function StyleDnaPanel() {
   return (
-    <div className="h-full space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-serif text-3xl font-bold text-foreground">Your Style DNA</h2>
-        <Badge variant="outline" className="border-primary/50 text-primary">
-          Analyzed
-        </Badge>
-      </div>
-
+    <div className="h-full space-y-4">
       {/* User Photo Card */}
       <Card className="overflow-hidden border-border/50 bg-card">
         <div className="relative aspect-[4/3] w-full">

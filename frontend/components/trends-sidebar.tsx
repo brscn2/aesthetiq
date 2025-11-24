@@ -55,10 +55,10 @@ const wardrobeItems = [
 
 export function TrendsSidebar() {
   return (
-    <div className="flex h-screen w-80 flex-col border-l border-border bg-card/30 backdrop-blur-sm">
-      <ScrollArea className="flex-1">
+    <div className="flex h-full w-80 flex-col border-l border-border bg-card/30 backdrop-blur-sm">
+      <ScrollArea className="flex-1 min-h-0">
         {/* Trending Now Section */}
-        <div className="p-6">
+        <div className="p-4">
           <div className="mb-4 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             <h3 className="font-semibold text-foreground">Trending Now</h3>
@@ -89,7 +89,7 @@ export function TrendsSidebar() {
         <Separator className="bg-border/50" />
 
         {/* From Your Closet Section */}
-        <div className="p-6">
+        <div className="p-4 pb-6">
           <div className="mb-4 flex items-center gap-2">
             <Heart className="h-5 w-5 text-accent" />
             <h3 className="font-semibold text-foreground">From Your Closet</h3>

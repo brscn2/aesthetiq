@@ -52,36 +52,36 @@ export function ChatStylist() {
   const [input, setInput] = useState("")
 
   return (
-    <div className="flex h-full flex-col bg-background p-6">
+    <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 font-serif text-3xl font-bold text-foreground">
-            <Sparkles className="h-7 w-7 text-primary" />
+      <div className="flex-shrink-0 bg-background p-6">
+        <div className="mb-4">
+          <h2 className="flex items-center gap-2 font-serif text-2xl font-bold text-foreground">
+            <Sparkles className="h-6 w-6 text-primary" />
             Your AI Stylist
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Ask me anything about fashion, styling, or outfit recommendations
           </p>
         </div>
-      </div>
 
-      {/* Context Chips */}
-      <div className="mb-4 flex gap-2">
-        {contextChips.map((chip) => (
-          <Badge
-            key={chip}
-            variant="outline"
-            className="cursor-pointer border-border/50 hover:bg-accent hover:text-accent-foreground"
-          >
-            {chip}
-          </Badge>
-        ))}
+        {/* Context Chips */}
+        <div className="flex flex-wrap gap-2">
+          {contextChips.map((chip) => (
+            <Badge
+              key={chip}
+              variant="outline"
+              className="cursor-pointer border-border/50 hover:bg-accent hover:text-accent-foreground"
+            >
+              {chip}
+            </Badge>
+          ))}
+        </div>
       </div>
 
       {/* Chat Messages */}
-      <ScrollArea className="flex-1 pr-4">
-        <div className="space-y-6">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-6 p-6">
           {messages.map((message) => (
             <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" && (
@@ -144,7 +144,7 @@ export function ChatStylist() {
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="mt-4 space-y-3">
+      <div className="flex-shrink-0 border-t border-border bg-background p-6">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Input
