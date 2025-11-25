@@ -16,7 +16,7 @@ export default function VirtualWardrobePage() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[#121212] text-foreground md:h-screen">
+      <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background text-foreground md:h-screen">
         {/* Control Bar */}
         <WardrobeControlBar
           activeTab={activeTab}
