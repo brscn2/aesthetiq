@@ -12,9 +12,9 @@ const requiresAuth = createRouteMatcher([
   "/settings(.*)",
 ])
 
-export default clerkMiddleware((auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   if (requiresAuth(request) || !isPublicRoute(request)) {
-    auth().protect()
+    await auth.protect()
   }
 })
 
