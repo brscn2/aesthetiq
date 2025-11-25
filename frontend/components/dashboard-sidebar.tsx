@@ -14,11 +14,15 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  onClose?: () => void
+}
+
+export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-screen w-64 flex-col border-r border-border bg-sidebar">
+    <div className="flex h-full w-full flex-col bg-sidebar">
       {/* Logo */}
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
         <h1 className="font-serif text-2xl font-bold tracking-tight text-sidebar-foreground">
@@ -34,6 +38,7 @@ export function DashboardSidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive

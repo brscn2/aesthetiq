@@ -150,19 +150,19 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl border-border bg-background text-foreground sm:rounded-2xl">
+      <DialogContent className="max-w-2xl border-white/10 bg-[#1a1a1a] text-white sm:rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-serif text-2xl font-light">Add New Item</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogTitle className="font-serif text-xl sm:text-2xl font-light">Add New Item</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
             Upload a photo and let our AI analyze the details.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="mt-4 grid gap-8 md:grid-cols-2">
+          <div className="mt-4 grid gap-6 sm:gap-8 md:grid-cols-2">
             {/* Left Column: Image Preview */}
-            <div className="space-y-4">
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed border-white/10 bg-black/20">
                 {imagePreview ? (
                   <>
                     <img
@@ -251,9 +251,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
             </div>
 
             {/* Right Column: Form Fields */}
-            <div className="space-y-5">
-              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 px-3 py-2 text-sm text-purple-600 dark:text-purple-300">
-                <SparklesIcon className="h-4 w-4" />
+            <div className="space-y-4 sm:space-y-5">
+              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-purple-300">
+                <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                 <span>AI Analysis Complete</span>
               </div>
 

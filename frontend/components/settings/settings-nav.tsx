@@ -29,27 +29,26 @@ const navItems = [
 ]
 
 interface SettingsNavProps {
-  activeSection: string
-  onSectionChange: (section: string) => void
+  onClose?: () => void
 }
 
-export function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
+export function SettingsNav({ onClose }: SettingsNavProps) {
   return (
     <div className="flex h-full flex-col space-y-8">
       {/* User Snippet */}
-      <div className="flex flex-col items-center space-y-3 text-center lg:items-start lg:text-left">
+      <div className="flex items-center gap-3 lg:flex-col lg:items-start lg:gap-2">
         <div className="relative">
-          <Avatar className="h-20 w-20 border-2 border-primary/20">
+          <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-primary/20">
             <AvatarImage src="/professional-portrait-photo-fashion.jpg" alt="User" />
             <AvatarFallback>JD</AvatarFallback>
           </Avatar>
-          <div className="absolute -bottom-2 -right-2 flex h-6 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-2 text-[10px] font-bold text-white shadow-lg">
+          <div className="absolute -bottom-1 -right-1 flex h-5 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-1.5 text-[9px] font-bold text-white shadow-lg">
             PRO
           </div>
         </div>
-        <div className="space-y-1">
-          <h2 className="font-playfair text-xl font-semibold tracking-tight text-foreground">Jane Doe</h2>
-          <p className="bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-sm font-medium text-transparent">
+        <div className="space-y-0.5 min-w-0 flex-1">
+          <h2 className="font-playfair text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">Jane Doe</h2>
+          <p className="bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-xs sm:text-sm font-medium text-transparent">
             Pro Member
           </p>
         </div>
@@ -61,15 +60,15 @@ export function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps
           <Button
             key={item.title}
             variant="ghost"
-            onClick={() => onSectionChange(item.title)}
+            onClick={onClose}
             className={cn(
-              "justify-start gap-3 rounded-full px-4 py-6 text-base font-medium transition-all duration-200",
-              activeSection === item.title
+              "justify-start gap-2 sm:gap-3 rounded-full px-3 sm:px-4 py-3 sm:py-4 text-sm sm:text-base font-medium transition-all duration-200",
+              item.isActive
                 ? "bg-accent text-accent-foreground hover:bg-accent/80"
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             )}
           >
-            <item.icon className="h-5 w-5" />
+            <item.icon className="h-4 w-4 sm:h-5 sm:w-5" />
             {item.title}
           </Button>
         ))}

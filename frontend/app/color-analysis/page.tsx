@@ -77,14 +77,14 @@ function SmartUploader({ onUpload }: { onUpload: () => void }) {
           onUpload()
         }}
       >
-        <div className="flex flex-col items-center space-y-6 text-center p-8">
-          <div className="rounded-full bg-primary/10 p-6 shadow-xl shadow-primary/5">
-            <Camera className="h-10 w-10 text-primary" />
+        <div className="flex flex-col items-center space-y-4 sm:space-y-6 text-center p-4 sm:p-8">
+          <div className="rounded-full bg-primary/10 p-4 sm:p-6 shadow-xl shadow-primary/5">
+            <Camera className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-serif text-2xl font-semibold">Upload your photo</h3>
-            <p className="text-muted-foreground max-w-xs mx-auto">
+            <h3 className="font-serif text-xl sm:text-2xl font-semibold">Upload your photo</h3>
+            <p className="text-sm sm:text-base text-muted-foreground max-w-xs mx-auto px-4">
               Drag and drop your image here, or click to browse files.
             </p>
           </div>

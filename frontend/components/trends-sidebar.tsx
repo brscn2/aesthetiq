@@ -55,7 +55,7 @@ const wardrobeItems = [
 
 export function TrendsSidebar() {
   return (
-    <div className="flex h-full w-80 flex-col border-l border-border bg-card/30 backdrop-blur-sm">
+    <div className="flex h-full w-full lg:w-80 flex-col border-l border-border bg-card/30 backdrop-blur-sm">
       <ScrollArea className="flex-1 min-h-0">
         {/* Trending Now Section */}
         <div className="p-4">
