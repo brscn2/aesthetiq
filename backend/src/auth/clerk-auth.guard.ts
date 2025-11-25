@@ -35,21 +35,25 @@ export class ClerkAuthGuard implements CanActivate {
       });
 
       // Check for errors first (discriminated union type)
-      if (result.errors) {
-        throw new UnauthorizedException('Invalid token');
+      if ((result as any).errors) {
+        console.error('Token verification errors:', (result as any).errors);
+        throw new UnauthorizedException(`Invalid token: ${JSON.stringify((result as any).errors)}`);
       }
 
-      // After checking for errors, TypeScript knows data exists
-      // Type assertion needed because JwtPayload type may not be fully inferred
-      const payload = result.data as { sub?: string };
-      if (!payload || !payload.sub) {
+      // Based on the logs, when verification succeeds, the result object itself contains the JWT payload
+      // The payload has properties like 'sub', 'iss', 'exp', etc.
+      // Extract user ID from the payload - Clerk JWT tokens use 'sub' (subject) field for the user ID
+      const userId = (result as any).sub;
+      
+      if (!userId || typeof userId !== 'string') {
+        // Log the payload structure for debugging (remove in production if needed)
+        console.error('Token payload structure:', JSON.stringify(result, null, 2));
         throw new UnauthorizedException('Invalid token: missing user ID');
       }
 
       // Attach the Clerk user ID to the request
-      // The 'sub' field contains the user ID
       request.user = {
-        clerkId: payload.sub,
+        clerkId: userId,
       };
 
       return true;
