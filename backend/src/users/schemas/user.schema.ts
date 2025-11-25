@@ -15,11 +15,11 @@ export enum Units {
 
 @Schema({ timestamps: true })
 export class User {
+  @Prop({ required: true, unique: true, index: true })
+  clerkId: string;
+
   @Prop({ required: true, unique: true, lowercase: true })
   email: string;
-
-  @Prop({ required: true })
-  passwordHash: string;
 
   @Prop({ required: true })
   name: string;

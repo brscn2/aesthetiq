@@ -9,19 +9,25 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { StyleProfileService } from './style-profile.service';
 import { CreateStyleProfileDto } from './dto/create-style-profile.dto';
 import { UpdateStyleProfileDto } from './dto/update-style-profile.dto';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('style-profile')
 @Controller('style-profile')
+@UseGuards(ClerkAuthGuard)
+@ApiBearerAuth()
 export class StyleProfileController {
   constructor(private readonly styleProfileService: StyleProfileService) {}
 
@@ -29,20 +35,25 @@ export class StyleProfileController {
   @ApiOperation({ summary: 'Create a new style profile' })
   @ApiResponse({ status: 201, description: 'Style profile successfully created' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async create(@Body() createStyleProfileDto: CreateStyleProfileDto) {
-    return this.styleProfileService.create(createStyleProfileDto);
+  async create(
+    @Body() createStyleProfileDto: CreateStyleProfileDto,
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    return this.styleProfileService.create({
+      ...createStyleProfileDto,
+      userId: user.clerkId,
+    });
   }
 
-  @Get('user/:userId')
-  @ApiOperation({ summary: 'Get style profile by user ID' })
-  @ApiParam({ name: 'userId', description: 'User ID' })
+  @Get('user')
+  @ApiOperation({ summary: 'Get style profile for the authenticated user' })
   @ApiResponse({ status: 200, description: 'Style profile found' })
   @ApiResponse({ status: 404, description: 'Style profile not found' })
-  async findByUserId(@Param('userId') userId: string) {
-    const profile = await this.styleProfileService.findByUserId(userId);
+  async findByUserId(@CurrentUser() user: { clerkId: string }) {
+    const profile = await this.styleProfileService.findByUserId(user.clerkId);
     if (!profile) {
       throw new NotFoundException(
-        `Style profile for user ${userId} not found`,
+        `Style profile for user ${user.clerkId} not found`,
       );
     }
     return profile;
@@ -69,18 +80,17 @@ export class StyleProfileController {
     return this.styleProfileService.update(id, updateStyleProfileDto);
   }
 
-  @Patch('user/:userId')
-  @ApiOperation({ summary: 'Update a style profile by user ID (upsert)' })
-  @ApiParam({ name: 'userId', description: 'User ID' })
+  @Patch('user')
+  @ApiOperation({ summary: 'Update a style profile for the authenticated user (upsert)' })
   @ApiResponse({
     status: 200,
     description: 'Style profile successfully updated or created',
   })
   async updateByUserId(
-    @Param('userId') userId: string,
+    @CurrentUser() user: { clerkId: string },
     @Body() updateStyleProfileDto: UpdateStyleProfileDto,
   ) {
-    return this.styleProfileService.updateByUserId(userId, updateStyleProfileDto);
+    return this.styleProfileService.updateByUserId(user.clerkId, updateStyleProfileDto);
   }
 
   @Delete(':id')

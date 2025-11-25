@@ -1,9 +1,9 @@
 "use client"
 
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
 import { Home, Palette, Shirt, User, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 const navigation = [
@@ -55,16 +55,26 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
 
       {/* User Section */}
       <div className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src="/placeholder-user.jpg" alt="User" />
-            <AvatarFallback className="bg-primary text-primary-foreground">SC</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <p className="text-sm font-medium text-sidebar-foreground">Sophia Chen</p>
-            <p className="text-xs text-sidebar-foreground/60">Premium Member</p>
+        <SignedIn>
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <p className="text-sm font-medium text-sidebar-foreground">Signed in</p>
+              <p className="text-xs text-sidebar-foreground/60">Manage your profile</p>
+            </div>
+            <UserButton afterSignOutUrl="/" />
           </div>
-        </div>
+        </SignedIn>
+
+        <SignedOut>
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm text-sidebar-foreground/80">Access your personalized wardrobe</p>
+            <SignInButton mode="modal">
+              <button className="rounded-md bg-sidebar-accent px-3 py-2 text-sm font-medium text-sidebar-accent-foreground transition hover:opacity-90">
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
+        </SignedOut>
       </div>
     </div>
   )

@@ -9,20 +9,26 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
 import { CreateChatSessionDto } from './dto/create-chat-session.dto';
 import { UpdateChatSessionDto } from './dto/update-chat-session.dto';
 import { AddMessageDto } from './dto/add-message.dto';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('chat')
 @Controller('chat')
+@UseGuards(ClerkAuthGuard)
+@ApiBearerAuth()
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
@@ -30,16 +36,21 @@ export class ChatController {
   @ApiOperation({ summary: 'Create a new chat session' })
   @ApiResponse({ status: 201, description: 'Chat session successfully created' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async create(@Body() createChatSessionDto: CreateChatSessionDto) {
-    return this.chatService.create(createChatSessionDto);
+  async create(
+    @Body() createChatSessionDto: CreateChatSessionDto,
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    return this.chatService.create({
+      ...createChatSessionDto,
+      userId: user.clerkId,
+    });
   }
 
-  @Get('user/:userId')
-  @ApiOperation({ summary: 'Get all chat sessions for a user' })
-  @ApiParam({ name: 'userId', description: 'User ID' })
+  @Get('user')
+  @ApiOperation({ summary: 'Get all chat sessions for the authenticated user' })
   @ApiResponse({ status: 200, description: 'List of chat sessions' })
-  async findAllByUserId(@Param('userId') userId: string) {
-    return this.chatService.findAllByUserId(userId);
+  async findAllByUserId(@CurrentUser() user: { clerkId: string }) {
+    return this.chatService.findAllByUserId(user.clerkId);
   }
 
   @Get('session/:sessionId')
