@@ -10,9 +10,6 @@ import {
 import { Category } from '../schemas/wardrobe-item.schema';
 
 export class CreateWardrobeItemDto {
-  // userId is now injected from authentication, not from DTO
-  userId?: string;
-
   @ApiProperty({ example: 'https://example.com/image.jpg' })
   @IsString()
   @IsNotEmpty()

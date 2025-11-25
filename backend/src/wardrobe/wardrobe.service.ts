@@ -16,7 +16,7 @@ export class WardrobeService {
     private wardrobeItemModel: Model<WardrobeItemDocument>,
   ) {}
 
-  async create(createWardrobeItemDto: CreateWardrobeItemDto): Promise<WardrobeItem> {
+  async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
     const createdItem = new this.wardrobeItemModel(createWardrobeItemDto);
     return createdItem.save();
   }
