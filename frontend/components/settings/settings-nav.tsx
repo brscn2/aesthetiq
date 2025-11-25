@@ -29,10 +29,12 @@ const navItems = [
 ]
 
 interface SettingsNavProps {
+  activeSection: string
+  onSectionChange: (section: string) => void
   onClose?: () => void
 }
 
-export function SettingsNav({ onClose }: SettingsNavProps) {
+export function SettingsNav({ activeSection, onSectionChange, onClose }: SettingsNavProps) {
   return (
     <div className="flex h-full flex-col space-y-8">
       {/* User Snippet */}
@@ -60,10 +62,13 @@ export function SettingsNav({ onClose }: SettingsNavProps) {
           <Button
             key={item.title}
             variant="ghost"
-            onClick={onClose}
+            onClick={() => {
+              onSectionChange(item.title)
+              onClose?.()
+            }}
             className={cn(
               "justify-start gap-2 sm:gap-3 rounded-full px-3 sm:px-4 py-3 sm:py-4 text-sm sm:text-base font-medium transition-all duration-200",
-              item.isActive
+              activeSection === item.title
                 ? "bg-accent text-accent-foreground hover:bg-accent/80"
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             )}
