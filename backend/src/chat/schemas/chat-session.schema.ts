@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types, Schema as MongooseSchema } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 export type ChatSessionDocument = ChatSession & Document;
 
@@ -33,8 +33,8 @@ const ChatMessageSchema = new MongooseSchema(
 
 @Schema({ timestamps: true })
 export class ChatSession {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
+  @Prop({ type: String, required: true, index: true })
+  userId: string;
 
   @Prop({ required: true, unique: true })
   sessionId: string;

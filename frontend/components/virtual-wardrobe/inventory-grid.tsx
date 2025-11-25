@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
-import { wardrobeApi } from "@/lib/api"
+import { useApi } from "@/lib/api"
 import { Category, WardrobeItem } from "@/types/api"
 import { formatDistanceToNow } from "date-fns"
 
@@ -71,6 +71,7 @@ function LoadingSkeleton() {
 }
 
 export function InventoryGrid() {
+  const { wardrobeApi } = useApi()
   const { data: wardrobeItems, isLoading, error } = useQuery({
     queryKey: ["wardrobe", TEMP_USER_ID],
     queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { wardrobeApi, uploadApi } from "@/lib/api"
+import { useApi } from "@/lib/api"
 import { Category, CreateWardrobeItemDto } from "@/types/api"
 import { toast } from "sonner"
 
@@ -37,6 +37,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const [removeBackground, setRemoveBackground] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const queryClient = useQueryClient()
+  const { wardrobeApi, uploadApi } = useApi()
 
   const {
     register,

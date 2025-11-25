@@ -1,5 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
+import { ClerkProvider } from "@clerk/nextjs"
 import { Inter, Playfair_Display } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
@@ -46,14 +47,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
-      <body className={`${inter.variable} ${playfair.variable} font-sans antialiased h-full`} suppressHydrationWarning>
-        <Providers>
-          {children}
-        </Providers>
-        <Toaster position="top-right" />
-        <Analytics />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className="dark h-full" suppressHydrationWarning>
+        <body className={`${inter.variable} ${playfair.variable} font-sans antialiased h-full`} suppressHydrationWarning>
+          <Providers>
+            {children}
+          </Providers>
+          <Toaster position="top-right" theme="dark" />
+          <Analytics />
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
