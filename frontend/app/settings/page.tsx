@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { SettingsNav } from "@/components/settings/settings-nav"
 import { SettingsPanel } from "@/components/settings/settings-panel"
 import { Button } from "@/components/ui/button"
-import { Menu, X } from "lucide-react"
+import { Settings as SettingsIcon, X } from "lucide-react"
 
 export default function SettingsPage() {
   const [navOpen, setNavOpen] = useState(false)
@@ -21,7 +21,7 @@ export default function SettingsPage() {
             onClick={() => setNavOpen(!navOpen)}
             className="mr-2"
           >
-            {navOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {navOpen ? <X className="h-5 w-5" /> : <SettingsIcon className="h-5 w-5" />}
           </Button>
           <h1 className="font-serif text-lg font-bold tracking-tight text-foreground">Settings</h1>
         </div>

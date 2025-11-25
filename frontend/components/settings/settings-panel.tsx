@@ -1,14 +1,17 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Sparkles, Eye, History, Share2 } from "lucide-react"
+import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle } from "lucide-react"
 
 export function SettingsPanel() {
+  const [facialAnalysis, setFacialAnalysis] = useState(true)
+  const [colorHistory, setColorHistory] = useState(true)
+  const [trendLearning, setTrendLearning] = useState(false)
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -51,49 +54,76 @@ export function SettingsPanel() {
         </div>
 
         <div className="grid gap-4">
-          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+          <div 
+            className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
+            onClick={() => setFacialAnalysis(!facialAnalysis)}
+          >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
                 <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="space-y-0.5 min-w-0 flex-1">
-                <Label className="text-sm sm:text-base">Allow Facial Feature Analysis</Label>
+                <Label className="text-sm sm:text-base cursor-pointer">Allow Facial Feature Analysis</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Enables AI to analyze your face shape and skin tone for personalized recommendations.
                 </p>
               </div>
             </div>
-            <Switch defaultChecked className="flex-shrink-0" />
+            <div className="flex-shrink-0">
+              {facialAnalysis ? (
+                <CheckCircle2 className="h-6 w-6 text-primary" />
+              ) : (
+                <Circle className="h-6 w-6 text-muted-foreground" />
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+          <div 
+            className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
+            onClick={() => setColorHistory(!colorHistory)}
+          >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
                 <History className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="space-y-0.5 min-w-0 flex-1">
-                <Label className="text-sm sm:text-base">Store Color Palette History</Label>
+                <Label className="text-sm sm:text-base cursor-pointer">Store Color Palette History</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Keep a record of your seasonal color analysis results over time.
                 </p>
               </div>
             </div>
-            <Switch defaultChecked className="flex-shrink-0" />
+            <div className="flex-shrink-0">
+              {colorHistory ? (
+                <CheckCircle2 className="h-6 w-6 text-primary" />
+              ) : (
+                <Circle className="h-6 w-6 text-muted-foreground" />
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4">
+          <div 
+            className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
+            onClick={() => setTrendLearning(!trendLearning)}
+          >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
                 <Share2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="space-y-0.5 min-w-0 flex-1">
-                <Label className="text-sm sm:text-base">Contribute to Trend Learning</Label>
+                <Label className="text-sm sm:text-base cursor-pointer">Contribute to Trend Learning</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
                   Anonymously share style preferences to help improve trend forecasting.
                 </p>
               </div>
             </div>
-            <Switch className="flex-shrink-0" />
+            <div className="flex-shrink-0">
+              {trendLearning ? (
+                <CheckCircle2 className="h-6 w-6 text-primary" />
+              ) : (
+                <Circle className="h-6 w-6 text-muted-foreground" />
+              )}
+            </div>
           </div>
         </div>
 

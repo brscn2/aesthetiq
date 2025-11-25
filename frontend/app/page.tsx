@@ -121,7 +121,9 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                   <div className="flex-1 overflow-y-auto">
-                    <TrendsSidebar />
+                    <div className="mx-auto w-full max-w-md px-4">
+                      <TrendsSidebar />
+                    </div>
                   </div>
                 </div>
               </div>
