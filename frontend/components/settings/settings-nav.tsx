@@ -9,31 +9,31 @@ const navItems = [
   {
     title: "Account",
     icon: User,
-    isActive: true,
   },
   {
     title: "Biometric Privacy",
     icon: Fingerprint,
-    isActive: false,
   },
   {
     title: "Preferences",
     icon: Sliders,
-    isActive: false,
   },
   {
     title: "Notifications",
     icon: Bell,
-    isActive: false,
   },
   {
     title: "Membership",
     icon: CreditCard,
-    isActive: false,
   },
 ]
 
-export function SettingsNav() {
+interface SettingsNavProps {
+  activeSection: string
+  onSectionChange: (section: string) => void
+}
+
+export function SettingsNav({ activeSection, onSectionChange }: SettingsNavProps) {
   return (
     <div className="flex h-full flex-col space-y-8">
       {/* User Snippet */}
@@ -61,9 +61,10 @@ export function SettingsNav() {
           <Button
             key={item.title}
             variant="ghost"
+            onClick={() => onSectionChange(item.title)}
             className={cn(
               "justify-start gap-3 rounded-full px-4 py-6 text-base font-medium transition-all duration-200",
-              item.isActive
+              activeSection === item.title
                 ? "bg-accent text-accent-foreground hover:bg-accent/80"
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             )}

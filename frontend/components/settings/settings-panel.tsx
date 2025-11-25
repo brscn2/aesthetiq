@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { AlertTriangle, Sparkles, Eye, History, Share2 } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export function SettingsPanel() {
   return (

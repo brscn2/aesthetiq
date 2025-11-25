@@ -13,7 +13,7 @@ export default function VirtualWardrobePage() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[#121212] text-foreground md:h-screen">
+      <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background text-foreground md:h-screen">
         {/* Control Bar */}
         <WardrobeControlBar
           activeTab={activeTab}
@@ -28,7 +28,7 @@ export default function VirtualWardrobePage() {
           </main>
 
           {/* Intelligence Sidebar */}
-          <aside className="hidden w-[350px] overflow-y-auto border-l border-white/10 bg-[#121212] p-6 lg:block">
+          <aside className="hidden w-[350px] overflow-y-auto border-l border-border bg-background p-6 lg:block">
             <WardrobeIntelligence />
           </aside>
         </div>

@@ -150,7 +150,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl border-white/10 bg-[#1a1a1a] text-white sm:rounded-2xl">
+      <DialogContent className="max-w-2xl border-border bg-background text-foreground sm:rounded-2xl">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl font-light">Add New Item</DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -162,7 +162,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           <div className="mt-4 grid gap-8 md:grid-cols-2">
             {/* Left Column: Image Preview */}
             <div className="space-y-4">
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed border-white/10 bg-black/20">
+              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted">
                 {imagePreview ? (
                   <>
                     <img
@@ -180,13 +180,13 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     <p className="text-sm text-muted-foreground">No image preview</p>
                   </div>
                 )}
-                <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 backdrop-blur-md">
+                <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-background/80 border border-border px-3 py-1.5 backdrop-blur-md">
                   <Switch
                     id="bg-remove"
                     checked={removeBackground}
                     onCheckedChange={setRemoveBackground}
                   />
-                  <Label htmlFor="bg-remove" className="text-xs text-white">
+                  <Label htmlFor="bg-remove" className="text-xs text-foreground">
                     Remove BG
                   </Label>
                 </div>
@@ -199,7 +199,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full border-white/10 bg-white/5 text-white hover:bg-white/10"
+                    className="w-full border-border bg-card text-foreground hover:bg-accent"
                     disabled={isUploading}
                     onClick={() => document.getElementById('file-upload')?.click()}
                   >
@@ -225,10 +225,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 </div>
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-white/10" />
+                    <span className="w-full border-t border-border" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-[#1a1a1a] px-2 text-muted-foreground">OR</span>
+                    <span className="bg-background px-2 text-muted-foreground">OR</span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -239,7 +239,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     id="imageUrl"
                     type="url"
                     placeholder="https://example.com/image.jpg"
-                    className="border-white/10 bg-white/5 text-white"
+                    className="border-border bg-card text-foreground"
                     {...register("imageUrl", { required: "Image URL or file upload is required" })}
                     onChange={handleImageUrlChange}
                   />
@@ -252,7 +252,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
             {/* Right Column: Form Fields */}
             <div className="space-y-5">
-              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 px-3 py-2 text-sm text-purple-300">
+              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 px-3 py-2 text-sm text-purple-600 dark:text-purple-300">
                 <SparklesIcon className="h-4 w-4" />
                 <span>AI Analysis Complete</span>
               </div>
@@ -265,10 +265,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   value={category}
                   onValueChange={(value) => setValue("category", value as Category)}
                 >
-                  <SelectTrigger className="border-white/10 bg-white/5 text-white">
+                  <SelectTrigger className="border-border bg-card text-foreground">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
-                  <SelectContent className="border-white/10 bg-[#1a1a1a] text-white">
+                  <SelectContent className="border-border bg-background text-foreground">
                     <SelectItem value={Category.TOP}>Tops</SelectItem>
                     <SelectItem value={Category.BOTTOM}>Bottoms</SelectItem>
                     <SelectItem value={Category.SHOE}>Footwear</SelectItem>
@@ -283,7 +283,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 </Label>
                 <Input
                   placeholder="e.g., T-Shirt, Jeans, Sneakers"
-                  className="border-white/10 bg-white/5 text-white"
+                  className="border-border bg-card text-foreground"
                   {...register("subCategory")}
                 />
               </div>
@@ -294,7 +294,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 </Label>
                 <Input
                   placeholder="e.g., Nike, Zara"
-                  className="border-white/10 bg-white/5 text-white"
+                  className="border-border bg-card text-foreground"
                   {...register("brand")}
                 />
               </div>
@@ -307,7 +307,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <Input
                     type="text"
                     placeholder="#000000"
-                    className="border-white/10 bg-white/5 text-white"
+                    className="border-border bg-card text-foreground"
                     {...register("colorHex", {
                       pattern: {
                         value: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
@@ -317,7 +317,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   />
                   {watch("colorHex") && (
                     <div
-                      className="h-8 w-8 rounded-full border border-white/20"
+                      className="h-8 w-8 rounded-full border border-border"
                       style={{ backgroundColor: watch("colorHex") }}
                     />
                   )}
@@ -330,7 +330,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
               <div className="pt-4">
                 <Button
                   type="submit"
-                  className="w-full bg-white text-black hover:bg-white/90"
+                  className="w-full bg-foreground text-background hover:bg-foreground/90"
                   disabled={mutation.isPending}
                 >
                   {mutation.isPending ? (

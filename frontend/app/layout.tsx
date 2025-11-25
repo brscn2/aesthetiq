@@ -46,12 +46,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark h-full" suppressHydrationWarning>
+    <html lang="en" className="h-full" suppressHydrationWarning>
       <body className={`${inter.variable} ${playfair.variable} font-sans antialiased h-full`} suppressHydrationWarning>
         <Providers>
           {children}
         </Providers>
-        <Toaster position="top-right" theme="dark" />
+        <Toaster position="top-right" />
         <Analytics />
       </body>
     </html>
