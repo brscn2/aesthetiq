@@ -9,27 +9,22 @@ const navItems = [
   {
     title: "Account",
     icon: User,
-    isActive: true,
   },
   {
     title: "Biometric Privacy",
     icon: Fingerprint,
-    isActive: false,
   },
   {
     title: "Preferences",
     icon: Sliders,
-    isActive: false,
   },
   {
     title: "Notifications",
     icon: Bell,
-    isActive: false,
   },
   {
     title: "Membership",
     icon: CreditCard,
-    isActive: false,
   },
 ]
 
