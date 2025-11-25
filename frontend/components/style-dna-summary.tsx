@@ -18,15 +18,15 @@ const styleStats = [
 
 export function StyleDnaSummary() {
   return (
-    <div className="flex items-center gap-6 flex-1">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 flex-1">
       {/* Color Palette - Compact */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground">Colors:</span>
-        <div className="flex gap-2">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <span className="text-xs sm:text-sm font-medium text-muted-foreground">Colors:</span>
+        <div className="flex gap-1.5 sm:gap-2">
           {colorPalette.slice(0, 6).map((color) => (
             <div
               key={color.hex}
-              className="h-6 w-6 rounded-full border border-border/50 shadow-sm"
+              className="h-5 w-5 sm:h-6 sm:w-6 rounded-full border border-border/50 shadow-sm"
               style={{ backgroundColor: color.hex }}
               title={color.name}
             />
@@ -35,10 +35,11 @@ export function StyleDnaSummary() {
       </div>
 
       {/* Style Stats - Compact */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
         {styleStats.map((stat) => (
-          <div key={stat.label} className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{stat.label}:</span>
+          <div key={stat.label} className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-xs text-muted-foreground hidden sm:inline">{stat.label}:</span>
+            <span className="text-xs text-muted-foreground sm:hidden">{stat.label.split(" ")[0]}:</span>
             <Badge variant="outline" className="text-xs border-border/50">
               {stat.value}
             </Badge>
@@ -46,7 +47,7 @@ export function StyleDnaSummary() {
         ))}
       </div>
 
-      <Badge variant="outline" className="border-primary/50 text-primary flex-shrink-0">
+      <Badge variant="outline" className="border-primary/50 text-primary flex-shrink-0 text-xs">
         Analyzed
       </Badge>
     </div>
