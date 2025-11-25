@@ -68,7 +68,6 @@ export interface WardrobeItem {
 }
 
 export interface CreateWardrobeItemDto {
-  userId: string;
   imageUrl: string;
   processedImageUrl?: string;
   category: Category;

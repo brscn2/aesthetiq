@@ -77,7 +77,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   const onSubmit = async (data: FormData) => {
     const createData: CreateWardrobeItemDto = {
-      userId: TEMP_USER_ID,
       imageUrl: data.imageUrl || "/placeholder.svg",
       processedImageUrl: removeBackground ? data.imageUrl : undefined,
       category: data.category,
