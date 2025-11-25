@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,14 +17,19 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { WardrobeService } from './wardrobe.service';
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { Category } from './schemas/wardrobe-item.schema';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('wardrobe')
 @Controller('wardrobe')
+@UseGuards(ClerkAuthGuard)
+@ApiBearerAuth()
 export class WardrobeController {
   constructor(private readonly wardrobeService: WardrobeService) {}
 
@@ -31,13 +37,18 @@ export class WardrobeController {
   @ApiOperation({ summary: 'Create a new wardrobe item' })
   @ApiResponse({ status: 201, description: 'Wardrobe item successfully created' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async create(@Body() createWardrobeItemDto: CreateWardrobeItemDto) {
-    return this.wardrobeService.create(createWardrobeItemDto);
+  async create(
+    @Body() createWardrobeItemDto: CreateWardrobeItemDto,
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    return this.wardrobeService.create({
+      ...createWardrobeItemDto,
+      userId: user.clerkId,
+    });
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all wardrobe items with optional filters' })
-  @ApiQuery({ name: 'userId', description: 'User ID', required: true })
   @ApiQuery({
     name: 'category',
     enum: Category,
@@ -51,11 +62,11 @@ export class WardrobeController {
   })
   @ApiResponse({ status: 200, description: 'List of wardrobe items' })
   async findAll(
-    @Query('userId') userId: string,
+    @CurrentUser() user: { clerkId: string },
     @Query('category') category?: Category,
     @Query('colorHex') colorHex?: string,
   ) {
-    return this.wardrobeService.findAll(userId, category, colorHex);
+    return this.wardrobeService.findAll(user.clerkId, category, colorHex);
   }
 
   @Get(':id')

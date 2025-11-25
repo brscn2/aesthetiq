@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document } from 'mongoose';
 
 export type WardrobeItemDocument = WardrobeItem & Document;
 
@@ -12,8 +12,8 @@ export enum Category {
 
 @Schema({ timestamps: true })
 export class WardrobeItem {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
+  @Prop({ type: String, required: true, index: true })
+  userId: string;
 
   @Prop({ required: true })
   imageUrl: string;

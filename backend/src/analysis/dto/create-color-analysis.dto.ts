@@ -5,14 +5,11 @@ import {
   IsOptional,
   IsArray,
   IsDateString,
-  IsMongoId,
 } from 'class-validator';
 
 export class CreateColorAnalysisDto {
-  @ApiProperty({ description: 'User ID' })
-  @IsMongoId()
-  @IsNotEmpty()
-  userId: string;
+  // userId is now injected from authentication, not from DTO
+  userId?: string;
 
   @ApiProperty({ example: 'Deep Autumn' })
   @IsString()

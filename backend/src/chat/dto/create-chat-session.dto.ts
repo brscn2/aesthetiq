@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsArray,
-  IsMongoId,
   ValidateNested,
   IsEnum,
   IsObject,
@@ -30,10 +29,8 @@ class ChatMessageDto {
 }
 
 export class CreateChatSessionDto {
-  @ApiProperty({ description: 'User ID' })
-  @IsMongoId()
-  @IsNotEmpty()
-  userId: string;
+  // userId is now injected from authentication, not from DTO
+  userId?: string;
 
   @ApiProperty({ example: 'session-123' })
   @IsString()

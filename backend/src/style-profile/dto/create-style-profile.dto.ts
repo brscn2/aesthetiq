@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsArray,
-  IsMongoId,
   IsObject,
   ValidateNested,
   Min,
@@ -30,10 +29,8 @@ class SizesDto {
 }
 
 export class CreateStyleProfileDto {
-  @ApiProperty({ description: 'User ID' })
-  @IsMongoId()
-  @IsNotEmpty()
-  userId: string;
+  // userId is now injected from authentication, not from DTO
+  userId?: string;
 
   @ApiProperty({ example: 'Urban Minimalist' })
   @IsString()

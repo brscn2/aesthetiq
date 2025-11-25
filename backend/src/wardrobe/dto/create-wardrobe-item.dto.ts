@@ -6,15 +6,12 @@ import {
   IsEnum,
   IsBoolean,
   IsDateString,
-  IsMongoId,
 } from 'class-validator';
 import { Category } from '../schemas/wardrobe-item.schema';
 
 export class CreateWardrobeItemDto {
-  @ApiProperty({ description: 'User ID' })
-  @IsMongoId()
-  @IsNotEmpty()
-  userId: string;
+  // userId is now injected from authentication, not from DTO
+  userId?: string;
 
   @ApiProperty({ example: 'https://example.com/image.jpg' })
   @IsString()

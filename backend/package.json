@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@azure/storage-blob": "^12.29.1",
+    "@clerk/backend": "^2.24.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -36,6 +37,7 @@
     "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "svix": "^1.81.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {

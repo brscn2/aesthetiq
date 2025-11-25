@@ -4,7 +4,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, // Enable raw body for webhook signature verification
+  });
 
   // Enable CORS
   // Allow localhost for local dev, Vercel deployments, and any additional frontend URLs from env
@@ -74,18 +76,20 @@ async function bootstrap() {
     .setTitle('AesthetIQ API')
     .setDescription('AI-fashion advisory web app API documentation')
     .setVersion('1.0')
+    .addBearerAuth()
     .addTag('users')
     .addTag('analysis')
     .addTag('style-profile')
     .addTag('wardrobe')
     .addTag('chat')
+    .addTag('webhooks')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Use PORT from environment (Railway provides this) or fallback to 3000
+  // Use PORT from environment or fallback to 3000
   const port = process.env.PORT || 3000;
-  // Bind to 0.0.0.0 to accept external connections (required for Railway)
+  // Bind to 0.0.0.0 to accept external connections
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://0.0.0.0:${port}`);
   console.log(`Swagger documentation: http://0.0.0.0:${port}/api/docs`);
