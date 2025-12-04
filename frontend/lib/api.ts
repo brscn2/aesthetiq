@@ -126,24 +126,32 @@ const createApiHelpers = (client: AxiosInstance) => ({
 })
 
 export const useApiClient = () => {
-  const { getToken } = useAuth()
+  const { getToken, isSignedIn } = useAuth()
 
   return useMemo(() => {
     const client = createHttpClient()
 
     client.interceptors.request.use(async (config) => {
-      const token = await getToken()
-      if (token) {
-        config.headers = {
-          ...config.headers,
-          Authorization: `Bearer ${token}`,
-        }
+      if (!isSignedIn) {
+        throw new Error('User is not authenticated')
       }
+      
+      const token = await getToken()
+      
+      if (!token) {
+        throw new Error('Failed to get authentication token')
+      }
+      
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      }
+      
       return config
     })
 
     return client
-  }, [getToken])
+  }, [getToken, isSignedIn])
 }
 
 export const useApi = () => {
