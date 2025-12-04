@@ -132,7 +132,7 @@ export interface StyleProfile {
 }
 
 export interface CreateStyleProfileDto {
-  userId: string;
+  userId?: string; // Optional - backend injects it from authentication
   archetype: string;
   sliders?: Record<string, number>;
   inspirationImageUrls?: string[];

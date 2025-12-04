@@ -29,8 +29,9 @@ class SizesDto {
 }
 
 export class CreateStyleProfileDto {
-  // userId is now injected from authentication, not from DTO
-  userId?: string;
+  // userId is NOT in this DTO - it's injected by the controller from @CurrentUser()
+  // Frontend should NOT send userId in request body
+  // The controller will add userId before calling the service
 
   @ApiProperty({ example: 'Urban Minimalist' })
   @IsString()
