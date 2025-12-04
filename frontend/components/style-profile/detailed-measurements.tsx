@@ -112,8 +112,12 @@ export function DetailedMeasurements({
       }
 
       // Update with new sizes (upsert will handle if profile exists)
+      // Filter out empty size values to avoid overwriting saved sizes
+      const filteredSizes = Object.fromEntries(
+        Object.entries(sizes).filter(([_, value]) => value && value.trim() !== "")
+      )
       await styleProfileApi.updateByUserId({
-        sizes,
+        sizes: Object.keys(filteredSizes).length > 0 ? filteredSizes : undefined,
       })
 
       toast.success("Measurements saved successfully")
