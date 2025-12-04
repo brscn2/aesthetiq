@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env*.local
