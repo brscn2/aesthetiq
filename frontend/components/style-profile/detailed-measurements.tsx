@@ -38,6 +38,30 @@ interface BodyMeasurements {
   sleeve?: string
 }
 
+type SizeRegion = "EU" | "US" | "UK"
+
+const SIZE_OPTIONS: Record<SizeRegion, {
+  top: string[]
+  bottom: string[]
+  shoe: string[]
+}> = {
+  EU: {
+    top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
+    bottom: ["38", "40", "42", "44", "46", "48", "50", "52"],
+    shoe: ["38", "39", "40", "41", "42", "43", "44", "45", "46"],
+  },
+  US: {
+    top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
+    bottom: ["24", "26", "28", "30", "32", "34", "36", "38"],
+    shoe: ["5", "6", "7", "8", "9", "10", "11", "12", "13"],
+  },
+  UK: {
+    top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
+    bottom: ["24", "26", "28", "30", "32", "34", "36", "38"],
+    shoe: ["3", "4", "5", "6", "7", "8", "9", "10", "11"],
+  },
+}
+
 export function DetailedMeasurements({
   open,
   onOpenChange,
@@ -47,6 +71,7 @@ export function DetailedMeasurements({
   const { userId } = useAuth()
   const { styleProfileApi } = useApi()
 
+  const [region, setRegion] = useState<SizeRegion | "">("")
   const [sizes, setSizes] = useState({
     top: currentSizes?.top || "",
     bottom: currentSizes?.bottom || "",
@@ -73,6 +98,17 @@ export function DetailedMeasurements({
       })
     }
   }, [currentSizes])
+
+  // Reset sizes when region changes
+  useEffect(() => {
+    if (region) {
+      setSizes({
+        top: "",
+        bottom: "",
+        shoe: "",
+      })
+    }
+  }, [region])
 
   const handleSizeChange = (type: "top" | "bottom" | "shoe", value: string) => {
     setSizes((prev) => ({ ...prev, [type]: value }))
@@ -138,11 +174,12 @@ export function DetailedMeasurements({
     }
   }
 
-  const sizeOptions = {
-    top: ["XS", "S", "M", "L", "XL", "XXL", "EU 32", "EU 34", "EU 36", "EU 38", "EU 40", "EU 42", "EU 44"],
-    bottom: ["24", "26", "28", "30", "32", "34", "36", "38", "EU 38", "EU 40", "EU 42", "EU 44", "EU 46"],
-    shoe: ["US 5", "US 6", "US 7", "US 8", "US 9", "US 10", "US 11", "US 12", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44"],
+  const getSizeOptions = () => {
+    if (!region) return { top: [], bottom: [], shoe: [] }
+    return SIZE_OPTIONS[region]
   }
+
+  const sizeOptions = getSizeOptions()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,12 +198,32 @@ export function DetailedMeasurements({
           {/* Size Selection */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg">Size Selection</h3>
+            
+            {/* Region Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="region">Size Region</Label>
+              <Select value={region} onValueChange={(value) => setRegion(value as SizeRegion)}>
+                <SelectTrigger id="region">
+                  <SelectValue placeholder="Select region (EU/US/UK)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EU">EU (European)</SelectItem>
+                  <SelectItem value="US">US (United States)</SelectItem>
+                  <SelectItem value="UK">UK (United Kingdom)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="top-size">Top Size</Label>
-                <Select value={sizes.top} onValueChange={(value) => handleSizeChange("top", value)}>
+                <Label htmlFor="top-size">Top Size {region && `(${region})`}</Label>
+                <Select 
+                  value={sizes.top} 
+                  onValueChange={(value) => handleSizeChange("top", value)}
+                  disabled={!region}
+                >
                   <SelectTrigger id="top-size">
-                    <SelectValue placeholder="Select size" />
+                    <SelectValue placeholder={region ? "Select size" : "Select region first"} />
                   </SelectTrigger>
                   <SelectContent>
                     {sizeOptions.top.map((size) => (
@@ -179,10 +236,14 @@ export function DetailedMeasurements({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="bottom-size">Bottom Size</Label>
-                <Select value={sizes.bottom} onValueChange={(value) => handleSizeChange("bottom", value)}>
+                <Label htmlFor="bottom-size">Bottom Size {region && `(${region})`}</Label>
+                <Select 
+                  value={sizes.bottom} 
+                  onValueChange={(value) => handleSizeChange("bottom", value)}
+                  disabled={!region}
+                >
                   <SelectTrigger id="bottom-size">
-                    <SelectValue placeholder="Select size" />
+                    <SelectValue placeholder={region ? "Select size" : "Select region first"} />
                   </SelectTrigger>
                   <SelectContent>
                     {sizeOptions.bottom.map((size) => (
@@ -195,10 +256,14 @@ export function DetailedMeasurements({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="shoe-size">Shoe Size</Label>
-                <Select value={sizes.shoe} onValueChange={(value) => handleSizeChange("shoe", value)}>
+                <Label htmlFor="shoe-size">Shoe Size {region && `(${region})`}</Label>
+                <Select 
+                  value={sizes.shoe} 
+                  onValueChange={(value) => handleSizeChange("shoe", value)}
+                  disabled={!region}
+                >
                   <SelectTrigger id="shoe-size">
-                    <SelectValue placeholder="Select size" />
+                    <SelectValue placeholder={region ? "Select size" : "Select region first"} />
                   </SelectTrigger>
                   <SelectContent>
                     {sizeOptions.shoe.map((size) => (

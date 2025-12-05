@@ -39,49 +39,11 @@ export function BrandSizing() {
     }
   }
 
-  const formatSizeValue = (size?: string) => {
-    if (!size) return "Not set"
-    return size
-  }
-
   const getDisplayValue = (type: "top" | "bottom" | "shoe") => {
     const size = sizes[type]
     if (!size) return "Not set"
-    
-    // Format based on type
-    if (type === "top") {
-      return size.includes("EU") ? size : `${size} / EU ${getEUEquivalent(type, size)}`
-    }
-    if (type === "bottom") {
-      return size.includes("EU") ? size : `${size} / EU ${getEUEquivalent(type, size)}`
-    }
-    if (type === "shoe") {
-      return size.includes("EU") ? size : `${size} / EU ${getEUEquivalent(type, size)}`
-    }
+    // Size is already saved with the correct region format, just display it as is
     return size
-  }
-
-  const getEUEquivalent = (type: "top" | "bottom" | "shoe", size: string): string => {
-    // Simple conversion logic (can be enhanced)
-    if (type === "top") {
-      const usToEU: Record<string, string> = {
-        XS: "32", S: "36", M: "38", L: "40", XL: "42", XXL: "44"
-      }
-      return usToEU[size] || "38"
-    }
-    if (type === "bottom") {
-      const usToEU: Record<string, string> = {
-        "24": "38", "26": "40", "28": "42", "30": "40", "32": "42", "34": "44", "36": "46", "38": "48"
-      }
-      return usToEU[size] || "40"
-    }
-    if (type === "shoe") {
-      const usToEU: Record<string, string> = {
-        "US 5": "38", "US 6": "39", "US 7": "40", "US 8": "41", "US 9": "42", "US 10": "43", "US 11": "44", "US 12": "45"
-      }
-      return usToEU[size] || "40"
-    }
-    return "40"
   }
 
   return (
