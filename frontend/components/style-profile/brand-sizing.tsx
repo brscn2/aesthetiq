@@ -1,42 +1,24 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAuth } from "@clerk/nextjs"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DetailedMeasurements } from "./detailed-measurements"
 import { useApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
+import { StyleProfile } from "@/types/api"
 
-export function BrandSizing() {
-  const { userId } = useAuth()
-  const { styleProfileApi } = useApi()
+interface BrandSizingProps {
+  styleProfile: StyleProfile
+  onProfileUpdate?: () => void
+}
+
+export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [sizes, setSizes] = useState<{
-    top?: string
-    bottom?: string
-    shoe?: string
-  }>({})
-  const [isLoading, setIsLoading] = useState(true)
+  const sizes = styleProfile.sizes || {}
 
-  useEffect(() => {
-    if (userId) {
-      loadSizes()
-    }
-  }, [userId])
-
-  const loadSizes = async () => {
-    if (!userId) return
-
-    setIsLoading(true)
-    try {
-      const profile = await styleProfileApi.getByUserId()
-      setSizes(profile.sizes || {})
-    } catch (error) {
-      // Profile doesn't exist yet, use default empty sizes
-      setSizes({})
-    } finally {
-      setIsLoading(false)
-    }
+  const handleSizesUpdate = () => {
+    // Trigger parent to refetch the profile
+    onProfileUpdate?.()
   }
 
   const getDisplayValue = (type: "top" | "bottom" | "shoe") => {
@@ -79,25 +61,19 @@ export function BrandSizing() {
             <CardTitle className="text-lg">My Sizes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="text-sm text-muted-foreground">Loading...</div>
-            ) : (
-              <>
-                <SizeRow label="Top" value={getDisplayValue("top")} />
-                <SizeRow label="Bottom" value={getDisplayValue("bottom")} />
-                <SizeRow label="Shoe" value={getDisplayValue("shoe")} />
-                <div className="pt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-primary hover:underline p-0 h-auto font-normal"
-                    onClick={() => setIsModalOpen(true)}
-                  >
-                    View Detailed Measurements
-                  </Button>
-                </div>
-              </>
-            )}
+            <SizeRow label="Top" value={getDisplayValue("top")} />
+            <SizeRow label="Bottom" value={getDisplayValue("bottom")} />
+            <SizeRow label="Shoe" value={getDisplayValue("shoe")} />
+            <div className="pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-primary hover:underline p-0 h-auto font-normal"
+                onClick={() => setIsModalOpen(true)}
+              >
+                View Detailed Measurements
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -106,7 +82,7 @@ export function BrandSizing() {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         currentSizes={sizes}
-        onSizesUpdate={loadSizes}
+        onSizesUpdate={handleSizesUpdate}
       />
     </section>
   )

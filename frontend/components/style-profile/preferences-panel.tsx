@@ -1,26 +1,99 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, X, Ban } from "lucide-react"
+import { StyleProfile } from "@/types/api"
+import { useApi } from "@/lib/api"
 
-export function PreferencesPanel() {
+interface PreferencesPanelProps {
+  styleProfile: StyleProfile
+}
+
+const SLIDER_CONFIGS = [
+  { key: "formal", label: "Formal", left: "Casual", right: "Formal" },
+  { key: "colorful", label: "Color Preference", left: "Neutral", right: "Colorful" },
+  { key: "casual", label: "Casual Style", left: "Dressy", right: "Casual" },
+  { key: "trendy", label: "Trendiness", left: "Classic", right: "Trendy" },
+  { key: "comfort", label: "Comfort", left: "Style", right: "Comfort" },
+  { key: "bold", label: "Boldness", left: "Subtle", right: "Bold" },
+  { key: "professional", label: "Professional", left: "Relaxed", right: "Professional" },
+]
+
+export function PreferencesPanel({ styleProfile }: PreferencesPanelProps) {
+  const { styleProfileApi } = useApi()
   const [noGoItem, setNoGoItem] = useState("")
-  const [noGos, setNoGos] = useState(["No Leather", "No High Heels", "No Yellow"])
+  const [noGos, setNoGos] = useState<string[]>(styleProfile.negativeConstraints || [])
+  const [sliders, setSliders] = useState<Record<string, number>>(styleProfile.sliders || {})
 
-  const addNoGo = () => {
-    if (noGoItem.trim()) {
-      setNoGos([...noGos, noGoItem.trim()])
+  useEffect(() => {
+    setNoGos(styleProfile.negativeConstraints || [])
+    setSliders(styleProfile.sliders || {})
+  }, [styleProfile])
+
+  const addNoGo = async () => {
+    if (noGoItem.trim() && !noGos.includes(noGoItem.trim())) {
+      const updatedNoGos = [...noGos, noGoItem.trim()]
+      setNoGos(updatedNoGos)
       setNoGoItem("")
+
+      // Update in backend
+      try {
+        await styleProfileApi.updateByUserId({
+          negativeConstraints: updatedNoGos,
+        })
+      } catch (error) {
+        console.error("Failed to update negative constraints:", error)
+        // Revert on error
+        setNoGos(noGos)
+      }
     }
   }
 
-  const removeNoGo = (index: number) => {
-    setNoGos(noGos.filter((_, i) => i !== index))
+  const removeNoGo = async (index: number) => {
+    const updatedNoGos = noGos.filter((_, i) => i !== index)
+    setNoGos(updatedNoGos)
+
+    // Update in backend
+    try {
+      await styleProfileApi.updateByUserId({
+        negativeConstraints: updatedNoGos,
+      })
+    } catch (error) {
+      console.error("Failed to update negative constraints:", error)
+      // Revert on error
+      setNoGos(noGos)
+    }
+  }
+
+  const handleSliderChange = async (key: string, value: number[]) => {
+    const updatedSliders = { ...sliders, [key]: value[0] }
+    setSliders(updatedSliders)
+
+    // Update in backend
+    try {
+      await styleProfileApi.updateByUserId({
+        sliders: updatedSliders,
+      })
+    } catch (error) {
+      console.error("Failed to update sliders:", error)
+      // Revert on error
+      setSliders(sliders)
+    }
+  }
+
+  const getSliderLabel = (key: string) => {
+    const config = SLIDER_CONFIGS.find(c => c.key === key)
+    if (!config) return "Unknown"
+
+    const value = sliders[key] ?? 50
+    if (value < 33) return config.left
+    if (value > 66) return config.right
+    return "Balanced"
   }
 
   return (
@@ -31,41 +104,28 @@ export function PreferencesPanel() {
           <CardTitle className="font-serif text-xl">Fit & Budget Preferences</CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
-          <div className="space-y-4">
-            <div className="flex justify-between text-sm font-medium">
-              <span>Fit Preference</span>
-              <span className="text-muted-foreground">Slightly Oversized</span>
-            </div>
-            <Slider defaultValue={[70]} max={100} step={1} className="[&>.relative>.absolute]:bg-primary" />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Tight</span>
-              <span>Oversized</span>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex justify-between text-sm font-medium">
-              <span>Experimentation</span>
-              <span className="text-muted-foreground">Balanced</span>
-            </div>
-            <Slider defaultValue={[50]} max={100} step={1} />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Safe</span>
-              <span>Bold</span>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex justify-between text-sm font-medium">
-              <span>Budget Range</span>
-              <span className="text-muted-foreground">Premium</span>
-            </div>
-            <Slider defaultValue={[65]} max={100} step={1} />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Economy</span>
-              <span>Luxury</span>
-            </div>
-          </div>
+          {SLIDER_CONFIGS.map((config) => {
+            const value = sliders[config.key] ?? 50
+            return (
+              <div key={config.key} className="space-y-4">
+                <div className="flex justify-between text-sm font-medium">
+                  <span>{config.label}</span>
+                  <span className="text-muted-foreground">{getSliderLabel(config.key)}</span>
+                </div>
+                <Slider
+                  value={[value]}
+                  onValueChange={(val) => handleSliderChange(config.key, val)}
+                  max={100}
+                  step={1}
+                  className="[&>.relative>.absolute]:bg-primary"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{config.left}</span>
+                  <span>{config.right}</span>
+                </div>
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
 

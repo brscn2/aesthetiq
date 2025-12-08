@@ -75,7 +75,17 @@ const createAnalysisApi = (client: AxiosInstance) => ({
 })
 
 const createStyleProfileApi = (client: AxiosInstance) => ({
-  getByUserId: (): Promise<StyleProfile> => client.get(`/style-profile/user`).then((res) => res.data),
+  getByUserId: async (): Promise<StyleProfile | null> => {
+    try {
+      const res = await client.get(`/style-profile/user`)
+      return res.data
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null
+      }
+      throw error
+    }
+  },
   getById: (id: string): Promise<StyleProfile> => client.get(`/style-profile/${id}`).then((res) => res.data),
   create: (data: CreateStyleProfileDto): Promise<StyleProfile> => client.post("/style-profile", data).then((res) => res.data),
   update: (id: string, data: UpdateStyleProfileDto): Promise<StyleProfile> => client.patch(`/style-profile/${id}`, data).then((res) => res.data),

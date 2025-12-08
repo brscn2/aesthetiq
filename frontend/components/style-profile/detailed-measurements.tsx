@@ -71,7 +71,43 @@ export function DetailedMeasurements({
   const { userId } = useAuth()
   const { styleProfileApi } = useApi()
 
-  const [region, setRegion] = useState<SizeRegion | "">("")
+  // Helper function to detect region from saved sizes
+  const detectRegionFromSizes = (sizes: { top?: string; bottom?: string; shoe?: string }): SizeRegion | "" => {
+    if (!sizes.top && !sizes.bottom && !sizes.shoe) return ""
+
+    // Check each region to see if the sizes match
+    for (const [reg, options] of Object.entries(SIZE_OPTIONS)) {
+      const region = reg as SizeRegion
+      let matches = 0
+      let total = 0
+
+      if (sizes.top) {
+        total++
+        if (options.top.includes(sizes.top)) matches++
+      }
+      if (sizes.bottom) {
+        total++
+        if (options.bottom.includes(sizes.bottom)) matches++
+      }
+      if (sizes.shoe) {
+        total++
+        if (options.shoe.includes(sizes.shoe)) matches++
+      }
+
+      // If at least one size matches and all provided sizes match, this is likely the region
+      if (matches > 0 && matches === total) {
+        return region
+      }
+    }
+
+    return ""
+  }
+
+  const [region, setRegion] = useState<SizeRegion | "">(() => {
+    // Detect region from current sizes on initial load
+    return currentSizes ? detectRegionFromSizes(currentSizes) : ""
+  })
+
   const [sizes, setSizes] = useState({
     top: currentSizes?.top || "",
     bottom: currentSizes?.bottom || "",
@@ -88,27 +124,49 @@ export function DetailedMeasurements({
   })
 
   const [isLoading, setIsLoading] = useState(false)
+  const [hasManuallyChangedRegion, setHasManuallyChangedRegion] = useState(false)
 
+  // Update sizes and region when modal opens or currentSizes changes
   useEffect(() => {
-    if (currentSizes) {
+    if (open && currentSizes) {
+      const detectedRegion = detectRegionFromSizes(currentSizes)
       setSizes({
         top: currentSizes.top || "",
         bottom: currentSizes.bottom || "",
         shoe: currentSizes.shoe || "",
       })
+      // Only set region if we haven't manually changed it, or if no region is set
+      if (!hasManuallyChangedRegion || !region) {
+        setRegion(detectedRegion)
+        setHasManuallyChangedRegion(false)
+      }
     }
-  }, [currentSizes])
+  }, [open, currentSizes])
 
-  // Reset sizes when region changes
+  // Reset sizes when region is manually changed (but preserve if sizes match the new region)
   useEffect(() => {
-    if (region) {
-      setSizes({
-        top: "",
-        bottom: "",
-        shoe: "",
-      })
+    if (region && hasManuallyChangedRegion) {
+      // Check if current sizes are valid for the new region
+      const options = SIZE_OPTIONS[region]
+      const topValid = !sizes.top || options.top.includes(sizes.top)
+      const bottomValid = !sizes.bottom || options.bottom.includes(sizes.bottom)
+      const shoeValid = !sizes.shoe || options.shoe.includes(sizes.shoe)
+
+      // Only reset if sizes don't match the new region
+      if (!topValid || !bottomValid || !shoeValid) {
+        setSizes({
+          top: "",
+          bottom: "",
+          shoe: "",
+        })
+      }
     }
-  }, [region])
+  }, [region, hasManuallyChangedRegion])
+
+  const handleRegionChange = (value: SizeRegion) => {
+    setHasManuallyChangedRegion(true)
+    setRegion(value)
+  }
 
   const handleSizeChange = (type: "top" | "bottom" | "shoe", value: string) => {
     setSizes((prev) => ({ ...prev, [type]: value }))
@@ -163,7 +221,7 @@ export function DetailedMeasurements({
       console.error("Error saving measurements:", error)
       const errorMessage = error?.response?.data?.message || error?.message || "Failed to save measurements"
       const statusCode = error?.response?.status
-      
+
       if (statusCode === 401) {
         toast.error("Authentication failed. Please log in again.")
       } else {
@@ -180,6 +238,13 @@ export function DetailedMeasurements({
   }
 
   const sizeOptions = getSizeOptions()
+
+  // Reset manual region change flag when modal closes
+  useEffect(() => {
+    if (!open) {
+      setHasManuallyChangedRegion(false)
+    }
+  }, [open])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -198,11 +263,11 @@ export function DetailedMeasurements({
           {/* Size Selection */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg">Size Selection</h3>
-            
+
             {/* Region Selection */}
             <div className="space-y-2">
               <Label htmlFor="region">Size Region</Label>
-              <Select value={region} onValueChange={(value) => setRegion(value as SizeRegion)}>
+              <Select value={region} onValueChange={(value) => handleRegionChange(value as SizeRegion)}>
                 <SelectTrigger id="region">
                   <SelectValue placeholder="Select region (EU/US/UK)" />
                 </SelectTrigger>
@@ -217,8 +282,8 @@ export function DetailedMeasurements({
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="top-size">Top Size {region && `(${region})`}</Label>
-                <Select 
-                  value={sizes.top} 
+                <Select
+                  value={sizes.top}
                   onValueChange={(value) => handleSizeChange("top", value)}
                   disabled={!region}
                 >
@@ -237,8 +302,8 @@ export function DetailedMeasurements({
 
               <div className="space-y-2">
                 <Label htmlFor="bottom-size">Bottom Size {region && `(${region})`}</Label>
-                <Select 
-                  value={sizes.bottom} 
+                <Select
+                  value={sizes.bottom}
                   onValueChange={(value) => handleSizeChange("bottom", value)}
                   disabled={!region}
                 >
@@ -257,8 +322,8 @@ export function DetailedMeasurements({
 
               <div className="space-y-2">
                 <Label htmlFor="shoe-size">Shoe Size {region && `(${region})`}</Label>
-                <Select 
-                  value={sizes.shoe} 
+                <Select
+                  value={sizes.shoe}
                   onValueChange={(value) => handleSizeChange("shoe", value)}
                   disabled={!region}
                 >

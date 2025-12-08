@@ -29,9 +29,7 @@ class SizesDto {
 }
 
 export class CreateStyleProfileDto {
-  // userId is now injected from authentication, not from DTO
-  userId?: string;
-
+  // userId is injected by the controller from authentication, not from DTO
   @ApiProperty({ example: 'Urban Minimalist' })
   @IsString()
   @IsNotEmpty()
