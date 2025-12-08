@@ -41,9 +41,7 @@ export class ClerkAuthGuard implements CanActivate {
 
       // After checking for errors, TypeScript knows data exists
       // Type assertion needed because JwtPayload type may not be fully inferred
-      // Try both result.data and direct result (for different Clerk versions)
-      // Some Clerk versions return { data: payload }, others return payload directly
-      const payload = (result.data || result) as { sub?: string };
+      const payload = result.data as { sub?: string };
       if (!payload || !payload.sub) {
         throw new UnauthorizedException('Invalid token: missing user ID');
       }

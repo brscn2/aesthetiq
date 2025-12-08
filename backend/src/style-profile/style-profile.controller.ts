@@ -39,13 +39,10 @@ export class StyleProfileController {
     @Body() createStyleProfileDto: CreateStyleProfileDto,
     @CurrentUser() user: { clerkId: string },
   ) {
-    // Create a new object with userId added (not from DTO)
-    const profileData = {
+    return this.styleProfileService.create({
       ...createStyleProfileDto,
       userId: user.clerkId,
-    } as CreateStyleProfileDto & { userId: string };
-    
-    return this.styleProfileService.create(profileData);
+    });
   }
 
   @Get('user')
@@ -71,6 +68,18 @@ export class StyleProfileController {
     return this.styleProfileService.findOne(id);
   }
 
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a style profile' })
+  @ApiParam({ name: 'id', description: 'Style profile ID' })
+  @ApiResponse({ status: 200, description: 'Style profile successfully updated' })
+  @ApiResponse({ status: 404, description: 'Style profile not found' })
+  async update(
+    @Param('id') id: string,
+    @Body() updateStyleProfileDto: UpdateStyleProfileDto,
+  ) {
+    return this.styleProfileService.update(id, updateStyleProfileDto);
+  }
+
   @Patch('user')
   @ApiOperation({ summary: 'Update a style profile for the authenticated user (upsert)' })
   @ApiResponse({
@@ -82,18 +91,6 @@ export class StyleProfileController {
     @Body() updateStyleProfileDto: UpdateStyleProfileDto,
   ) {
     return this.styleProfileService.updateByUserId(user.clerkId, updateStyleProfileDto);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update a style profile' })
-  @ApiParam({ name: 'id', description: 'Style profile ID' })
-  @ApiResponse({ status: 200, description: 'Style profile successfully updated' })
-  @ApiResponse({ status: 404, description: 'Style profile not found' })
-  async update(
-    @Param('id') id: string,
-    @Body() updateStyleProfileDto: UpdateStyleProfileDto,
-  ) {
-    return this.styleProfileService.update(id, updateStyleProfileDto);
   }
 
   @Delete(':id')
