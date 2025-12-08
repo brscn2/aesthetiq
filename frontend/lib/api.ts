@@ -132,19 +132,15 @@ export const useApiClient = () => {
     const client = createHttpClient()
 
     client.interceptors.request.use(async (config) => {
-      if (!isSignedIn) {
-        throw new Error('User is not authenticated')
-      }
-      
+      // Get JWT token for backend verification
+      // getToken() returns a JWT token that can be verified by the backend
+      // No template needed - Clerk generates a JWT by default
       const token = await getToken()
       
       if (!token) {
-        throw new Error('Failed to get authentication token')
-      }
-      
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
+        console.warn('No token available for request to:', config.url)
+      } else {
+        config.headers.Authorization = `Bearer ${token}`
       }
       
       return config
