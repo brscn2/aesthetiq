@@ -98,21 +98,44 @@ export interface UploadResponse {
 }
 
 const createUploadApi = (client: AxiosInstance) => ({
-  uploadImage: async (file: File): Promise<UploadResponse> => {
+  uploadImage: async (file: File, retries = 2): Promise<UploadResponse> => {
     const formData = new FormData()
     formData.append("file", file)
 
-    const response = await client.post<UploadResponse>(
-      "/upload",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      },
-    )
+    let lastError: any
 
-    return response.data
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await client.post<UploadResponse>(
+          "/upload",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+            timeout: 30000, // 30 second timeout
+          },
+        )
+
+        return response.data
+      } catch (error: any) {
+        lastError = error
+
+        // Don't retry on client errors (4xx) - only on network/server errors
+        if (error.response?.status && error.response.status >= 400 && error.response.status < 500) {
+          throw error
+        }
+
+        // If this wasn't the last attempt, wait before retrying
+        if (attempt < retries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 5000) // Exponential backoff, max 5s
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+    }
+
+    // All retries failed
+    throw lastError
   },
 })
 

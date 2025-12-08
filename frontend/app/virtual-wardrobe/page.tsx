@@ -31,7 +31,7 @@ export default function VirtualWardrobePage() {
           </main>
 
           {/* Intelligence Sidebar - Desktop */}
-          <aside className="hidden w-[350px] overflow-y-auto border-l border-white/10 bg-[#121212] p-6 lg:block">
+          <aside className="hidden w-[350px] overflow-y-auto border-l border-border bg-background p-6 lg:block">
             <WardrobeIntelligence />
           </aside>
         </div>
@@ -55,14 +55,13 @@ export default function VirtualWardrobePage() {
               onClick={() => setShowIntelligence(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:hidden">
-              <div className="w-full max-w-md rounded-lg border border-white/10 bg-[#121212] p-6 max-h-[90vh] overflow-y-auto">
+              <div className="w-full max-w-md rounded-lg border border-border bg-background p-6 max-h-[90vh] overflow-y-auto">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="font-serif text-xl font-bold text-white">Wardrobe Intelligence</h2>
+                  <h2 className="font-serif text-xl font-bold text-foreground">Wardrobe Intelligence</h2>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowIntelligence(false)}
-                    className="text-white hover:bg-white/10"
                   >
                     <X className="h-5 w-5" />
                   </Button>
