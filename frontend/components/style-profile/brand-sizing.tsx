@@ -1,8 +1,33 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DetailedMeasurements } from "./detailed-measurements"
+import { useApi } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { StyleProfile } from "@/types/api"
 
-export function BrandSizing() {
+interface BrandSizingProps {
+  styleProfile: StyleProfile
+  onProfileUpdate?: () => void
+}
+
+export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const sizes = styleProfile.sizes || {}
+
+  const handleSizesUpdate = () => {
+    // Trigger parent to refetch the profile
+    onProfileUpdate?.()
+  }
+
+  const getDisplayValue = (type: "top" | "bottom" | "shoe") => {
+    const size = sizes[type]
+    if (!size) return "Not set"
+    // Size is already saved with the correct region format, just display it as is
+    return size
+  }
+
   return (
     <section className="space-y-6">
       <h3 className="font-serif text-2xl font-bold">Brand Affinity & Sizing</h3>
@@ -36,15 +61,29 @@ export function BrandSizing() {
             <CardTitle className="text-lg">My Sizes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <SizeRow label="Top" value="M / EU 38" />
-            <SizeRow label="Bottom" value="30 / EU 40" />
-            <SizeRow label="Shoe" value="US 9 / EU 40" />
+            <SizeRow label="Top" value={getDisplayValue("top")} />
+            <SizeRow label="Bottom" value={getDisplayValue("bottom")} />
+            <SizeRow label="Shoe" value={getDisplayValue("shoe")} />
             <div className="pt-2">
-              <button className="text-xs text-primary hover:underline">View Detailed Measurements</button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-primary hover:underline p-0 h-auto font-normal"
+                onClick={() => setIsModalOpen(true)}
+              >
+                View Detailed Measurements
+              </Button>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <DetailedMeasurements
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        currentSizes={sizes}
+        onSizesUpdate={handleSizesUpdate}
+      />
     </section>
   )
 }

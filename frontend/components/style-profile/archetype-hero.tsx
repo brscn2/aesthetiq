@@ -1,19 +1,53 @@
 "use client"
 
+import { useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Sparkles } from "lucide-react"
+import { StyleProfile } from "@/types/api"
 
-const data = [
-  { subject: "Trendy", A: 120, fullMark: 150 },
-  { subject: "Classic", A: 98, fullMark: 150 },
-  { subject: "Comfort", A: 86, fullMark: 150 },
-  { subject: "Bold", A: 65, fullMark: 150 },
-  { subject: "Professional", A: 110, fullMark: 150 },
-]
+interface ArchetypeHeroProps {
+  styleProfile: StyleProfile
+}
 
-export function ArchetypeHero() {
+export function ArchetypeHero({ styleProfile }: ArchetypeHeroProps) {
+  const chartData = useMemo(() => {
+    const sliders = styleProfile.sliders || {}
+    const defaultData = [
+      { subject: "Trendy", A: 60, fullMark: 100 },
+      { subject: "Classic", A: 70, fullMark: 100 },
+      { subject: "Comfort", A: 75, fullMark: 100 },
+      { subject: "Bold", A: 40, fullMark: 100 },
+      { subject: "Professional", A: 65, fullMark: 100 },
+    ]
+
+    // Map slider values to chart data
+    const sliderMap: Record<string, string> = {
+      trendy: "Trendy",
+      classic: "Classic",
+      comfort: "Comfort",
+      bold: "Bold",
+      professional: "Professional",
+    }
+
+    return Object.entries(sliderMap).map(([key, subject]) => ({
+      subject,
+      A: sliders[key] ?? defaultData.find(d => d.subject === subject)?.A ?? 50,
+      fullMark: 100,
+    }))
+  }, [styleProfile.sliders])
+
+  const archetypeDescription = useMemo(() => {
+    const descriptions: Record<string, string> = {
+      "Urban Minimalist": "You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette over pattern, favoring architectural shapes that bridge the gap between office sophistication and street-style edge.",
+      "Classic Elegance": "You value timeless pieces and refined sophistication. Your style is built on quality basics and elegant silhouettes that never go out of fashion.",
+      "Bold Innovator": "You're not afraid to experiment with color, pattern, and shape. Your wardrobe reflects your creative spirit and willingness to push boundaries.",
+      "Casual Comfort": "Comfort and ease are your priorities. You favor relaxed fits and versatile pieces that work for any occasion.",
+    }
+    return descriptions[styleProfile.archetype] || "Your unique style profile is being developed based on your preferences and wardrobe."
+  }, [styleProfile.archetype])
+
   return (
     <section className="grid gap-8 lg:grid-cols-2 lg:items-center">
       <div className="space-y-6">
@@ -24,12 +58,10 @@ export function ArchetypeHero() {
         <div className="space-y-2">
           <h2 className="font-serif text-4xl font-bold leading-tight md:text-5xl">
             Your Style Persona: <br />
-            <span className="text-gradient-ai">Urban Minimalist</span>
+            <span className="text-gradient-ai">{styleProfile.archetype}</span>
           </h2>
           <p className="text-lg leading-relaxed text-muted-foreground">
-            You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette
-            over pattern, favoring architectural shapes that bridge the gap between office sophistication and
-            street-style edge.
+            {archetypeDescription}
           </p>
         </div>
       </div>
@@ -50,7 +82,7 @@ export function ArchetypeHero() {
               className="h-full w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
                   <PolarGrid stroke="var(--muted-foreground)" strokeOpacity={0.3} />
                   <PolarAngleAxis
                     dataKey="subject"

@@ -5,18 +5,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
+import { StyleProfile } from "@/types/api"
 
-const INSPIRATION_IMAGES = [
-  "/minimalist-fashion-street-style.jpg",
-  "/architectural-blazer-beige.jpg",
-  "/black-monochrome-outfit-texture.jpg",
-  "/wide-leg-trousers-grey.jpg",
-  "/oversized-coat-winter-fashion.jpg",
-]
+interface InspirationBoardProps {
+  styleProfile: StyleProfile
+}
 
-const TAGS = ["Streetwear", "Oversized Silhouette", "Neutral Tones", "Layering", "Matte Textures"]
+const DEFAULT_TAGS = ["Streetwear", "Oversized Silhouette", "Neutral Tones", "Layering", "Matte Textures"]
 
-export function InspirationBoard() {
+export function InspirationBoard({ styleProfile }: InspirationBoardProps) {
+  const inspirationImages = styleProfile.inspirationImageUrls || []
+  const tags = DEFAULT_TAGS // In the future, these could be extracted from the profile or AI analysis
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
@@ -39,7 +39,7 @@ export function InspirationBoard() {
           </CardContent>
         </Card>
 
-        {INSPIRATION_IMAGES.map((src, i) => (
+        {inspirationImages.map((src, i) => (
           <div
             key={i}
             className="break-inside-avoid overflow-hidden rounded-xl border border-border/50 bg-muted/20 mb-4"
@@ -56,18 +56,20 @@ export function InspirationBoard() {
       </div>
 
       {/* AI Analysis Tags */}
-      <div className="flex flex-wrap gap-2">
-        <span className="flex items-center px-2 text-sm text-muted-foreground">AI Detected:</span>
-        {TAGS.map((tag) => (
-          <Badge key={tag} variant="secondary" className="group gap-1 px-3 py-1 text-sm hover:bg-secondary/80">
-            {tag}
-            <button className="ml-1 opacity-0 transition-opacity group-hover:opacity-100">
-              <X className="h-3 w-3" />
-              <span className="sr-only">Remove {tag} tag</span>
-            </button>
-          </Badge>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <span className="flex items-center px-2 text-sm text-muted-foreground">AI Detected:</span>
+          {tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="group gap-1 px-3 py-1 text-sm hover:bg-secondary/80">
+              {tag}
+              <button className="ml-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <X className="h-3 w-3" />
+                <span className="sr-only">Remove {tag} tag</span>
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
