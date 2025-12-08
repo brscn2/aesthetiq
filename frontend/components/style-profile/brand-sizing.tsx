@@ -6,6 +6,18 @@ import { DetailedMeasurements } from "./detailed-measurements"
 import { useApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { StyleProfile } from "@/types/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { X } from "lucide-react"
+import { toast } from "sonner"
 
 interface BrandSizingProps {
   styleProfile: StyleProfile
@@ -14,7 +26,12 @@ interface BrandSizingProps {
 
 export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isAddBrandModalOpen, setIsAddBrandModalOpen] = useState(false)
+  const [newBrandName, setNewBrandName] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const { styleProfileApi } = useApi()
   const sizes = styleProfile.sizes || {}
+  const favoriteBrands = styleProfile.favoriteBrands || []
 
   const handleSizesUpdate = () => {
     // Trigger parent to refetch the profile
@@ -26,6 +43,53 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
     if (!size) return "Not set"
     // Size is already saved with the correct region format, just display it as is
     return size
+  }
+
+  const handleAddBrand = async () => {
+    if (!newBrandName.trim()) {
+      toast.error("Brand name cannot be empty")
+      return
+    }
+
+    const trimmedBrand = newBrandName.trim()
+    if (favoriteBrands.includes(trimmedBrand)) {
+      toast.error("This brand is already in your favorites")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const updatedBrands = [...favoriteBrands, trimmedBrand]
+      await styleProfileApi.updateByUserId({
+        favoriteBrands: updatedBrands,
+      })
+      toast.success("Brand added successfully")
+      setNewBrandName("")
+      setIsAddBrandModalOpen(false)
+      onProfileUpdate?.()
+    } catch (error) {
+      console.error("Error adding brand:", error)
+      toast.error("Failed to add brand")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleRemoveBrand = async (brandToRemove: string) => {
+    setIsSaving(true)
+    try {
+      const updatedBrands = favoriteBrands.filter((brand) => brand !== brandToRemove)
+      await styleProfileApi.updateByUserId({
+        favoriteBrands: updatedBrands,
+      })
+      toast.success("Brand removed successfully")
+      onProfileUpdate?.()
+    } catch (error) {
+      console.error("Error removing brand:", error)
+      toast.error("Failed to remove brand")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -40,17 +104,29 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {["COS", "Arket", "Acne Studios", "Totême"].map((brand) => (
+              {favoriteBrands.map((brand) => (
                 <div
                   key={brand}
-                  className="flex aspect-[3/2] items-center justify-center rounded-lg border border-border bg-background/50 p-4 text-center font-serif text-lg font-medium shadow-sm transition-colors hover:border-primary/50"
+                  className="group relative flex aspect-[3/2] items-center justify-center rounded-lg border border-border bg-background/50 p-4 text-center font-serif text-lg font-medium shadow-sm transition-colors hover:border-primary/50"
                 >
-                  {brand}
+                  <span className="truncate">{brand}</span>
+                  <button
+                    onClick={() => handleRemoveBrand(brand)}
+                    disabled={isSaving}
+                    className="absolute right-1 top-1 rounded-full bg-destructive/80 p-1 opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
+                    aria-label={`Remove ${brand}`}
+                  >
+                    <X className="h-3 w-3 text-destructive-foreground" />
+                  </button>
                 </div>
               ))}
-              <div className="flex aspect-[3/2] cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted bg-transparent p-4 text-center text-sm text-muted-foreground hover:bg-muted/10">
+              <button
+                onClick={() => setIsAddBrandModalOpen(true)}
+                disabled={isSaving}
+                className="flex aspect-[3/2] cursor-pointer items-center justify-center rounded-lg border border-dashed border-muted bg-transparent p-4 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 + Add Brand
-              </div>
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -84,6 +160,50 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
         currentSizes={sizes}
         onSizesUpdate={handleSizesUpdate}
       />
+
+      {/* Add Brand Dialog */}
+      <Dialog open={isAddBrandModalOpen} onOpenChange={setIsAddBrandModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Favorite Brand</DialogTitle>
+            <DialogDescription>
+              Enter the name of a brand you love to add it to your favorites.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="brand-name">Brand Name</Label>
+              <Input
+                id="brand-name"
+                placeholder="e.g., COS, Arket, Acne Studios"
+                value={newBrandName}
+                onChange={(e) => setNewBrandName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isSaving) {
+                    handleAddBrand()
+                  }
+                }}
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddBrandModalOpen(false)
+                setNewBrandName("")
+              }}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddBrand} disabled={isSaving || !newBrandName.trim()}>
+              {isSaving ? "Adding..." : "Add Brand"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

@@ -121,6 +121,7 @@ export interface StyleProfile {
   sliders: Record<string, number>;
   inspirationImageUrls: string[];
   negativeConstraints: string[];
+  favoriteBrands: string[];
   sizes: {
     top?: string;
     bottom?: string;
@@ -136,6 +137,7 @@ export interface CreateStyleProfileDto {
   sliders?: Record<string, number>;
   inspirationImageUrls?: string[];
   negativeConstraints?: string[];
+  favoriteBrands?: string[];
   sizes?: {
     top?: string;
     bottom?: string;
@@ -148,6 +150,7 @@ export interface UpdateStyleProfileDto {
   sliders?: Record<string, number>;
   inspirationImageUrls?: string[];
   negativeConstraints?: string[];
+  favoriteBrands?: string[];
   sizes?: {
     top?: string;
     bottom?: string;
