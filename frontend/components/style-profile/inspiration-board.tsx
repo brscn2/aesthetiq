@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import Image from "next/image"
+import NextImage from "next/image"
 import { StyleProfile } from "@/types/api"
 import { useApi } from "@/lib/api"
 import { toast } from "sonner"
@@ -27,39 +27,106 @@ interface InspirationBoardProps {
 }
 
 const DEFAULT_TAGS = ["Streetwear", "Oversized Silhouette", "Neutral Tones", "Layering", "Matte Textures"]
+const MAX_OUTPUT_SIZE = 5 * 1024 * 1024 // 5MB cap after compression
+const COMPRESSION_THRESHOLD = 1.5 * 1024 * 1024 // start compressing after 1.5MB
+const MAX_DIMENSION = 1920
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 
 export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationBoardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [imageUrl, setImageUrl] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { uploadApi, styleProfileApi } = useApi()
   const inspirationImages = styleProfile.inspirationImageUrls || []
   const tags = DEFAULT_TAGS // In the future, these could be extracted from the profile or AI analysis
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const loadImageFromFile = (file: File) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image()
+      const objectUrl = URL.createObjectURL(file)
+      image.onload = () => {
+        URL.revokeObjectURL(objectUrl)
+        resolve(image)
+      }
+      image.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl)
+        reject(err)
+      }
+      image.src = objectUrl
+    })
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Invalid file type. Please upload a JPEG, PNG, or WebP image.')
-      return
+  const canvasToFile = (canvas: HTMLCanvasElement, file: File, quality: number) =>
+    new Promise<File | null>((resolve) => {
+      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return resolve(null)
+          resolve(
+            new File([blob], file.name, {
+              type: mimeType,
+              lastModified: Date.now(),
+            })
+          )
+        },
+        mimeType,
+        quality
+      )
+    })
+
+  const compressImageIfNeeded = async (file: File) => {
+    const image = await loadImageFromFile(file)
+    const needsResize = image.width > MAX_DIMENSION || image.height > MAX_DIMENSION
+    const needsCompression = file.size > COMPRESSION_THRESHOLD
+
+    if (!needsResize && !needsCompression) {
+      return file
     }
 
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size too large. Maximum size is 5MB.')
-      return
+    const scale = needsResize ? Math.min(1, MAX_DIMENSION / Math.max(image.width, image.height)) : 1
+    const targetWidth = Math.round(image.width * scale)
+    const targetHeight = Math.round(image.height * scale)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight)
+
+    const qualitySteps = [0.82, 0.72, 0.62]
+    let candidate: File | null = null
+
+    for (const quality of qualitySteps) {
+      candidate = await canvasToFile(canvas, file, quality)
+      if (candidate && candidate.size <= MAX_OUTPUT_SIZE) {
+        return candidate
+      }
+    }
+
+    return candidate || file
+  }
+
+  const processFile = async (file: File): Promise<string | null> => {
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error('Invalid file type. Please upload a JPEG, PNG, or WebP image.')
+      return null
     }
 
     setIsUploading(true)
 
     try {
-      // Upload the file
-      const response = await uploadApi.uploadImage(file)
+      const compressedFile = await compressImageIfNeeded(file)
+
+      if (compressedFile.size > MAX_OUTPUT_SIZE) {
+        toast.error('Image is too large even after compression. Please choose a smaller file.')
+        return null
+      }
+
+      const response = await uploadApi.uploadImage(compressedFile)
 
       // Backend returns absolute URL from Azure Blob Storage
       const fullUrl = response.url.startsWith('http') || response.url.startsWith('https')
@@ -68,12 +135,20 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
 
       setImageUrl(fullUrl)
       toast.success("Image uploaded successfully!")
+      return fullUrl
     } catch (error: any) {
       toast.error(`Failed to upload image: ${error.message || 'Unknown error'}`)
       setImageUrl("")
+      return null
     } finally {
       setIsUploading(false)
     }
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processFile(file)
   }
 
   const handleAddInspiration = async () => {
@@ -90,22 +165,7 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
       return
     }
 
-    setIsSaving(true)
-    try {
-      const updatedImages = [...inspirationImages, imageUrl]
-      await styleProfileApi.updateByUserId({
-        inspirationImageUrls: updatedImages,
-      })
-      toast.success("Inspiration added successfully!")
-      setImageUrl("")
-      setIsModalOpen(false)
-      onProfileUpdate?.()
-    } catch (error) {
-      console.error("Error adding inspiration:", error)
-      toast.error("Failed to add inspiration")
-    } finally {
-      setIsSaving(false)
-    }
+    await addInspiration(imageUrl)
   }
 
   const handleRemoveInspiration = async (index: number) => {
@@ -125,6 +185,46 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
     }
   }
 
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDragActive(false)
+    const file = event.dataTransfer.files?.[0]
+    if (file) {
+      const uploadedUrl = await processFile(file)
+      if (uploadedUrl) {
+        await addInspiration(uploadedUrl)
+      }
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    if (!isDragActive) {
+      setIsDragActive(true)
+    }
+  }
+
+  const handleDragLeave = () => setIsDragActive(false)
+
+  const addInspiration = async (url: string) => {
+    setIsSaving(true)
+    try {
+      const updatedImages = [...inspirationImages, url]
+      await styleProfileApi.updateByUserId({
+        inspirationImageUrls: updatedImages,
+      })
+      toast.success("Inspiration added successfully!")
+      setImageUrl("")
+      setIsModalOpen(false)
+      onProfileUpdate?.()
+    } catch (error) {
+      console.error("Error adding inspiration:", error)
+      toast.error("Failed to add inspiration")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex items-center justify-between">
@@ -137,16 +237,20 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
       {/* Masonry Grid Layout using CSS Columns */}
       <div className="columns-2 gap-4 space-y-4 md:columns-3 lg:columns-4">
         {/* Add Inspiration Card */}
-        <Card 
-          className="break-inside-avoid border-2 border-dashed border-muted bg-transparent transition-colors hover:border-primary hover:bg-primary/5 cursor-pointer"
+        <Card
+          className={`break-inside-avoid border-2 border-dashed bg-transparent transition-colors hover:border-primary hover:bg-primary/5 cursor-pointer ${isDragActive ? 'border-primary bg-primary/10' : 'border-muted'
+            }`}
           onClick={() => setIsModalOpen(true)}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <CardContent className="flex aspect-[3/4] flex-col items-center justify-center p-6 text-center text-muted-foreground">
             <div className="mb-4 rounded-full bg-muted/50 p-4">
               <Plus className="h-6 w-6" />
             </div>
             <p className="font-medium">Add Inspiration</p>
-            <p className="text-xs">Upload or save from chat</p>
+            <p className="text-xs">Upload, drag & drop, or save from chat</p>
           </CardContent>
         </Card>
 
@@ -155,7 +259,7 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
             key={i}
             className="group relative break-inside-avoid overflow-hidden rounded-xl border border-border/50 bg-muted/20 mb-4"
           >
-            <Image
+            <NextImage
               src={src || "/placeholder.svg"}
               alt={`Inspiration ${i + 1}`}
               width={400}
@@ -211,8 +315,14 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
               </TabsTrigger>
             </TabsList>
             <TabsContent value="upload" className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="file-upload">Select Image</Label>
+              <div
+                className={`space-y-2 rounded-lg border border-dashed p-4 transition ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted'
+                  }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Label htmlFor="file-upload">Select or drop an image</Label>
                 <Input
                   id="file-upload"
                   type="file"
@@ -223,7 +333,7 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Supported formats: JPEG, PNG, WebP (Max 5MB)
+                  JPEG, PNG, WebP — auto-compresses large files (max 5MB after compression)
                 </p>
               </div>
               {isUploading && (
@@ -235,12 +345,12 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
               {imageUrl && (
                 <div className="space-y-2">
                   <Label>Preview</Label>
-                  <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
-                    <Image
+                  <div className="relative w-full overflow-hidden rounded-lg border border-border bg-muted/30 sm:h-[340px] h-[280px]">
+                    <NextImage
                       src={imageUrl}
                       alt="Preview"
                       fill
-                      className="object-cover"
+                      className="object-contain"
                     />
                   </div>
                 </div>
@@ -265,7 +375,7 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
                 <div className="space-y-2">
                   <Label>Preview</Label>
                   <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
-                    <Image
+                    <NextImage
                       src={imageUrl}
                       alt="Preview"
                       fill
@@ -294,8 +404,8 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
             >
               Cancel
             </Button>
-            <Button 
-              onClick={handleAddInspiration} 
+            <Button
+              onClick={handleAddInspiration}
               disabled={isSaving || isUploading || !imageUrl.trim()}
             >
               {isSaving ? (
