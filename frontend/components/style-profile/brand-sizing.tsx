@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DetailedMeasurements } from "./detailed-measurements"
 import { useApi } from "@/lib/api"
@@ -29,6 +29,10 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
   const [isAddBrandModalOpen, setIsAddBrandModalOpen] = useState(false)
   const [newBrandName, setNewBrandName] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [recommendedBrands, setRecommendedBrands] = useState<
+    { name: string; reason: string }[]
+  >([])
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false)
   const { styleProfileApi } = useApi()
   const sizes = styleProfile.sizes || {}
   const favoriteBrands = styleProfile.favoriteBrands || []
@@ -45,13 +49,13 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
     return size
   }
 
-  const handleAddBrand = async () => {
-    if (!newBrandName.trim()) {
+  const saveBrand = async (brandName: string, options?: { onSuccess?: () => void }) => {
+    const trimmedBrand = brandName.trim()
+    if (!trimmedBrand) {
       toast.error("Brand name cannot be empty")
       return
     }
 
-    const trimmedBrand = newBrandName.trim()
     if (favoriteBrands.includes(trimmedBrand)) {
       toast.error("This brand is already in your favorites")
       return
@@ -63,9 +67,8 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
       await styleProfileApi.updateByUserId({
         favoriteBrands: updatedBrands,
       })
-      toast.success("Brand added successfully")
-      setNewBrandName("")
-      setIsAddBrandModalOpen(false)
+      toast.success(`${trimmedBrand} added to favorites`)
+      options?.onSuccess?.()
       onProfileUpdate?.()
     } catch (error) {
       console.error("Error adding brand:", error)
@@ -91,6 +94,43 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
       setIsSaving(false)
     }
   }
+
+  const loadRecommendedBrands = () => {
+    setIsLoadingRecommendations(true)
+
+    // Placeholder recommendations for the future recommendation engine.
+    // Ties loosely to archetype so the UI already handles dynamic data.
+    const archetype = styleProfile.archetype?.toLowerCase() || ""
+    const recs =
+      archetype.includes("minimal") || archetype.includes("modern")
+        ? [
+          { name: "COS", reason: "Clean lines, neutral palette" },
+          { name: "Arket", reason: "Scandi basics with structure" },
+          { name: "Theory", reason: "Tailored essentials" },
+        ]
+        : archetype.includes("romantic")
+          ? [
+            { name: "Reformation", reason: "Feminine silhouettes" },
+            { name: "Sézane", reason: "Parisian softness" },
+            { name: "LoveShackFancy", reason: "Soft florals" },
+          ]
+          : [
+            { name: "Acne Studios", reason: "Elevated essentials" },
+            { name: "Everlane", reason: "Quality everyday staples" },
+            { name: "A.P.C.", reason: "Understated denim & leather" },
+          ]
+
+    // Simulate async flow to make wiring identical to a future API call.
+    setTimeout(() => {
+      setRecommendedBrands(recs)
+      setIsLoadingRecommendations(false)
+    }, 250)
+  }
+
+  useEffect(() => {
+    loadRecommendedBrands()
+    // Refreshes when archetype changes (e.g., user updates their profile)
+  }, [styleProfile.archetype])
 
   return (
     <section className="space-y-6">
@@ -127,6 +167,61 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
               >
                 + Add Brand
               </button>
+            </div>
+
+            <div className="mt-6 space-y-2 rounded-lg border border-border/60 bg-muted/10 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Recommended brands</p>
+                  <p className="text-xs text-muted-foreground">
+                    Prototype — we’ll auto-suggest based on your profile soon. Add any you like.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={loadRecommendedBrands}
+                  disabled={isLoadingRecommendations}
+                >
+                  {isLoadingRecommendations ? "Refreshing..." : "Refresh"}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {isLoadingRecommendations &&
+                  Array.from({ length: 3 }).map((_, idx) => (
+                    <div
+                      key={`rec-skeleton-${idx}`}
+                      className="h-[84px] rounded-md border border-dashed border-muted bg-background/40 animate-pulse"
+                    />
+                  ))}
+
+                {!isLoadingRecommendations &&
+                  recommendedBrands.map((brand) => {
+                    const isSaved = favoriteBrands.includes(brand.name)
+                    return (
+                      <div
+                        key={brand.name}
+                        className="flex items-start justify-between gap-2 rounded-md border border-border bg-background/60 p-3"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-semibold leading-tight">{brand.name}</p>
+                          <p className="text-xs text-muted-foreground">{brand.reason}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={isSaved ? "outline" : "secondary"}
+                          disabled={isSaving || isSaved}
+                          onClick={() => saveBrand(brand.name)}
+                          className="text-xs"
+                        >
+                          {isSaved ? "Saved" : "Add"}
+                        </Button>
+                      </div>
+                    )
+                  })}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -180,7 +275,12 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
                 onChange={(e) => setNewBrandName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !isSaving) {
-                    handleAddBrand()
+                    saveBrand(newBrandName, {
+                      onSuccess: () => {
+                        setNewBrandName("")
+                        setIsAddBrandModalOpen(false)
+                      },
+                    })
                   }
                 }}
                 disabled={isSaving}
@@ -198,7 +298,17 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
             >
               Cancel
             </Button>
-            <Button onClick={handleAddBrand} disabled={isSaving || !newBrandName.trim()}>
+            <Button
+              onClick={() =>
+                saveBrand(newBrandName, {
+                  onSuccess: () => {
+                    setNewBrandName("")
+                    setIsAddBrandModalOpen(false)
+                  },
+                })
+              }
+              disabled={isSaving || !newBrandName.trim()}
+            >
               {isSaving ? "Adding..." : "Add Brand"}
             </Button>
           </DialogFooter>
