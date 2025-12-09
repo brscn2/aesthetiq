@@ -24,6 +24,9 @@ export class StyleProfile {
   @Prop({ type: [String], default: [] })
   negativeConstraints: string[];
 
+  @Prop({ type: [String], default: [] })
+  favoriteBrands: string[];
+
   @Prop({
     type: {
       top: { type: String },

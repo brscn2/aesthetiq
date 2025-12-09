@@ -29,9 +29,7 @@ class SizesDto {
 }
 
 export class CreateStyleProfileDto {
-  // userId is now injected from authentication, not from DTO
-  userId?: string;
-
+  // userId is injected by the controller from authentication, not from DTO
   @ApiProperty({ example: 'Urban Minimalist' })
   @IsString()
   @IsNotEmpty()
@@ -63,6 +61,15 @@ export class CreateStyleProfileDto {
   @IsString({ each: true })
   @IsOptional()
   negativeConstraints?: string[];
+
+  @ApiProperty({
+    example: ['COS', 'Arket', 'Acne Studios'],
+    required: false,
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  favoriteBrands?: string[];
 
   @ApiProperty({ type: SizesDto, required: false })
   @ValidateNested()

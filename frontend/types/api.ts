@@ -121,6 +121,7 @@ export interface StyleProfile {
   sliders: Record<string, number>;
   inspirationImageUrls: string[];
   negativeConstraints: string[];
+  favoriteBrands: string[];
   sizes: {
     top?: string;
     bottom?: string;
@@ -131,11 +132,12 @@ export interface StyleProfile {
 }
 
 export interface CreateStyleProfileDto {
-  userId: string;
+  userId?: string; // Optional - backend injects it from authentication
   archetype: string;
   sliders?: Record<string, number>;
   inspirationImageUrls?: string[];
   negativeConstraints?: string[];
+  favoriteBrands?: string[];
   sizes?: {
     top?: string;
     bottom?: string;
@@ -148,6 +150,7 @@ export interface UpdateStyleProfileDto {
   sliders?: Record<string, number>;
   inspirationImageUrls?: string[];
   negativeConstraints?: string[];
+  favoriteBrands?: string[];
   sizes?: {
     top?: string;
     bottom?: string;

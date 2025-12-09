@@ -16,7 +16,7 @@ export class StyleProfileService {
   ) {}
 
   async create(
-    createStyleProfileDto: CreateStyleProfileDto,
+    createStyleProfileDto: CreateStyleProfileDto & { userId: string },
   ): Promise<StyleProfile> {
     const createdProfile = new this.styleProfileModel(createStyleProfileDto);
     return createdProfile.save();
