@@ -62,6 +62,15 @@ export class CreateStyleProfileDto {
   @IsOptional()
   negativeConstraints?: string[];
 
+  @ApiProperty({
+    example: ['COS', 'Arket', 'Acne Studios'],
+    required: false,
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  favoriteBrands?: string[];
+
   @ApiProperty({ type: SizesDto, required: false })
   @ValidateNested()
   @Type(() => SizesDto)
