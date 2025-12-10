@@ -1,9 +1,10 @@
 "use client"
 
-import { User, Fingerprint, Sliders, Bell, CreditCard, Shield } from "lucide-react"
+import { User, Fingerprint, Sliders, Bell, CreditCard, Shield, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useUser } from "@/contexts/user-context"
 
 const navItems = [
   {
@@ -35,25 +36,53 @@ interface SettingsNavProps {
 }
 
 export function SettingsNav({ activeSection, onSectionChange, onClose }: SettingsNavProps) {
+  const { user, isLoading } = useUser()
+
+  // Get user initials for fallback
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
   return (
     <div className="flex h-full flex-col space-y-8">
       {/* User Snippet */}
       <div className="flex items-center gap-3 lg:flex-col lg:items-start lg:gap-2">
-        <div className="relative">
-          <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-primary/20">
-            <AvatarImage src="/professional-portrait-photo-fashion.jpg" alt="User" />
-            <AvatarFallback>JD</AvatarFallback>
-          </Avatar>
-          <div className="absolute -bottom-1 -right-1 flex h-5 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-1.5 text-[9px] font-bold text-white shadow-lg">
-            PRO
+        {isLoading ? (
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-muted animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+              <div className="h-3 w-16 bg-muted animate-pulse rounded" />
+            </div>
           </div>
-        </div>
-        <div className="space-y-0.5 min-w-0 flex-1">
-          <h2 className="font-playfair text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">Jane Doe</h2>
-          <p className="bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-xs sm:text-sm font-medium text-transparent">
-            Pro Member
-          </p>
-        </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-primary/20">
+                <AvatarImage src={user?.avatarUrl || "/professional-portrait-photo-fashion.jpg"} alt="User" />
+                <AvatarFallback>{user?.name ? getInitials(user.name) : 'U'}</AvatarFallback>
+              </Avatar>
+              {user?.subscriptionStatus === 'PRO' && (
+                <div className="absolute -bottom-1 -right-1 flex h-5 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-1.5 text-[9px] font-bold text-white shadow-lg">
+                  PRO
+                </div>
+              )}
+            </div>
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <h2 className="font-playfair text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">
+                {user?.name || 'User'}
+              </h2>
+              <p className="bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-xs sm:text-sm font-medium text-transparent">
+                {user?.subscriptionStatus === 'PRO' ? 'Pro Member' : 'Free Member'}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Navigation Menu */}

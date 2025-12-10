@@ -2,6 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@/components/theme-provider';
+import { UserProvider } from '@/contexts/user-context';
+import { SettingsProvider } from '@/contexts/settings-context';
 import { useState } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -24,7 +26,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <UserProvider>
+          <SettingsProvider>
+            {children}
+          </SettingsProvider>
+        </UserProvider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @Injectable()
 export class UsersService {
@@ -45,6 +46,106 @@ export class UsersService {
     if (!result) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
+  }
+
+  // Clerk-based methods
+  async findByClerkId(clerkId: string): Promise<User> {
+    let user = await this.userModel.findOne({ clerkId }).exec();
+    
+    // If user doesn't exist, create a basic user record
+    // This handles cases where the webhook hasn't fired yet or failed
+    if (!user) {
+      console.log(`User with Clerk ID ${clerkId} not found, creating basic user record`);
+      
+      user = new this.userModel({
+        clerkId,
+        email: `user-${clerkId}@temp.local`, // Temporary email, will be updated by webhook
+        name: 'User', // Temporary name, will be updated by webhook
+        subscriptionStatus: 'FREE',
+        settings: {
+          units: 'IMPERIAL',
+          currency: 'USD',
+          shoppingRegion: 'USA',
+          allowBiometrics: false,
+          allowFacialAnalysis: true,
+          storeColorHistory: true,
+          contributeToTrendLearning: false,
+          theme: 'SYSTEM',
+        },
+      });
+      
+      await user.save();
+      console.log(`Basic user record created for Clerk ID: ${clerkId}`);
+    }
+    
+    return user;
+  }
+
+  async getSettingsByClerkId(clerkId: string): Promise<User['settings']> {
+    // Use findByClerkId which will auto-create user if needed
+    const user = await this.findByClerkId(clerkId);
+    return user.settings;
+  }
+
+  async updateSettingsByClerkId(clerkId: string, updateSettingsDto: UpdateSettingsDto): Promise<User['settings']> {
+    // Ensure user exists first (will auto-create if needed)
+    const existingUser = await this.findByClerkId(clerkId);
+    
+    // Merge new settings with existing settings to avoid overwriting unrelated fields
+    const updatedSettings = {
+      ...existingUser.settings,
+      ...updateSettingsDto,
+    };
+    
+    const user = await this.userModel
+      .findOneAndUpdate(
+        { clerkId },
+        { $set: { 'settings': updatedSettings } },
+        { new: true, runValidators: true }
+      )
+      .select('settings')
+      .exec();
+    
+    if (!user) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
+    
+    return user.settings;
+  }
+
+  // Settings-specific methods (by ID)
+  async getSettings(id: string): Promise<User['settings']> {
+    const user = await this.userModel.findById(id).select('settings').exec();
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    return user.settings;
+  }
+
+  async updateSettings(id: string, updateSettingsDto: UpdateSettingsDto): Promise<User['settings']> {
+    // First get the existing user to merge settings properly
+    const existingUser = await this.findOne(id);
+    
+    // Merge new settings with existing settings to avoid overwriting unrelated fields
+    const updatedSettings = {
+      ...existingUser.settings,
+      ...updateSettingsDto,
+    };
+    
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { $set: { 'settings': updatedSettings } },
+        { new: true, runValidators: true }
+      )
+      .select('settings')
+      .exec();
+    
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    
+    return user.settings;
   }
 }
 

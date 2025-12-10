@@ -581,8 +581,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // AUTO-START background removal in the background
       // User can continue filling out the form while AI processes
       if (removeBackground) {
-        toast.info('🤖 AI entfernt Hintergrund im Hintergrund...', {
-          description: 'Du kannst schon weitermachen! Dauert ca. 10-30 Sekunden.',
+        toast.info('AI removing background in the background...', {
+          description: 'You can continue! Takes about 10-30 seconds.',
           duration: 4000,
         })
         
@@ -738,7 +738,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                       <div className="absolute inset-0 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
                         <div className="text-center px-5 py-4 bg-background/95 rounded-lg border border-purple-500/30 shadow-xl">
                           <Loader2 className="mx-auto h-10 w-10 animate-spin text-purple-500 dark:text-purple-400" />
-                          <p className="mt-2 text-sm font-medium text-foreground">AI entfernt Hintergrund</p>
+                          <p className="mt-2 text-sm font-medium text-foreground">AI removing background</p>
                           <div className="mt-3 h-1.5 w-40 overflow-hidden rounded-full bg-muted">
                             <div 
                               className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 ease-out"
@@ -787,8 +787,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                             setImagePreview(processedPreviewUrl)
                           } else if (uploadedFile && !processedImageBlob && !isProcessing) {
                             // Start processing if not already done
-                            toast.info('🤖 AI entfernt Hintergrund...', {
-                              description: 'Dauert ca. 10-30 Sekunden',
+                            toast.info('AI removing background...', {
+                              description: 'Takes about 10-30 seconds',
                               duration: 3000,
                             })
                             handleBackgroundRemoval(uploadedFile)

@@ -8,17 +8,47 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SubscriptionStatus, Units } from '../schemas/user.schema';
+import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion } from '../schemas/user.schema';
 
 class UserSettingsDto {
-  @ApiProperty({ enum: Units, default: Units.METRIC })
+  // Measurement & Regional
+  @ApiProperty({ enum: Units, default: Units.IMPERIAL })
   @IsEnum(Units)
   @IsOptional()
   units?: Units;
 
+  @ApiProperty({ enum: Currency, default: Currency.USD })
+  @IsEnum(Currency)
+  @IsOptional()
+  currency?: Currency;
+
+  @ApiProperty({ enum: ShoppingRegion, default: ShoppingRegion.USA })
+  @IsEnum(ShoppingRegion)
+  @IsOptional()
+  shoppingRegion?: ShoppingRegion;
+
+  // Privacy & Biometric Settings
   @ApiProperty({ default: false })
   @IsOptional()
   allowBiometrics?: boolean;
+
+  @ApiProperty({ default: true })
+  @IsOptional()
+  allowFacialAnalysis?: boolean;
+
+  @ApiProperty({ default: true })
+  @IsOptional()
+  storeColorHistory?: boolean;
+
+  @ApiProperty({ default: false })
+  @IsOptional()
+  contributeToTrendLearning?: boolean;
+
+  // Appearance
+  @ApiProperty({ enum: Theme, default: Theme.SYSTEM })
+  @IsEnum(Theme)
+  @IsOptional()
+  theme?: Theme;
 }
 
 export class CreateUserDto {

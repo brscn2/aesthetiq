@@ -2,11 +2,26 @@
 
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { Sparkles, Palette } from "lucide-react"
+import { Sparkles, Palette, Loader2 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useSettings } from "@/contexts/settings-context"
+import { Currency, ShoppingRegion, Units } from "@/types/api"
 
 export function PreferencesPanel() {
+  const { settings, isLoading, updateSettings } = useSettings()
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl flex items-center justify-center p-8">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="text-muted-foreground">Loading preferences...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-6 lg:p-10">
       {/* Header */}
@@ -52,42 +67,51 @@ export function PreferencesPanel() {
         <div className="grid gap-6 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Measurement Units</Label>
-            <Select defaultValue="imperial">
+            <Select 
+              value={settings?.units || Units.IMPERIAL}
+              onValueChange={(value) => updateSettings({ units: value as Units })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select units" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="imperial">Imperial (in/lbs)</SelectItem>
-                <SelectItem value="metric">Metric (cm/kg)</SelectItem>
+                <SelectItem value={Units.IMPERIAL}>Imperial (in/lbs)</SelectItem>
+                <SelectItem value={Units.METRIC}>Metric (cm/kg)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>Shopping Region</Label>
-            <Select defaultValue="usa">
+            <Select 
+              value={settings?.shoppingRegion || ShoppingRegion.USA}
+              onValueChange={(value) => updateSettings({ shoppingRegion: value as ShoppingRegion })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="usa">United States</SelectItem>
-                <SelectItem value="uk">United Kingdom</SelectItem>
-                <SelectItem value="eu">Europe</SelectItem>
-                <SelectItem value="apac">Asia Pacific</SelectItem>
+                <SelectItem value={ShoppingRegion.USA}>United States</SelectItem>
+                <SelectItem value={ShoppingRegion.UK}>United Kingdom</SelectItem>
+                <SelectItem value={ShoppingRegion.EU}>Europe</SelectItem>
+                <SelectItem value={ShoppingRegion.APAC}>Asia Pacific</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>Currency</Label>
-            <Select defaultValue="usd">
+            <Select 
+              value={settings?.currency || Currency.USD}
+              onValueChange={(value) => updateSettings({ currency: value as Currency })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="usd">USD ($)</SelectItem>
-                <SelectItem value="gbp">GBP (£)</SelectItem>
-                <SelectItem value="eur">EUR (€)</SelectItem>
+                <SelectItem value={Currency.USD}>USD ($)</SelectItem>
+                <SelectItem value={Currency.GBP}>GBP (£)</SelectItem>
+                <SelectItem value={Currency.EUR}>EUR (€)</SelectItem>
               </SelectContent>
             </Select>
           </div>
