@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 python-multipart
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.30.0
@@ -8,7 +9,7 @@ numpy
 pandas
 scikit-learn
 pillow
-opencv-python
+opencv-python-headless
 scikit-image
 mediapipe
 openpyxl

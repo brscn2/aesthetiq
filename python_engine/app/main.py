@@ -24,7 +24,7 @@ try:
     analyzer = FaceAnalysisService(
         segmentation_weights=f"{base_path}/weights/resnet18.pt",
         model_path=f"{base_path}/weights/season_resnet18.pth",
-        device="cuda" # Will fallback to CPU if needed
+        device="cuda" if torch.cuda.is_available() else "cpu"
     )
 except Exception as e:
     print(f"Failed to load models: {e}")
