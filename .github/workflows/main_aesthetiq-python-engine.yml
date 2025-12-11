@@ -41,6 +41,8 @@ jobs:
           path: |
             python_engine/
             !python_engine/antenv/
+            !python_engine/**/__pycache__/
+            !python_engine/**/*.pyc
 
       # 🚫 Opting Out of Oryx Build
       # If you prefer to disable the Oryx build process during deployment, follow these steps:
@@ -64,10 +66,30 @@ jobs:
       
       - name: Move python_engine contents to root
         run: |
-          # Move contents from python_engine/ to current directory
-          mv python_engine/* .
-          mv python_engine/.* . 2>/dev/null || true
-          rmdir python_engine
+          # Check if python_engine directory exists (it should from the artifact)
+          if [ -d "python_engine" ]; then
+            echo "Moving python_engine contents to root..."
+            # Move all visible files and directories
+            shopt -s dotglob nullglob
+            for item in python_engine/*; do
+              if [ -e "$item" ]; then
+                mv "$item" .
+              fi
+            done
+            # Move hidden files
+            for item in python_engine/.*; do
+              if [ -f "$item" ] && [ "$(basename "$item")" != "." ] && [ "$(basename "$item")" != ".." ]; then
+                mv "$item" .
+              fi
+            done
+            # Remove empty directory
+            rmdir python_engine 2>/dev/null || true
+            echo "Move completed successfully"
+          else
+            echo "Warning: python_engine directory not found. Listing current directory:"
+            ls -la
+            exit 1
+          fi
       
       - name: Make startup script executable
         run: |
