@@ -65,5 +65,8 @@ async def analyze_face(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Run on localhost:8000
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # Azure App Service provides PORT environment variable
+    # Default to 8000 for local development
+    port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "0.0.0.0")
+    uvicorn.run(app, host=host, port=port)
