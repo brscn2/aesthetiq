@@ -48,12 +48,12 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className="dark" suppressHydrationWarning>
+      <html lang="en" suppressHydrationWarning>
         <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`} suppressHydrationWarning>
           <Providers>
             {children}
           </Providers>
-          <Toaster position="top-right" theme="dark" />
+          <Toaster position="top-right" theme="system" />
           <Analytics />
         </body>
       </html>

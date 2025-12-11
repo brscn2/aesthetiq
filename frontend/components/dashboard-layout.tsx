@@ -4,7 +4,7 @@ import { useState } from "react"
 import type React from "react"
 import { DashboardSidebar } from "./dashboard-sidebar"
 import { Button } from "@/components/ui/button"
-import { Menu, X, Sparkles } from "lucide-react"
+import { Menu, X } from "lucide-react"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -44,14 +44,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
-          <div className="flex items-center space-x-2">
-            <div className="bg-gradient-to-r from-purple-500 to-rose-500 rounded-lg p-1.5 shadow-lg shadow-purple-500/25">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <span className="font-playfair text-lg font-bold bg-gradient-to-r from-purple-600 to-rose-600 bg-clip-text text-transparent">
-              AesthetIQ
-            </span>
-          </div>
+          <h1 className="font-serif text-xl font-bold tracking-tight text-foreground">
+            Aesthet<span className="text-gradient-ai">IQ</span>
+          </h1>
         </div>
         <main className="flex-1 overflow-hidden">{children}</main>
       </div>
