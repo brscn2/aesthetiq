@@ -22,7 +22,7 @@ class UserSettingsDto {
   @IsOptional()
   currency?: Currency;
 
-  @ApiProperty({ enum: ShoppingRegion, default: ShoppingRegion.USA })
+  @ApiProperty({ enum: ShoppingRegion, default: ShoppingRegion.EU })
   @IsEnum(ShoppingRegion)
   @IsOptional()
   shoppingRegion?: ShoppingRegion;
