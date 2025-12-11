@@ -12,12 +12,12 @@ import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion } from '../s
 
 class UserSettingsDto {
   // Measurement & Regional
-  @ApiProperty({ enum: Units, default: Units.IMPERIAL })
+  @ApiProperty({ enum: Units, default: Units.METRIC })
   @IsEnum(Units)
   @IsOptional()
   units?: Units;
 
-  @ApiProperty({ enum: Currency, default: Currency.USD })
+  @ApiProperty({ enum: Currency, default: Currency.EUR })
   @IsEnum(Currency)
   @IsOptional()
   currency?: Currency;
