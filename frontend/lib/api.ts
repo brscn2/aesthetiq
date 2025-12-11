@@ -46,6 +46,13 @@ const createHttpClient = () => {
 }
 
 const createUserApi = (client: AxiosInstance) => ({
+  // Current user endpoints (authenticated)
+  getCurrentUser: (): Promise<User> => client.get("/users/me").then((res) => res.data),
+  getCurrentUserSettings: (): Promise<User['settings']> => client.get("/users/me/settings").then((res) => res.data),
+  updateCurrentUserSettings: (data: Partial<User['settings']>): Promise<User['settings']> => 
+    client.patch("/users/me/settings", data).then((res) => res.data),
+  
+  // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
   getById: (id: string): Promise<User> => client.get(`/users/${id}`).then((res) => res.data),
   create: (data: CreateUserDto): Promise<User> => client.post("/users", data).then((res) => res.data),

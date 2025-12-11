@@ -2,6 +2,7 @@
 
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
 import { Home, Palette, Shirt, User, Settings } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -56,12 +57,16 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
       {/* User Section */}
       <div className="border-t border-sidebar-border p-4">
         <SignedIn>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">
               <p className="text-sm font-medium text-sidebar-foreground">Signed in</p>
               <p className="text-xs text-sidebar-foreground/60">Manage your profile</p>
             </div>
             <UserButton afterSignOutUrl="/" />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-sidebar-foreground/60">Theme</span>
+            <ThemeToggle />
           </div>
         </SignedIn>
 
