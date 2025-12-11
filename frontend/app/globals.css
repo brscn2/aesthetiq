@@ -127,8 +127,6 @@
   html,
   body {
     @apply bg-background text-foreground;
-    height: 100%;
-    overflow: hidden;
   }
 }
 
@@ -143,5 +141,152 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.4); }
+    50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite;
+  }
+}
+
+/* Seamless flowing gradient background for landing page */
+@layer utilities {
+  .landing-gradient-bg {
+    background: 
+      /* Animated flowing color blobs */
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(168, 85, 247, 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(236, 72, 153, 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 10% 40%, rgba(251, 191, 36, 0.10) 0%, transparent 50%),
+      radial-gradient(ellipse 80% 60% at 90% 50%, rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 30% 70%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 70% 85%, rgba(99, 102, 241, 0.10) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 30% at 50% 95%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+      /* Base gradient */
+      linear-gradient(180deg, 
+        rgba(255, 255, 255, 1) 0%,
+        rgba(250, 245, 255, 0.8) 15%,
+        rgba(255, 250, 250, 0.7) 30%,
+        rgba(255, 253, 245, 0.6) 45%,
+        rgba(245, 255, 250, 0.5) 60%,
+        rgba(250, 250, 255, 0.6) 75%,
+        rgba(255, 245, 255, 0.8) 90%,
+        rgba(255, 255, 255, 1) 100%
+      );
+    background-attachment: fixed;
+    animation: flowingGradient 30s ease-in-out infinite;
+  }
+
+  .dark .landing-gradient-bg {
+    background: 
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(236, 72, 153, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 10% 40%, rgba(251, 191, 36, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse 80% 60% at 90% 50%, rgba(34, 197, 94, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 30% 70%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 70% 85%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 30% at 50% 95%, rgba(236, 72, 153, 0.08) 0%, transparent 50%),
+      linear-gradient(180deg, 
+        var(--background) 0%,
+        var(--background) 100%
+      );
+    background-attachment: fixed;
+  }
+
+  @keyframes flowingGradient {
+    0%, 100% {
+      background-position: 
+        0% 0%, 100% 0%, 0% 50%, 100% 50%, 0% 100%, 100% 100%, 50% 100%, 0% 0%;
+    }
+    25% {
+      background-position: 
+        25% 10%, 75% 30%, 25% 60%, 75% 40%, 25% 90%, 75% 80%, 50% 95%, 0% 0%;
+    }
+    50% {
+      background-position: 
+        50% 20%, 50% 40%, 50% 70%, 50% 30%, 50% 80%, 50% 60%, 50% 90%, 0% 0%;
+    }
+    75% {
+      background-position: 
+        75% 10%, 25% 30%, 75% 60%, 25% 40%, 75% 90%, 25% 80%, 50% 95%, 0% 0%;
+    }
+  }
+
+  /* Remove hard edges between sections */
+  .section-blend {
+    position: relative;
+    z-index: 1;
+  }
+
+  .section-blend::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    left: 0;
+    right: 0;
+    height: 100px;
+    background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .dark .section-blend::before {
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 50%, transparent 100%);
+  }
+}
+/* Landing page gradient background */
+@layer utilities {
+  .landing-gradient-bg {
+    background: linear-gradient(
+      135deg,
+      rgba(168, 85, 247, 0.1) 0%,
+      rgba(236, 72, 153, 0.08) 25%,
+      rgba(251, 191, 36, 0.06) 50%,
+      rgba(34, 197, 94, 0.05) 75%,
+      rgba(59, 130, 246, 0.08) 100%
+    );
+    background-size: 400% 400%;
+    animation: gradientFlow 15s ease-in-out infinite;
+  }
+
+  @keyframes gradientFlow {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .dark .landing-gradient-bg {
+    background: linear-gradient(
+      135deg,
+      rgba(168, 85, 247, 0.05) 0%,
+      rgba(236, 72, 153, 0.04) 25%,
+      rgba(251, 191, 36, 0.03) 50%,
+      rgba(34, 197, 94, 0.025) 75%,
+      rgba(59, 130, 246, 0.04) 100%
+    );
+    background-size: 400% 400%;
+    animation: gradientFlow 15s ease-in-out infinite;
   }
 }

@@ -48,8 +48,8 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className="dark h-full" suppressHydrationWarning>
-        <body className={`${inter.variable} ${playfair.variable} font-sans antialiased h-full`} suppressHydrationWarning>
+      <html lang="en" className="dark" suppressHydrationWarning>
+        <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`} suppressHydrationWarning>
           <Providers>
             {children}
           </Providers>
