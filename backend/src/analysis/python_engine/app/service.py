@@ -7,8 +7,8 @@ from PIL import Image
 from transformers import pipeline
 from typing import Dict, Any, Union
 
-# Import core logic from inference.py
-# from extract_details.inference import (
+# Import core logic from core/
+# from core.inference import (
     # load_model,
     # prepare_image,
     # ColorAnalysisPipeline
