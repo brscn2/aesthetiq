@@ -11,7 +11,7 @@ export class CreateColorAnalysisDto {
   // userId is now injected from authentication, not from DTO
   userId?: string;
 
-  @ApiProperty({ example: 'Deep Autumn' })
+  @ApiProperty({ example: 'Dark Autumn' })
   @IsString()
   @IsNotEmpty()
   season: string;
@@ -27,18 +27,26 @@ export class CreateColorAnalysisDto {
   undertone: string;
 
   @ApiProperty({
-    example: ['#8B4513', '#CD853F', '#DEB887'],
-    description: 'Array of hex color codes',
+    example: [
+      { name: 'Terracotta', hex: '#8D4E38' },
+      { name: 'Forest Green', hex: '#2E4A3B' },
+      { name: 'Mahogany', hex: '#4A1C17' },
+    ],
+    description: 'Array of color objects with name and hex code',
   })
   @IsArray()
-  @IsString({ each: true })
   @IsOptional()
-  palette?: string[];
+  palette?: Array<{ name: string; hex: string }>;
 
   @ApiProperty({ required: false, example: 'Oval' })
   @IsString()
   @IsOptional()
   faceShape?: string;
+
+  @ApiProperty({ required: false, example: 'https://storage.azure.com/analysis/image.jpg' })
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 
   @ApiProperty({ required: false })
   @IsDateString()

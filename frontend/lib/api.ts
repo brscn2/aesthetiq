@@ -74,10 +74,20 @@ const createWardrobeApi = (client: AxiosInstance) => ({
 })
 
 const createAnalysisApi = (client: AxiosInstance) => ({
-  getLatest: (userId: string): Promise<ColorAnalysis> => client.get(`/analysis/latest?userId=${userId}`).then((res) => res.data),
-  getAllByUserId: (userId: string): Promise<ColorAnalysis[]> => client.get(`/analysis/user/${userId}`).then((res) => res.data),
+  getLatest: (): Promise<ColorAnalysis> => client.get(`/analysis/latest`).then((res) => res.data),
+  getAllByUserId: (): Promise<ColorAnalysis[]> => client.get(`/analysis/user`).then((res) => res.data),
   getById: (id: string): Promise<ColorAnalysis> => client.get(`/analysis/${id}`).then((res) => res.data),
   create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> => client.post("/analysis", data).then((res) => res.data),
+  analyzeImage: (file: File): Promise<ColorAnalysis> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return client.post("/analysis/analyze-image", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // 60 second timeout for analysis
+    }).then((res) => res.data);
+  },
   delete: (id: string): Promise<void> => client.delete(`/analysis/${id}`).then(() => undefined),
 })
 
