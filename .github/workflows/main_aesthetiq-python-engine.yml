@@ -64,29 +64,32 @@ jobs:
           name: python-app
           path: .
       
-      - name: Move python_engine contents to root
+      - name: Verify deployment structure
         run: |
-          # Check if python_engine directory exists (it should from the artifact)
-          if [ -d "python_engine" ]; then
+          echo "Verifying deployment structure..."
+          echo "Current directory contents:"
+          ls -la
+          echo ""
+          # Check if files are already at root (which is what we want)
+          if [ -d "app" ] && [ -f "requirements.txt" ]; then
+            echo "✓ Files are already at root level - ready for deployment"
+          elif [ -d "python_engine" ]; then
             echo "Moving python_engine contents to root..."
-            # Move all visible files and directories
             shopt -s dotglob nullglob
             for item in python_engine/*; do
               if [ -e "$item" ]; then
                 mv "$item" .
               fi
             done
-            # Move hidden files
             for item in python_engine/.*; do
               if [ -f "$item" ] && [ "$(basename "$item")" != "." ] && [ "$(basename "$item")" != ".." ]; then
                 mv "$item" .
               fi
             done
-            # Remove empty directory
             rmdir python_engine 2>/dev/null || true
-            echo "Move completed successfully"
+            echo "Move completed"
           else
-            echo "Warning: python_engine directory not found. Listing current directory:"
+            echo "Error: Expected files not found. Listing directory:"
             ls -la
             exit 1
           fi
