@@ -51,33 +51,6 @@ export class UsersService {
   // Clerk-based methods
   async findByClerkId(clerkId: string): Promise<User> {
     let user = await this.userModel.findOne({ clerkId }).exec();
-    
-    // If user doesn't exist, create a basic user record
-    // This handles cases where the webhook hasn't fired yet or failed
-    if (!user) {
-      console.log(`User with Clerk ID ${clerkId} not found, creating basic user record`);
-      
-      user = new this.userModel({
-        clerkId,
-        email: `user-${clerkId}@temp.local`, // Temporary email, will be updated by webhook
-        name: 'User', // Temporary name, will be updated by webhook
-        subscriptionStatus: 'FREE',
-        settings: {
-          units: 'IMPERIAL',
-          currency: 'USD',
-          shoppingRegion: 'USA',
-          allowBiometrics: false,
-          allowFacialAnalysis: true,
-          storeColorHistory: true,
-          contributeToTrendLearning: false,
-          theme: 'SYSTEM',
-        },
-      });
-      
-      await user.save();
-      console.log(`Basic user record created for Clerk ID: ${clerkId}`);
-    }
-    
     return user;
   }
 
