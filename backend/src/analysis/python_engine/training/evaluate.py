@@ -6,9 +6,12 @@ from sklearn.metrics import classification_report, accuracy_score
 import json
 
 # Configuration
-TEST_DIR = "backend/src/analysis/python_engine/data" # Root where annotations.xlsx is
+# Since this script is now in training/, data/ is in ../data
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+TEST_DIR = os.path.join(parent_dir, "data")
 API_URL = "http://127.0.0.1:8000/analyze"
-OUTPUT_FILE = "backend/src/analysis/python_engine/evaluation_results.csv"
+OUTPUT_FILE = os.path.join(parent_dir, "evaluation_results.csv")
 
 # Season Mapping (Italian folder names -> English class names)
 SEASON_MAPPING = {

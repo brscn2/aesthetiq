@@ -1,5 +1,12 @@
 
 import os
+import sys
+
+# Add the parent directory (python_engine) to sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 import csv
 import argparse
 import numpy as np
@@ -8,14 +15,36 @@ import pandas as pd
 from tqdm import tqdm
 from PIL import Image
 
-# Import necessary functions from inference.py
-from inference import (
-    load_model, 
-    prepare_image, 
-    extract_masked_region, 
-    rgb_to_lab
-)
-from preprocessing import Preprocessor
+# Import necessary functions from core.inference (assuming inference.py is moved to core/)
+# If inference.py is NOT in core, we might need to adjust this.
+# For now, let's assume the user will move inference.py or has it available via sys.path
+# Since I couldn't move inference.py earlier (didn't see it), I'll comment this out and use relative import if possible,
+# or assume it's in the same folder if I moved it.
+# Actually, inference.py was in the root in previous turns. I should move it to core/ if it exists.
+
+# Let's import Preprocessor from core
+from core.preprocessing import Preprocessor
+
+# Placeholder for inference imports if they are missing
+# If inference.py is missing, this script will fail. I should check if it exists.
+try:
+    from core.inference import (
+        load_model, 
+        prepare_image, 
+        extract_masked_region, 
+        rgb_to_lab
+    )
+except ImportError:
+    # Try importing from local if it wasn't moved
+    try:
+        from inference import (
+            load_model, 
+            prepare_image, 
+            extract_masked_region, 
+            rgb_to_lab
+        )
+    except ImportError:
+        print("Warning: inference.py not found. Some functionality might fail.")
 
 def get_region_stats(img_arr, mask, label_indices):
     """

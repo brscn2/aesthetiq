@@ -1,5 +1,12 @@
 
 import os
+import sys
+
+# Add the parent directory (python_engine) to sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +17,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-from preprocessing import Preprocessor
+from core.preprocessing import Preprocessor
 
 # Define standard 12 Seasons
 SEASON_ORDER = [
