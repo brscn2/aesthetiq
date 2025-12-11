@@ -13,7 +13,7 @@ app = FastAPI()
 try:
     analyzer = FaceAnalysisService(
         segmentation_weights="backend/src/analysis/python_engine/weights/resnet18.pt",
-        model_path="backend/src/analysis/python_engine/season_resnet18.pth",
+        model_path="backend/src/analysis/python_engine/weights/season_resnet18.pth",
         device="cuda" # Will fallback to CPU if needed
     )
 except Exception as e:

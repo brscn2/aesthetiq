@@ -91,8 +91,8 @@ class Preprocessor:
         Full pipeline: Detect/Crop -> White Balance
         """
         # 1. Detect and Crop
-        # Padding 0.3 (30%) ensures we include hair and chin which are crucial for analysis
-        cropped = self.detect_and_crop_face(image, padding=0.3)
+        # Padding 0.1 (10%) zooms in on eyes/skin features for better ResNet feature extraction
+        cropped = self.detect_and_crop_face(image, padding=0.1)
         if cropped is None:
             # Fallback: use original image if face detection fails (maybe it's already cropped?)
             cropped = image
