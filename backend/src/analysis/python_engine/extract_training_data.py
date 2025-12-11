@@ -66,7 +66,14 @@ def map_italian_season(cls, sub_cls):
     return f"{sub} {s}"
 
 def process_dataset(dataset_root, output_file, weights_path, backbone="resnet18"):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Detect device (Support CUDA, MPS, and CPU)
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+        
     print(f"Using device: {device}")
     
     # Load Segmentation Model

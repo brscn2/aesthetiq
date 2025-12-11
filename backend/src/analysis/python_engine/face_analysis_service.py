@@ -8,11 +8,12 @@ from transformers import pipeline
 from typing import Dict, Any, Union
 
 # Import core logic from inference.py
-from inference import (
-    load_model,
-    prepare_image,
-    ColorAnalysisPipeline
-)
+# from extract_details.inference import (
+    # load_model,
+    # prepare_image,
+    # ColorAnalysisPipeline
+# )
+
 from preprocessing import Preprocessor
 
 # Set up logging
@@ -39,16 +40,18 @@ class FaceAnalysisService:
         # 0. Initialize Preprocessor
         self.preprocessor = Preprocessor()
 
-        # 1. Initialize Color Analysis Pipeline (Loads tuned parameters if available)
-        self.color_pipeline = ColorAnalysisPipeline(config_path=tuned_parameters)
+        # Initialize Color Analysis Pipeline (Loads tuned parameters if available)
+        # self.color_pipeline = ColorAnalysisPipeline(config_path=tuned_parameters)
 
-        # 2. Load ResNet Model (New Deep Learning Approach)
+        # 1. Load ResNet Model (New Deep Learning Approach)
         self.model_path = model_path
-        self.season_classes = [
+        
+        # CRITICAL: This list MUST match the Alphabetical Order used by LabelEncoder during training
+        self.season_classes = sorted([
             "DARK AUTUMN", "DARK WINTER", "LIGHT SPRING", "LIGHT SUMMER",
             "MUTED AUTUMN", "MUTED SUMMER", "BRIGHT SPRING", "BRIGHT WINTER",
             "WARM AUTUMN", "WARM SPRING", "COOL WINTER", "COOL SUMMER"
-        ]
+        ])
         
         try:
             from torchvision import models
@@ -76,7 +79,7 @@ class FaceAnalysisService:
         except Exception as e:
              logger.error(f"Failed to load ResNet model: {e}")
              self.resnet = None
-
+        """
         # 2. Load Segmentation Model (Still used for explainability features)
         self.seg_num_classes = 19
         if not os.path.exists(segmentation_weights):
@@ -88,15 +91,14 @@ class FaceAnalysisService:
         except Exception as e:
             logger.error(f"Failed to load segmentation model: {e}")
             raise
-
+        """
         # 3. Load Face Shape Classification Model
         try:
-            # Using -1 for CPU, 0+ for GPU
-            hf_device = 0 if self.device.type == 'cuda' else -1
+            # Pass the torch.device object directly to support CPU, CUDA, and MPS
             self.face_shape_classifier = pipeline(
                 "image-classification", 
                 model="metadome/face_shape_classification", 
-                device=hf_device
+                device=self.device
             )
             logger.info("Face shape classification model loaded successfully.")
         except Exception as e:
@@ -132,6 +134,8 @@ class FaceAnalysisService:
             }
 
             # --- B. Segmentation ---
+
+            """
             image_batch = prepare_image(image).to(self.device)
             with torch.no_grad():
                 output = self.seg_model(image_batch)[0]
@@ -142,6 +146,7 @@ class FaceAnalysisService:
             mask_pil = Image.fromarray(predicted_mask.astype(np.uint8))
             restored_mask = mask_pil.resize(original_size, resample=Image.NEAREST)
             mask = np.array(restored_mask)
+            """
 
             # --- C. Color Palette Analysis (Deep Learning) ---
             # 1. ResNet Prediction (The "Brain")
@@ -149,18 +154,31 @@ class FaceAnalysisService:
             scores = {}
             
             if self.resnet:
-                input_tensor = self.transform(image).unsqueeze(0).to(self.device)
+                # Test Time Augmentation (TTA): Predict on Original + Flipped image
+                # 1. Original
+                t_original = self.transform(image)
+                
+                # 2. Horizontal Flip
+                img_flipped = image.transpose(Image.FLIP_LEFT_RIGHT)
+                t_flipped = self.transform(img_flipped)
+                
+                # Stack batch: [2, 3, 224, 224]
+                input_batch = torch.stack([t_original, t_flipped]).to(self.device)
+
                 with torch.no_grad():
-                    outputs = self.resnet(input_tensor)
-                    probs = torch.softmax(outputs, dim=1)[0]
+                    outputs = self.resnet(input_batch)
+                    probs_batch = torch.softmax(outputs, dim=1)
+                    
+                    # Average probabilities across the batch (TTA)
+                    avg_probs = torch.mean(probs_batch, dim=0)
                     
                     # Get Top Prediction
-                    top_idx = torch.argmax(probs).item()
+                    top_idx = torch.argmax(avg_probs).item()
                     palette_name = self.season_classes[top_idx]
                     
                     # Get all scores
                     for i, season in enumerate(self.season_classes):
-                        scores[season] = float(probs[i])
+                        scores[season] = float(avg_probs[i])
             
             # --- Result Construction ---
             result['palette'] = palette_name.title()
