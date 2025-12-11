@@ -10,12 +10,16 @@ import {
   HttpStatus,
   NotFoundException,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { AnalysisService } from './analysis.service';
 import { CreateColorAnalysisDto } from './dto/create-color-analysis.dto';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { uploadConfig } from '../config/upload.config';
 
 @ApiTags('analysis')
 @Controller('analysis')
@@ -23,6 +27,30 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @ApiBearerAuth()
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
+
+  @Post('analyze-image')
+  @UseInterceptors(FileInterceptor('file', uploadConfig))
+  @ApiOperation({ summary: 'Analyze an image and create a color analysis result' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Analysis successfully created' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async analyzeImage(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    return this.analysisService.analyzeImage(file, user.clerkId);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new color analysis result' })

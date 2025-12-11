@@ -17,11 +17,22 @@ export class ColorAnalysis {
   @Prop({ required: true })
   undertone: string;
 
-  @Prop({ type: [String], default: [] })
-  palette: string[];
+  @Prop({
+    type: [
+      {
+        name: { type: String, required: true },
+        hex: { type: String, required: true },
+      },
+    ],
+    default: [],
+  })
+  palette: Array<{ name: string; hex: string }>;
 
   @Prop()
   faceShape?: string;
+
+  @Prop()
+  imageUrl?: string;
 
   @Prop({ default: Date.now })
   scanDate: Date;
