@@ -105,11 +105,24 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F160EB8B4C6A4C0EB69D50797DAD027D }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CCA7A56E0EB8424188B0AB0C230F6EBA }}
 
-      - name: Configure startup command
+      - name: Get resource group and start App Service
         run: |
-          # Set the startup command for Azure App Service
-          # This tells Azure how to run the FastAPI app
-          az webapp config set --name aesthetiq-python-engine --resource-group $(az webapp show --name aesthetiq-python-engine --query resourceGroup -o tsv) --startup-file "uvicorn app.main:app --host 0.0.0.0 --port \$PORT" || echo "Warning: Could not set startup command automatically. Please set it manually in Azure Portal: Configuration > General settings > Startup Command = 'uvicorn app.main:app --host 0.0.0.0 --port \$PORT'"
+          # Get the resource group for the app
+          RESOURCE_GROUP=$(az webapp show --name aesthetiq-python-engine --query resourceGroup -o tsv)
+          if [ -z "$RESOURCE_GROUP" ]; then
+            echo "Warning: Could not find resource group. Trying to start app anyway..."
+            az webapp start --name aesthetiq-python-engine || true
+          else
+            echo "Found resource group: $RESOURCE_GROUP"
+            # Start the app service (it might be stopped)
+            echo "Starting App Service..."
+            az webapp start --name aesthetiq-python-engine --resource-group "$RESOURCE_GROUP" || true
+            # Wait a moment for the service to start
+            sleep 5
+            # Set the startup command
+            echo "Setting startup command..."
+            az webapp config set --name aesthetiq-python-engine --resource-group "$RESOURCE_GROUP" --startup-file "uvicorn app.main:app --host 0.0.0.0 --port \$PORT" || echo "Warning: Could not set startup command. Please set it manually in Azure Portal: Configuration > General settings > Startup Command = 'uvicorn app.main:app --host 0.0.0.0 --port \$PORT'"
+          fi
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
