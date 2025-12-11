@@ -52,9 +52,9 @@ export class User {
   @Prop({
     type: {
       // Measurement & Regional
-      units: { type: String, enum: Units, default: Units.IMPERIAL },
-      currency: { type: String, enum: Currency, default: Currency.USD },
-      shoppingRegion: { type: String, enum: ShoppingRegion, default: ShoppingRegion.USA },
+      units: { type: String, enum: Units, default: Units.METRIC },
+      currency: { type: String, enum: Currency, default: Currency.EUR },
+      shoppingRegion: { type: String, enum: ShoppingRegion, default: ShoppingRegion.EU },
       
       // Privacy & Biometric Settings
       allowBiometrics: { type: Boolean, default: false },
@@ -66,9 +66,9 @@ export class User {
       theme: { type: String, enum: Theme, default: Theme.SYSTEM },
     },
     default: {
-      units: Units.IMPERIAL,
-      currency: Currency.USD,
-      shoppingRegion: ShoppingRegion.USA,
+      units: Units.METRIC,
+      currency: Currency.EUR,
+      shoppingRegion: ShoppingRegion.EU,
       allowBiometrics: false,
       allowFacialAnalysis: true,
       storeColorHistory: true,
