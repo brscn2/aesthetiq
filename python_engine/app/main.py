@@ -20,7 +20,7 @@ app = FastAPI()
 try:
     # Update paths to point to the correct locations from the root or relative to the script
     # Assuming running from repo root: backend/src/analysis/python_engine/weights/...
-    base_path = "python_engine"
+    base_path = "."
     analyzer = FaceAnalysisService(
         segmentation_weights=f"{base_path}/weights/resnet18.pt",
         model_path=f"{base_path}/weights/season_resnet18.pth",
