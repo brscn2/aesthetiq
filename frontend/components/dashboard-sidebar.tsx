@@ -1,7 +1,7 @@
 "use client"
 
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
-import { Home, Palette, Shirt, User, Settings } from "lucide-react"
+import { Home, Palette, Shirt, User, Settings, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -25,9 +25,14 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
     <div className="flex h-full w-full flex-col bg-sidebar">
       {/* Logo */}
       <div className="flex h-16 items-center border-b border-sidebar-border px-6">
-        <h1 className="font-serif text-2xl font-bold tracking-tight text-sidebar-foreground">
-          Aesthet<span className="text-gradient-ai">IQ</span>
-        </h1>
+        <div className="flex items-center space-x-2">
+          <div className="bg-gradient-to-r from-purple-500 to-rose-500 rounded-xl p-2 shadow-lg shadow-purple-500/25">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <span className="font-playfair text-xl font-bold bg-gradient-to-r from-purple-600 to-rose-600 bg-clip-text text-transparent">
+            AesthetIQ
+          </span>
+        </div>
       </div>
 
       {/* Navigation */}
