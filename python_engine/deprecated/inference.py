@@ -242,6 +242,7 @@ def prepare_image(image: Image.Image, input_size: Tuple[int, int] = (512, 512)) 
     return image_tensor.unsqueeze(0)
 
 def load_model(model_name: str, num_classes: int, weight_path: str, device: torch.device) -> torch.nn.Module:
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model = BiSeNet(num_classes, backbone_name=model_name)
     model.to(device)
     if os.path.exists(weight_path):
