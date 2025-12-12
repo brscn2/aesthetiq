@@ -54,3 +54,12 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+.DS_Store
+**/.DS_Store
+
+/src/analysis/python_engine/data/RGB
+
+**/__pycache__/**
+*.zip
+*.xlsx
