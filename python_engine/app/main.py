@@ -1,6 +1,7 @@
 import uvicorn
 import sys
 import os
+import torch
 
 # Add the parent directory (python_engine) to sys.path so we can import 'core' and 'app'
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,12 +19,11 @@ app = FastAPI()
 # Initialize Service (Loads models once on startup)
 # Ensure paths are relative to where this script is run
 try:
-    # Update paths to point to the correct locations from the root or relative to the script
-    # Assuming running from repo root: backend/src/analysis/python_engine/weights/...
-    base_path = "."
+    # Use parent_dir (python_engine root) to locate weights reliably
+    base_path = parent_dir
     analyzer = FaceAnalysisService(
-        segmentation_weights=f"{base_path}/weights/resnet18.pt",
-        model_path=f"{base_path}/weights/season_resnet18.pth",
+        segmentation_weights=os.path.join(base_path, "weights/resnet18.pt"),
+        model_path=os.path.join(base_path, "weights/season_resnet18.pth"),
         device="cuda" if torch.cuda.is_available() else "cpu"
     )
 except Exception as e:
