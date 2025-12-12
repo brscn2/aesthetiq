@@ -9,9 +9,39 @@ export enum Units {
   IMPERIAL = 'IMPERIAL',
 }
 
+export enum Theme {
+  LIGHT = 'LIGHT',
+  DARK = 'DARK',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum Currency {
+  USD = 'USD',
+  EUR = 'EUR',
+  GBP = 'GBP',
+}
+
+export enum ShoppingRegion {
+  USA = 'USA',
+  UK = 'UK',
+  EU = 'EU',
+  APAC = 'APAC',
+}
+
 export interface UserSettings {
-  units?: Units;
-  allowBiometrics?: boolean;
+  // Measurement & Regional
+  units: Units;
+  currency: Currency;
+  shoppingRegion: ShoppingRegion;
+  
+  // Privacy & Biometric Settings
+  allowBiometrics: boolean;
+  allowFacialAnalysis: boolean;
+  storeColorHistory: boolean;
+  contributeToTrendLearning: boolean;
+  
+  // Appearance
+  theme: Theme;
 }
 
 export interface User {
@@ -96,8 +126,9 @@ export interface ColorAnalysis {
   season: string;
   contrastLevel: string;
   undertone: string;
-  palette: string[];
+  palette: Array<{ name: string; hex: string }>;
   faceShape?: string;
+  imageUrl?: string;
   scanDate: string;
   createdAt?: string;
   updatedAt?: string;

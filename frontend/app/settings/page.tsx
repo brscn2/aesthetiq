@@ -5,6 +5,9 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { SettingsNav } from "@/components/settings/settings-nav"
 import { SettingsPanel } from "@/components/settings/settings-panel"
 import { PreferencesPanel } from "@/components/settings/preferences-panel"
+import { BiometricPrivacyPanel } from "@/components/settings/biometric-privacy-panel"
+import { NotificationsPanel } from "@/components/settings/notifications-panel"
+import { MembershipPanel } from "@/components/settings/membership-panel"
 import { Button } from "@/components/ui/button"
 import { Settings as SettingsIcon, X } from "lucide-react"
 
@@ -58,7 +61,11 @@ export default function SettingsPage() {
 
         {/* Right Panel */}
         <div className="flex-1 overflow-y-auto bg-background/50">
-          {activeSection === "Preferences" ? <PreferencesPanel /> : <SettingsPanel />}
+          {activeSection === "Account" && <SettingsPanel />}
+          {activeSection === "Biometric Privacy" && <BiometricPrivacyPanel />}
+          {activeSection === "Preferences" && <PreferencesPanel />}
+          {activeSection === "Notifications" && <NotificationsPanel />}
+          {activeSection === "Membership" && <MembershipPanel />}
         </div>
 
       </div>

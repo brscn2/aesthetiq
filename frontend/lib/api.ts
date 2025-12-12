@@ -46,6 +46,13 @@ const createHttpClient = () => {
 }
 
 const createUserApi = (client: AxiosInstance) => ({
+  // Current user endpoints (authenticated)
+  getCurrentUser: (): Promise<User> => client.get("/users/me").then((res) => res.data),
+  getCurrentUserSettings: (): Promise<User['settings']> => client.get("/users/me/settings").then((res) => res.data),
+  updateCurrentUserSettings: (data: Partial<User['settings']>): Promise<User['settings']> => 
+    client.patch("/users/me/settings", data).then((res) => res.data),
+  
+  // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
   getById: (id: string): Promise<User> => client.get(`/users/${id}`).then((res) => res.data),
   create: (data: CreateUserDto): Promise<User> => client.post("/users", data).then((res) => res.data),
@@ -67,10 +74,20 @@ const createWardrobeApi = (client: AxiosInstance) => ({
 })
 
 const createAnalysisApi = (client: AxiosInstance) => ({
-  getLatest: (userId: string): Promise<ColorAnalysis> => client.get(`/analysis/latest?userId=${userId}`).then((res) => res.data),
-  getAllByUserId: (userId: string): Promise<ColorAnalysis[]> => client.get(`/analysis/user/${userId}`).then((res) => res.data),
+  getLatest: (): Promise<ColorAnalysis> => client.get(`/analysis/latest`).then((res) => res.data),
+  getAllByUserId: (): Promise<ColorAnalysis[]> => client.get(`/analysis/user`).then((res) => res.data),
   getById: (id: string): Promise<ColorAnalysis> => client.get(`/analysis/${id}`).then((res) => res.data),
   create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> => client.post("/analysis", data).then((res) => res.data),
+  analyzeImage: (file: File): Promise<ColorAnalysis> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return client.post("/analysis/analyze-image", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60000, // 60 second timeout for analysis
+    }).then((res) => res.data);
+  },
   delete: (id: string): Promise<void> => client.delete(`/analysis/${id}`).then(() => undefined),
 })
 
@@ -108,21 +125,44 @@ export interface UploadResponse {
 }
 
 const createUploadApi = (client: AxiosInstance) => ({
-  uploadImage: async (file: File): Promise<UploadResponse> => {
+  uploadImage: async (file: File, retries = 2): Promise<UploadResponse> => {
     const formData = new FormData()
     formData.append("file", file)
 
-    const response = await client.post<UploadResponse>(
-      "/upload",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      },
-    )
+    let lastError: any
 
-    return response.data
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await client.post<UploadResponse>(
+          "/upload",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+            timeout: 30000, // 30 second timeout
+          },
+        )
+
+        return response.data
+      } catch (error: any) {
+        lastError = error
+
+        // Don't retry on client errors (4xx) - only on network/server errors
+        if (error.response?.status && error.response.status >= 400 && error.response.status < 500) {
+          throw error
+        }
+
+        // If this wasn't the last attempt, wait before retrying
+        if (attempt < retries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 5000) // Exponential backoff, max 5s
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+    }
+
+    // All retries failed
+    throw lastError
   },
 })
 

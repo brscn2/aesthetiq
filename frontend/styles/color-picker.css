@@ -1,0 +1,22 @@
+/* Custom styles for react-colorful color picker */
+.react-colorful {
+  width: 200px;
+  height: 200px;
+}
+
+.react-colorful__saturation {
+  border-radius: 8px 8px 0 0;
+}
+
+.react-colorful__hue {
+  height: 24px;
+  border-radius: 0 0 8px 8px;
+  margin-top: 8px;
+}
+
+.react-colorful__pointer {
+  width: 20px;
+  height: 20px;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

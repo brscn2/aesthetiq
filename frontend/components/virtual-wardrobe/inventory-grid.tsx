@@ -30,6 +30,18 @@ function ItemCard({ item }: { item: WardrobeItem }) {
     <Card className="group relative overflow-hidden border-border bg-card transition-all hover:border-purple-500/30 hover:bg-accent">
       <CardContent className="p-4">
         <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-muted">
+          {/* Checkerboard pattern for transparent backgrounds */}
+          {item.processedImageUrl && (
+            <div 
+              className="absolute inset-0"
+              style={{
+                backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
+                backgroundSize: '20px 20px',
+                backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+                opacity: 0.05
+              }}
+            />
+          )}
           <div className="absolute inset-0 flex items-center justify-center p-4 opacity-90 transition-transform duration-500 group-hover:scale-105">
             <Image
               src={item.processedImageUrl || item.imageUrl || "/placeholder.svg"}
@@ -103,11 +115,18 @@ export function InventoryGrid() {
     )
   }
 
+  // Sort items by creation date (newest first)
+  const sortedItems = [...(wardrobeItems || [])].sort((a, b) => {
+    const dateA = new Date(a.createdAt || 0).getTime()
+    const dateB = new Date(b.createdAt || 0).getTime()
+    return dateB - dateA // Newest first
+  })
+
   // Group items by category
-  const tops = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.TOP) || []
-  const bottoms = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.BOTTOM) || []
-  const footwear = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.SHOE) || []
-  const accessories = wardrobeItems?.filter((item: WardrobeItem) => item.category === Category.ACCESSORY) || []
+  const tops = sortedItems.filter((item: WardrobeItem) => item.category === Category.TOP)
+  const bottoms = sortedItems.filter((item: WardrobeItem) => item.category === Category.BOTTOM)
+  const footwear = sortedItems.filter((item: WardrobeItem) => item.category === Category.SHOE)
+  const accessories = sortedItems.filter((item: WardrobeItem) => item.category === Category.ACCESSORY)
 
   return (
     <div className="space-y-10 pb-10">

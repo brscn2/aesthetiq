@@ -1,17 +1,31 @@
 "use client"
 
-import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle } from "lucide-react"
+import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { useSettings } from "@/contexts/settings-context"
+import { useUser } from "@/contexts/user-context"
+import { Currency, ShoppingRegion, Units } from "@/types/api"
 
 export function SettingsPanel() {
-  const [facialAnalysis, setFacialAnalysis] = useState(true)
-  const [colorHistory, setColorHistory] = useState(true)
-  const [trendLearning, setTrendLearning] = useState(false)
+  const { user, isLoading: userLoading } = useUser()
+  const { settings, isLoading: settingsLoading, updateSettings } = useSettings()
+
+  const isLoading = userLoading || settingsLoading
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl flex items-center justify-center p-8">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="text-muted-foreground">Loading settings...</span>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
@@ -31,8 +45,12 @@ export function SettingsPanel() {
               <Sparkles className="h-4 w-4" />
               <span className="text-xs font-medium uppercase tracking-wider">Current Plan</span>
             </div>
-            <h3 className="font-playfair text-xl sm:text-2xl text-white">AesthetIQ Pro</h3>
-            <p className="text-xs sm:text-sm text-purple-200/80">Next billing: Nov 24, 2025</p>
+            <h3 className="font-playfair text-xl sm:text-2xl text-white">
+              AesthetIQ {user?.subscriptionStatus === 'PRO' ? 'Pro' : 'Free'}
+            </h3>
+            <p className="text-xs sm:text-sm text-purple-200/80">
+              {user?.subscriptionStatus === 'PRO' ? 'Next billing: Nov 24, 2025' : 'Upgrade to unlock premium features'}
+            </p>
           </div>
           <Button
             variant="outline"
@@ -56,7 +74,7 @@ export function SettingsPanel() {
         <div className="grid gap-4">
           <div 
             className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
-            onClick={() => setFacialAnalysis(!facialAnalysis)}
+            onClick={() => updateSettings({ allowFacialAnalysis: !settings?.allowFacialAnalysis })}
           >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
@@ -70,7 +88,7 @@ export function SettingsPanel() {
               </div>
             </div>
             <div className="flex-shrink-0">
-              {facialAnalysis ? (
+              {settings?.allowFacialAnalysis ? (
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               ) : (
                 <Circle className="h-6 w-6 text-muted-foreground" />
@@ -80,7 +98,7 @@ export function SettingsPanel() {
 
           <div 
             className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
-            onClick={() => setColorHistory(!colorHistory)}
+            onClick={() => updateSettings({ storeColorHistory: !settings?.storeColorHistory })}
           >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
@@ -94,7 +112,7 @@ export function SettingsPanel() {
               </div>
             </div>
             <div className="flex-shrink-0">
-              {colorHistory ? (
+              {settings?.storeColorHistory ? (
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               ) : (
                 <Circle className="h-6 w-6 text-muted-foreground" />
@@ -104,7 +122,7 @@ export function SettingsPanel() {
 
           <div 
             className="flex items-center justify-between space-x-3 rounded-lg border border-border bg-card/50 p-3 sm:p-4 cursor-pointer hover:bg-card/70 transition-colors"
-            onClick={() => setTrendLearning(!trendLearning)}
+            onClick={() => updateSettings({ contributeToTrendLearning: !settings?.contributeToTrendLearning })}
           >
             <div className="flex items-start gap-3 flex-1 min-w-0">
               <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
@@ -118,7 +136,7 @@ export function SettingsPanel() {
               </div>
             </div>
             <div className="flex-shrink-0">
-              {trendLearning ? (
+              {settings?.contributeToTrendLearning ? (
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               ) : (
                 <Circle className="h-6 w-6 text-muted-foreground" />
@@ -158,42 +176,51 @@ export function SettingsPanel() {
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Measurement Units</Label>
-            <Select defaultValue="imperial">
+            <Select 
+              value={settings?.units || Units.IMPERIAL} 
+              onValueChange={(value) => updateSettings({ units: value as Units })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select units" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="imperial">Imperial (in/lbs)</SelectItem>
-                <SelectItem value="metric">Metric (cm/kg)</SelectItem>
+                <SelectItem value={Units.IMPERIAL}>Imperial (in/lbs)</SelectItem>
+                <SelectItem value={Units.METRIC}>Metric (cm/kg)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>Shopping Region</Label>
-            <Select defaultValue="usa">
+            <Select 
+              value={settings?.shoppingRegion || ShoppingRegion.USA}
+              onValueChange={(value) => updateSettings({ shoppingRegion: value as ShoppingRegion })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="usa">United States</SelectItem>
-                <SelectItem value="uk">United Kingdom</SelectItem>
-                <SelectItem value="eu">Europe</SelectItem>
-                <SelectItem value="apac">Asia Pacific</SelectItem>
+                <SelectItem value={ShoppingRegion.USA}>United States</SelectItem>
+                <SelectItem value={ShoppingRegion.UK}>United Kingdom</SelectItem>
+                <SelectItem value={ShoppingRegion.EU}>Europe</SelectItem>
+                <SelectItem value={ShoppingRegion.APAC}>Asia Pacific</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>Currency</Label>
-            <Select defaultValue="usd">
+            <Select 
+              value={settings?.currency || Currency.USD}
+              onValueChange={(value) => updateSettings({ currency: value as Currency })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="usd">USD ($)</SelectItem>
-                <SelectItem value="gbp">GBP (£)</SelectItem>
-                <SelectItem value="eur">EUR (€)</SelectItem>
+                <SelectItem value={Currency.USD}>USD ($)</SelectItem>
+                <SelectItem value={Currency.GBP}>GBP (£)</SelectItem>
+                <SelectItem value={Currency.EUR}>EUR (€)</SelectItem>
               </SelectContent>
             </Select>
           </div>

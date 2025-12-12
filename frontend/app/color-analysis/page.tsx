@@ -1,32 +1,153 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Camera, X, Sparkles, ScanLine } from "lucide-react"
+import { Upload, Camera, X, Sparkles, ScanLine, AlertCircle, History, Calendar, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
+import { useApi } from "@/lib/api"
+import { ColorAnalysis } from "@/types/api"
+import { toast } from "sonner"
 
 export default function ColorAnalysisPage() {
-  const [analysisState, setAnalysisState] = useState<"upload" | "processing" | "complete">("upload")
+  const [analysisState, setAnalysisState] = useState<"upload" | "processing" | "complete" | "viewing">("upload")
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [analysisResult, setAnalysisResult] = useState<ColorAnalysis | null>(null)
+  const [pastAnalyses, setPastAnalyses] = useState<ColorAnalysis[]>([])
+  const [isLoadingPastAnalyses, setIsLoadingPastAnalyses] = useState(false)
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { analysisApi } = useApi()
 
-  // Simulate processing flow
-  const handleUpload = () => {
-    setAnalysisState("processing")
-    let progress = 0
-    const interval = setInterval(() => {
-      progress += 2
-      setUploadProgress(progress)
-      if (progress >= 100) {
-        clearInterval(interval)
-        setAnalysisState("complete")
+  // Load latest analysis and past analyses on mount
+  useEffect(() => {
+    loadPastAnalyses()
+    loadLatestAnalysis()
+  }, [])
+
+  const loadLatestAnalysis = async () => {
+    try {
+      const latest = await analysisApi.getLatest()
+      if (latest) {
+        setAnalysisResult(latest)
+        setAnalysisState("viewing")
       }
-    }, 50)
+    } catch (err: any) {
+      // No analysis found is okay, user can upload one
+      if (err.response?.status !== 404) {
+        console.error("Failed to load latest analysis:", err)
+      }
+    }
+  }
+
+  const loadPastAnalyses = async () => {
+    setIsLoadingPastAnalyses(true)
+    try {
+      const analyses = await analysisApi.getAllByUserId()
+      setPastAnalyses(analyses)
+    } catch (err: any) {
+      console.error("Failed to load past analyses:", err)
+      if (err.response?.status !== 404) {
+        toast.error("Failed to load past analyses")
+      }
+    } finally {
+      setIsLoadingPastAnalyses(false)
+    }
+  }
+
+  const handleFileSelect = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file)
+    setUploadedImageUrl(previewUrl)
+
+    // Start analysis
+    setAnalysisState("processing")
+    setUploadProgress(0)
+    setError(null)
+
+    try {
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval)
+            return 90
+          }
+          return prev + 10
+        })
+      }, 500)
+
+      const result = await analysisApi.analyzeImage(file)
+
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+      setAnalysisResult(result)
+      setAnalysisState("complete")
+      toast.success("Analysis complete!")
+      // Reload past analyses to include the new one
+      loadPastAnalyses()
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to analyze image")
+      setAnalysisState("upload")
+      setUploadedImageUrl(null)
+      toast.error("Analysis failed. Please try again.")
+    }
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileSelect(file)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      handleFileSelect(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const resetAnalysis = () => {
+    setAnalysisState("upload")
+    setAnalysisResult(null)
+    setUploadedImageUrl(null)
+    setError(null)
+    setUploadProgress(0)
+    if (uploadedImageUrl) {
+      URL.revokeObjectURL(uploadedImageUrl)
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const selectAnalysis = (analysis: ColorAnalysis) => {
+    setAnalysisResult(analysis)
+    setAnalysisState("viewing")
+    // Use the saved image URL from the analysis if available
+    // Otherwise clear the uploaded image URL
+    if (analysis.imageUrl) {
+      setUploadedImageUrl(analysis.imageUrl)
+    } else {
+      setUploadedImageUrl(null)
+    }
   }
 
   return (
@@ -43,11 +164,58 @@ export default function ColorAnalysisPage() {
 
           {/* Main Content Area */}
           <div className="min-h-[600px] w-full">
-            {analysisState === "upload" && <SmartUploader onUpload={handleUpload} />}
+            {analysisState === "upload" && (
+              <div className="space-y-6">
+                <SmartUploader
+                  onFileSelect={handleFileSelect}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  fileInputRef={fileInputRef}
+                  onFileInputChange={handleFileInputChange}
+                  error={error}
+                />
+                {pastAnalyses.length > 0 && (
+                  <PastAnalysesList
+                    analyses={pastAnalyses}
+                    onSelectAnalysis={selectAnalysis}
+                    onDeleteAnalysis={async (id: string) => {
+                      try {
+                        await analysisApi.delete(id)
+                        toast.success("Analysis deleted successfully")
+                        await loadPastAnalyses()
+                        // If the deleted analysis was being viewed, reset to upload state
+                        if (analysisResult?._id === id) {
+                          setAnalysisResult(null)
+                          setAnalysisState("upload")
+                        }
+                      } catch (err: any) {
+                        toast.error(err.response?.data?.message || "Failed to delete analysis")
+                      }
+                    }}
+                    isLoading={isLoadingPastAnalyses}
+                  />
+                )}
+              </div>
+            )}
 
-            {analysisState === "processing" && <ProcessingView progress={uploadProgress} />}
+            {analysisState === "processing" && (
+              <ProcessingView progress={uploadProgress} imageUrl={uploadedImageUrl} />
+            )}
 
-            {analysisState === "complete" && <AnalysisReport />}
+            {(analysisState === "complete" || analysisState === "viewing") && analysisResult && (
+              <AnalysisReport
+                analysis={analysisResult}
+                imageUrl={uploadedImageUrl || analysisResult.imageUrl || null}
+                onReset={resetAnalysis}
+                pastAnalyses={pastAnalyses}
+                onSelectAnalysis={selectAnalysis}
+                isViewingPast={analysisState === "viewing"}
+                onViewAll={() => {
+                  setAnalysisState("upload")
+                  setAnalysisResult(null)
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -55,11 +223,31 @@ export default function ColorAnalysisPage() {
   )
 }
 
-function SmartUploader({ onUpload }: { onUpload: () => void }) {
+function SmartUploader({
+  onFileSelect,
+  onDrop,
+  onDragOver,
+  fileInputRef,
+  onFileInputChange,
+  error,
+}: {
+  onFileSelect: (file: File) => void
+  onDrop: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  fileInputRef: React.RefObject<HTMLInputElement>
+  onFileInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  error: string | null
+}) {
   const [isDragging, setIsDragging] = useState(false)
 
   return (
     <div className="animate-in fade-in zoom-in-95 duration-500">
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4 flex items-center gap-2 text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span className="text-sm">{error}</span>
+        </div>
+      )}
       <div
         className={cn(
           "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out",
@@ -69,14 +257,22 @@ function SmartUploader({ onUpload }: { onUpload: () => void }) {
         onDragOver={(e) => {
           e.preventDefault()
           setIsDragging(true)
+          onDragOver(e)
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(e) => {
           e.preventDefault()
           setIsDragging(false)
-          onUpload()
+          onDrop(e)
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={onFileInputChange}
+          className="hidden"
+        />
         <div className="flex flex-col items-center space-y-4 sm:space-y-6 text-center p-4 sm:p-8">
           <div className="rounded-full bg-primary/10 p-4 sm:p-6 shadow-xl shadow-primary/5">
             <Camera className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
@@ -98,7 +294,7 @@ function SmartUploader({ onUpload }: { onUpload: () => void }) {
           <Button
             size="lg"
             className="mt-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-8 h-12 rounded-full shadow-lg hover:shadow-primary/20 transition-all"
-            onClick={onUpload}
+            onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="h-4 w-4" />
             Select Image
@@ -118,11 +314,15 @@ function InstructionCard({ icon: Icon, text }: { icon: any; text: string }) {
   )
 }
 
-function ProcessingView({ progress }: { progress: number }) {
+function ProcessingView({ progress, imageUrl }: { progress: number; imageUrl: string | null }) {
   return (
     <div className="flex h-[500px] flex-col items-center justify-center space-y-8 animate-in fade-in duration-500">
       <div className="relative h-64 w-64 overflow-hidden rounded-full border-4 border-muted shadow-2xl">
-        <Image src="/placeholder-user.jpg" alt="Processing" fill className="object-cover opacity-50 grayscale" />
+        {imageUrl ? (
+          <img src={imageUrl} alt="Processing" className="h-full w-full object-cover opacity-50 grayscale" />
+        ) : (
+          <Image src="/placeholder-user.jpg" alt="Processing" fill className="object-cover opacity-50 grayscale" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-transparent animate-scan" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
           <ScanLine className="h-16 w-16 text-primary animate-pulse" />
@@ -142,35 +342,236 @@ function ProcessingView({ progress }: { progress: number }) {
   )
 }
 
-function AnalysisReport() {
+function PastAnalysesList({
+  analyses,
+  onSelectAnalysis,
+  onDeleteAnalysis,
+  isLoading,
+}: {
+  analyses: ColorAnalysis[]
+  onSelectAnalysis: (analysis: ColorAnalysis) => void
+  onDeleteAnalysis: (id: string) => void
+  isLoading: boolean
+}) {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  const handleDelete = (e: React.MouseEvent, analysisId: string) => {
+    e.stopPropagation() // Prevent triggering the card click
+    if (confirm("Are you sure you want to delete this analysis? This action cannot be undone.")) {
+      onDeleteAnalysis(analysisId)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">Loading past analyses...</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <History className="h-5 w-5 text-muted-foreground" />
+          <h3 className="font-serif text-xl font-bold">Past Analyses</h3>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {analyses.map((analysis) => (
+            <div
+              key={analysis._id}
+              className="relative group rounded-lg border border-border/50 bg-background/50 hover:bg-background/80 hover:border-primary/50 transition-all overflow-hidden"
+            >
+              <button
+                onClick={() => onSelectAnalysis(analysis)}
+                className="w-full text-left p-4"
+              >
+                {/* Photo Preview */}
+                {analysis.imageUrl ? (
+                  <div className="relative w-full aspect-[3/4] mb-3 rounded-lg overflow-hidden border border-border/30">
+                    <img
+                      src={analysis.imageUrl}
+                      alt={`${analysis.season} analysis`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Hide image if it fails to load, show placeholder instead
+                        e.currentTarget.style.display = "none"
+                        const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                        if (placeholder) placeholder.style.display = "flex"
+                      }}
+                    />
+                    <div className="hidden absolute inset-0 bg-muted/50 items-center justify-center">
+                      <Camera className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative w-full aspect-[3/4] mb-3 rounded-lg overflow-hidden border border-border/30 bg-muted/50 flex items-center justify-center">
+                    <Camera className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+
+                <div className="flex items-start justify-between mb-2">
+                  <Badge variant="outline" className="text-xs">
+                    {analysis.season}
+                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{analysis.season}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(analysis.scanDate)}
+                  </p>
+                  <div className="flex gap-1 mt-2">
+                    {analysis.palette?.slice(0, 5).map((color, idx) => (
+                      <div
+                        key={idx}
+                        className="h-6 w-6 rounded-full border border-border/50"
+                        style={{ backgroundColor: color.hex }}
+                        title={color.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </button>
+
+              {/* Delete Button */}
+              <button
+                onClick={(e) => handleDelete(e, analysis._id)}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-destructive/90 hover:bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                title="Delete analysis"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AnalysisReport({
+  analysis,
+  imageUrl,
+  onReset,
+  pastAnalyses,
+  onSelectAnalysis,
+  isViewingPast,
+  onViewAll,
+}: {
+  analysis: ColorAnalysis
+  imageUrl: string | null
+  onReset: () => void
+  pastAnalyses?: ColorAnalysis[]
+  onSelectAnalysis?: (analysis: ColorAnalysis) => void
+  isViewingPast?: boolean
+  onViewAll?: () => void
+}) {
+  const contrastValue = analysis.contrastLevel === "High" ? 85 : analysis.contrastLevel === "Low" ? 30 : 55
+  const undertoneValue = analysis.undertone === "Warm" ? 70 : analysis.undertone === "Cool" ? 30 : 50
+
+  const getSeasonDescription = (season: string) => {
+    const descriptions: Record<string, string> = {
+      "Dark Autumn": "Rich, warm, and dark. You shine in colors that mirror the turning leaves and deep earth tones.",
+      "Dark Winter": "Bold, cool, and deep. Your palette features rich jewel tones and crisp contrasts.",
+      "Light Spring": "Fresh, warm, and light. Your colors are bright and airy, like a spring morning.",
+      "Light Summer": "Soft, cool, and light. Your palette features gentle pastels and muted tones.",
+      "Muted Autumn": "Soft, warm, and earthy. Your colors are rich but subdued, like autumn mist.",
+      "Muted Summer": "Soft, cool, and muted. Your palette features gentle, dusty tones.",
+      "Bright Spring": "Vibrant, warm, and clear. Your colors are bold and energetic.",
+      "Bright Winter": "Vivid, cool, and clear. Your palette features intense, saturated colors.",
+      "Warm Autumn": "Rich, warm, and golden. Your colors echo the warmth of autumn leaves.",
+      "Warm Spring": "Bright, warm, and clear. Your palette features sunny, vibrant tones.",
+      "Cool Winter": "Crisp, cool, and bold. Your colors are sharp and dramatic.",
+      "Cool Summer": "Soft, cool, and muted. Your palette features gentle, dusty blues and grays.",
+    }
+    return descriptions[season] || "Your personalized color analysis is complete."
+  }
+
   return (
     <div className="space-y-12 animate-in slide-in-from-bottom-8 duration-700">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          {isViewingPast && (
+            <Badge variant="secondary" className="gap-2">
+              <History className="h-3 w-3" />
+              Viewing Past Analysis
+            </Badge>
+          )}
+          {analysis.scanDate && (
+            <span className="text-sm text-muted-foreground">
+              {new Date(analysis.scanDate).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {pastAnalyses && pastAnalyses.length > 0 && onViewAll && (
+            <Button variant="outline" onClick={onViewAll}>
+              <History className="h-4 w-4 mr-2" />
+              View All Analyses
+            </Button>
+          )}
+          <Button variant="outline" onClick={onReset}>
+            Analyze Another Photo
+          </Button>
+        </div>
+      </div>
       {/* Section 2: The Analysis Report (Core Visual) */}
       <section className="relative grid gap-8 lg:grid-cols-2 lg:items-center">
         {/* The Subject */}
         <div className="relative mx-auto aspect-[3/4] w-full max-w-md overflow-hidden rounded-2xl shadow-2xl ring-1 ring-border/50">
-          <Image src="/placeholder-user.jpg" alt="User Analysis" fill className="object-cover" />
+          {imageUrl || analysis.imageUrl ? (
+            <img
+              src={imageUrl || analysis.imageUrl || ""}
+              alt="User Analysis"
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                // Fallback to placeholder if image fails to load
+                e.currentTarget.src = "/placeholder-user.jpg"
+              }}
+            />
+          ) : (
+            <Image src="/placeholder-user.jpg" alt="User Analysis" fill className="object-cover" />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
 
           {/* Feature Extraction Cards - Glassmorphism */}
           <GlassCard
-            label="Skin Undertone"
-            value="Cool Olive"
-            hex="#E8C4A6"
+            label="Undertone"
+            value={analysis.undertone}
+            hex={analysis.palette?.[0]?.hex || "#E8C4A6"}
             className="absolute top-12 right-4 translate-x-4 lg:right-8 lg:translate-x-0"
           />
           <GlassCard
-            label="Eye Color"
-            value="High Contrast"
-            hex="#3E2723"
+            label="Contrast"
+            value={analysis.contrastLevel}
+            hex={analysis.palette?.[1]?.hex || "#3E2723"}
             className="absolute top-1/3 left-4 -translate-x-4 lg:left-8 lg:translate-x-0"
           />
-          <GlassCard
-            label="Hair Tone"
-            value="Dark Ash"
-            hex="#1A1A1A"
-            className="absolute bottom-1/3 right-4 translate-x-4 lg:right-8 lg:translate-x-0"
-          />
+          {analysis.faceShape && (
+            <GlassCard
+              label="Face Shape"
+              value={analysis.faceShape}
+              hex={analysis.palette?.[2]?.hex || "#1A1A1A"}
+              className="absolute bottom-1/3 right-4 translate-x-4 lg:right-8 lg:translate-x-0"
+            />
+          )}
         </div>
 
         {/* The Verdict */}
@@ -182,28 +583,35 @@ function AnalysisReport() {
             </div>
             <h2 className="font-serif text-5xl font-bold leading-tight md:text-6xl">
               Your Season is <br />
-              <span className="text-gradient-ai">Deep Autumn</span>
+              <span className="text-gradient-ai">{analysis.season}</span>
             </h2>
-            <p className="text-lg text-muted-foreground">
-              Rich, warm, and dark. You shine in colors that mirror the turning leaves and deep earth tones.
-            </p>
+            <p className="text-lg text-muted-foreground">{getSeasonDescription(analysis.season)}</p>
           </div>
 
           <div className="grid gap-6 rounded-xl border border-border bg-card/30 p-6 backdrop-blur-sm">
             <div className="space-y-3">
               <div className="flex justify-between text-sm font-medium">
                 <span>Contrast Level</span>
-                <span className="text-primary">High</span>
+                <span className="text-primary">{analysis.contrastLevel}</span>
               </div>
-              <Progress value={85} className="h-2" />
+              <Progress value={contrastValue} className="h-2" />
             </div>
             <div className="space-y-3">
               <div className="flex justify-between text-sm font-medium">
-                <span>Temperature</span>
-                <span className="text-orange-400">Warm</span>
+                <span>Undertone</span>
+                <span className={analysis.undertone === "Warm" ? "text-orange-400" : "text-blue-400"}>
+                  {analysis.undertone}
+                </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                <div className="h-full w-[70%] bg-gradient-to-r from-blue-400 via-purple-400 to-orange-400" />
+                <div
+                  className={cn(
+                    "h-full transition-all",
+                    analysis.undertone === "Warm"
+                      ? "w-[70%] bg-gradient-to-r from-blue-400 via-purple-400 to-orange-400"
+                      : "w-[30%] bg-gradient-to-r from-blue-400 via-purple-400 to-orange-400",
+                  )}
+                />
               </div>
             </div>
           </div>
@@ -217,48 +625,18 @@ function AnalysisReport() {
           <CardContent className="p-8">
             <div className="space-y-8">
               {/* Power Colors */}
-              <div>
-                <h4 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                  Power Colors
-                </h4>
-                <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                  <PaletteSwatch color="#8D4E38" name="Terracotta" />
-                  <PaletteSwatch color="#2E4A3B" name="Forest Green" />
-                  <PaletteSwatch color="#4A1C17" name="Mahogany" />
-                  <PaletteSwatch color="#D4AF37" name="Gold" />
-                  <PaletteSwatch color="#C25A00" name="Burnt Orange" />
-                  <PaletteSwatch color="#5D4037" name="Cocoa" />
-                  <PaletteSwatch color="#333333" name="Charcoal" />
-                  <PaletteSwatch color="#556B2F" name="Olive" />
-                </div>
-              </div>
-
-              <div className="grid gap-8 md:grid-cols-2">
-                {/* Neutrals */}
+              {analysis.palette && analysis.palette.length > 0 && (
                 <div>
                   <h4 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Essentials
+                    Power Colors
                   </h4>
-                  <div className="flex flex-wrap gap-3">
-                    <PaletteSwatch color="#F5F5DC" name="Cream" size="sm" />
-                    <PaletteSwatch color="#2F4F4F" name="Dark Slate" size="sm" />
-                    <PaletteSwatch color="#3E2723" name="Espresso" size="sm" />
-                    <PaletteSwatch color="#8B4513" name="Saddle Brown" size="sm" />
+                  <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                    {analysis.palette.slice(0, 8).map((color, index) => (
+                      <PaletteSwatch key={index} color={color.hex} name={color.name} />
+                    ))}
                   </div>
                 </div>
-
-                {/* Avoid */}
-                <div>
-                  <h4 className="mb-4 flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-destructive">
-                    <X className="h-4 w-4" /> Avoid
-                  </h4>
-                  <div className="flex flex-wrap gap-3 opacity-60 grayscale hover:grayscale-0 transition-all">
-                    <PaletteSwatch color="#FF69B4" name="Hot Pink" size="sm" crossOut />
-                    <PaletteSwatch color="#00FFFF" name="Cyan" size="sm" crossOut />
-                    <PaletteSwatch color="#E6E6FA" name="Lavender" size="sm" crossOut />
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>

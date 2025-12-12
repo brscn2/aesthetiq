@@ -13,6 +13,25 @@ export enum Units {
   IMPERIAL = 'IMPERIAL',
 }
 
+export enum Theme {
+  LIGHT = 'LIGHT',
+  DARK = 'DARK',
+  SYSTEM = 'SYSTEM',
+}
+
+export enum Currency {
+  USD = 'USD',
+  EUR = 'EUR',
+  GBP = 'GBP',
+}
+
+export enum ShoppingRegion {
+  USA = 'USA',
+  UK = 'UK',
+  EU = 'EU',
+  APAC = 'APAC',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true, index: true })
@@ -32,17 +51,45 @@ export class User {
 
   @Prop({
     type: {
+      // Measurement & Regional
       units: { type: String, enum: Units, default: Units.METRIC },
+      currency: { type: String, enum: Currency, default: Currency.EUR },
+      shoppingRegion: { type: String, enum: ShoppingRegion, default: ShoppingRegion.EU },
+      
+      // Privacy & Biometric Settings
       allowBiometrics: { type: Boolean, default: false },
+      allowFacialAnalysis: { type: Boolean, default: true },
+      storeColorHistory: { type: Boolean, default: true },
+      contributeToTrendLearning: { type: Boolean, default: false },
+      
+      // Appearance
+      theme: { type: String, enum: Theme, default: Theme.SYSTEM },
     },
     default: {
       units: Units.METRIC,
+      currency: Currency.EUR,
+      shoppingRegion: ShoppingRegion.EU,
       allowBiometrics: false,
+      allowFacialAnalysis: true,
+      storeColorHistory: true,
+      contributeToTrendLearning: false,
+      theme: Theme.SYSTEM,
     },
   })
   settings: {
+    // Measurement & Regional
     units: Units;
+    currency: Currency;
+    shoppingRegion: ShoppingRegion;
+    
+    // Privacy & Biometric Settings
     allowBiometrics: boolean;
+    allowFacialAnalysis: boolean;
+    storeColorHistory: boolean;
+    contributeToTrendLearning: boolean;
+    
+    // Appearance
+    theme: Theme;
   };
 }
 
