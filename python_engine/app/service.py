@@ -3,6 +3,7 @@ import logging
 import os
 import torch
 import numpy as np
+import pickle
 from PIL import Image
 from transformers import pipeline
 from typing import Dict, Any, Union
@@ -18,13 +19,22 @@ from preprocessing import Preprocessor
 
 # Set up logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Add handler if not already present (avoid duplicate handlers)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 class FaceAnalysisService:
     def __init__(self, 
                  segmentation_weights: str = "weights/resnet18.pt", 
                  segmentation_backbone: str = "resnet18", 
                  tuned_parameters: str = "tuned_parameters.json",
-                 model_path: str = "season_resnet18.pth",
+                 model_path: str = "weights/season_resnet18.pth",
                  device: str = "cuda"):
         """
         Initialize the Face Analysis Service.
@@ -46,12 +56,28 @@ class FaceAnalysisService:
         # 1. Load ResNet Model (New Deep Learning Approach)
         self.model_path = model_path
         
-        # CRITICAL: This list MUST match the Alphabetical Order used by LabelEncoder during training
+        # Try to load LabelEncoder from the same directory as the model
+        model_dir = os.path.dirname(self.model_path)
+        le_path = os.path.join(model_dir if model_dir else ".", "season_label_encoder.pkl")
+        logger.debug(f"LabelEncoder path: '{le_path}'")
+        
+        # Default fallback (CRITICAL: Must match training if pickle fails)
         self.season_classes = sorted([
             "DARK AUTUMN", "DARK WINTER", "LIGHT SPRING", "LIGHT SUMMER",
             "MUTED AUTUMN", "MUTED SUMMER", "BRIGHT SPRING", "BRIGHT WINTER",
             "WARM AUTUMN", "WARM SPRING", "COOL WINTER", "COOL SUMMER"
         ])
+
+        if os.path.exists(le_path):
+            try:
+                with open(le_path, 'rb') as f:
+                    self.le = pickle.load(f)
+                self.season_classes = self.le.classes_.tolist()
+                logger.info(f"Loaded LabelEncoder from {le_path}.\nClasses: {self.season_classes}")
+            except Exception as e:
+                logger.error(f"Failed to load LabelEncoder from {le_path}: {e}")
+        else:
+            logger.warning(f"LabelEncoder not found at {le_path}. Using hardcoded sorted classes.")
         
         try:
             from torchvision import models
@@ -105,6 +131,7 @@ class FaceAnalysisService:
             logger.error(f"Failed to load face shape model: {e}")
             raise
     
+    # TODO: Consider making this async to handle large amount of requests
     def process_image(self, image_input: Union[str, Image.Image]) -> Dict[str, Any]:
         """
         Process a single image to extract face shape and color palette.
