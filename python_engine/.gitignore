@@ -7,3 +7,6 @@
 *.zip
 *.xlsx
 **/aesthetiq-env/**
+
+.env
+/logs/app.log
