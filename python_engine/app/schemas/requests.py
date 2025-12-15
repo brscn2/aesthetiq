@@ -2,9 +2,11 @@
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator
 
+from app.utils.helpers import sanitize_input
 
-class ConversationRequest(BaseModel):
-    """Request schema for conversational agent."""
+
+class BaseConversationRequest(BaseModel):
+    """Base schema for conversation requests with shared fields."""
     
     message: str = Field(
         ...,
@@ -41,50 +43,21 @@ class ConversationRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def validate_message(cls, v: str) -> str:
-        """Validate message is not empty or whitespace."""
+        """Validate and sanitize message input."""
         if not v.strip():
             raise ValueError("Message cannot be empty or whitespace")
-        return v.strip()
+        # Use sanitize_input for thorough cleaning
+        return sanitize_input(v, max_length=10000)
 
 
-class ConversationStreamRequest(BaseModel):
+class ConversationRequest(BaseConversationRequest):
+    """Request schema for conversational agent (non-streaming)."""
+    pass
+
+
+class ConversationStreamRequest(BaseConversationRequest):
     """Request schema for streaming conversational responses."""
-    
-    message: str = Field(
-        ...,
-        description="User's message to the agent",
-        min_length=1,
-        max_length=10000
-    )
-    
-    user_id: str = Field(
-        ...,
-        description="Unique identifier for the user"
-    )
-    
-    session_id: Optional[str] = Field(
-        None,
-        description="Optional session ID"
-    )
-    
-    context: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Optional context data (history, preferences, etc.)"
-    )
-    
-    stream_mode: str = Field(
-        "tokens",
-        description="Streaming mode: 'tokens' for token-by-token, 'events' for workflow events",
-        pattern="^(tokens|events)$"
-    )
-    
-    @field_validator("message")
-    @classmethod
-    def validate_message(cls, v: str) -> str:
-        """Validate message is not empty or whitespace."""
-        if not v.strip():
-            raise ValueError("Message cannot be empty or whitespace")
-        return v.strip()
+    pass
 
 
 class HealthCheckRequest(BaseModel):

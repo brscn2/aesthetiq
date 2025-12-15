@@ -1,13 +1,14 @@
 """Helper utility functions."""
 from typing import Dict, Any, Optional
 import hashlib
-import json
+import uuid
 from datetime import datetime, timezone
 
 
 def generate_session_id(user_id: str, timestamp: Optional[datetime] = None) -> str:
     """
     Generate a unique session ID for a conversation.
+    Includes random salt to prevent collisions.
     
     Args:
         user_id: User identifier
@@ -19,22 +20,29 @@ def generate_session_id(user_id: str, timestamp: Optional[datetime] = None) -> s
     if timestamp is None:
         timestamp = datetime.now(timezone.utc)
     
-    data = f"{user_id}_{timestamp.isoformat()}"
+    # Add random UUID to ensure uniqueness even if same user/time
+    salt = str(uuid.uuid4())
+    data = f"{user_id}_{timestamp.isoformat()}_{salt}"
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
-def hash_message(message: str) -> str:
+def validate_session_id(session_id: str) -> bool:
     """
-    Generate a hash for a message (useful for caching).
-    Can avoid LLM call if same message is called again.
+    Validate session ID format to prevent injection/abuse.
+    Allows alphanumeric characters, hyphens, and underscores.
+    Max length 64 characters.
     
     Args:
-        message: Message text
+        session_id: Session ID to validate
         
     Returns:
-        SHA256 hash of the message
+        True if valid, False otherwise
     """
-    return hashlib.sha256(message.encode()).hexdigest()
+    if not session_id or len(session_id) > 64:
+        return False
+        
+    # Check for valid characters (alphanumeric, -, _)
+    return all(c.isalnum() or c in "-_" for c in session_id)
 
 
 def sanitize_input(text: str, max_length: int = 10000) -> str:
@@ -92,44 +100,9 @@ def format_conversation_history(
     return formatted
 
 
-def calculate_tokens_estimate(text: str) -> int:
-    """
-    Estimate token count for text (rough approximation).
-    Can be used to check if token-limit will be exceeded.
-    
-    Args:
-        text: Input text
-        
-    Returns:
-        Estimated token count
-        
-    Note:
-        This is a rough estimate. For accurate counts, use tiktoken library.
-    """
-    # Rough estimate: 1 token ≈ 4 characters for English
-    return len(text) // 4
-
-
-#TODO: Remove this
-def dict_to_cache_key(data: Dict[str, Any]) -> str:
-    """
-    Convert a dictionary to a stable cache key.
-    
-    Args:
-        data: Dictionary to convert
-        
-    Returns:
-        Cache key string
-    """
-    # Sort keys for stability
-    json_str = json.dumps(data, sort_keys=True)
-    return hashlib.md5(json_str.encode()).hexdigest()
-
-
 def mask_sensitive_data(data: str, visible_chars: int = 4) -> str:
     """
     Mask sensitive data (API keys, tokens, etc.) for logging.
-    This is the most useless function I have ever seen in my life but fck it.
     
     Args:
         data: Sensitive string to mask

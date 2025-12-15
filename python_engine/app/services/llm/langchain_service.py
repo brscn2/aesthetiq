@@ -2,15 +2,14 @@
 from typing import Optional, Dict, Any, AsyncIterator
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from app.core.config import get_settings
 from app.core.logger import get_logger
-from app.prompts import PromptManager
+from app.prompts import get_prompt_manager
+from app.utils.helpers import format_conversation_history
 
 logger = get_logger(__name__)
 settings = get_settings()
-prompt_manager = PromptManager()
 
 
 class LangChainService:
@@ -98,6 +97,7 @@ class LangChainService:
             messages = []
             
             # Add system prompt (priority: custom > template > default)
+            prompt_manager = get_prompt_manager()
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
             elif template_name:
@@ -111,9 +111,10 @@ class LangChainService:
                 # Use default system prompt
                 messages.append(SystemMessage(content=prompt_manager.get_template("system_default")))
             
-            # Add conversation history from context if available
+            # Add conversation history from context if available (formatted and limited)
             if context and "history" in context:
-                for hist_msg in context["history"]:
+                formatted_history = format_conversation_history(context["history"])
+                for hist_msg in formatted_history:
                     if hist_msg["role"] == "user":
                         messages.append(HumanMessage(content=hist_msg["content"]))
                     elif hist_msg["role"] == "assistant":
@@ -154,18 +155,20 @@ class LangChainService:
         
         try:
             # Build messages (same as generate_response)
+            prompt_manager = get_prompt_manager()
             messages = []
             
             if system_prompt:
                 messages.append(SystemMessage(content=system_prompt))
             else:
                 messages.append(SystemMessage(
-                    content="You are a helpful AI assistant."
+                    content=prompt_manager.get_template("system_default")
                 ))
             
-            # Add conversation history from context if available
+            # Add conversation history from context if available (formatted and limited)
             if context and "history" in context:
-                for hist_msg in context["history"]:
+                formatted_history = format_conversation_history(context["history"])
+                for hist_msg in formatted_history:
                     if hist_msg["role"] == "user":
                         messages.append(HumanMessage(content=hist_msg["content"]))
                     elif hist_msg["role"] == "assistant":
@@ -181,27 +184,3 @@ class LangChainService:
         except Exception as e:
             logger.error(f"Error streaming response: {str(e)}", exc_info=True)
             raise
-    
-    def create_prompt_template(
-        self,
-        template: str,
-        input_variables: list[str]
-    ) -> ChatPromptTemplate:
-        """
-        Create a reusable chat prompt template.
-        
-        Args:
-            template: Template string with placeholders
-            input_variables: List of variable names in template
-            
-        Returns:
-            ChatPromptTemplate instance
-            
-        Example:
-            >>> template = "Answer this question: {question}"
-            >>> prompt = service.create_prompt_template(template, ["question"])
-        """
-        return ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful AI assistant."),
-            ("user", template)
-        ])

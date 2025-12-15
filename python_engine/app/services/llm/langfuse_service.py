@@ -230,6 +230,7 @@ class LangfuseService:
         except Exception as e:
             logger.error(f"Error logging event: {e}")
     
+    # TODO: Integrate into LangChainService.generate_response() for automatic LLM call logging
     def log_generation(
         self,
         name: str,
@@ -270,6 +271,7 @@ class LangfuseService:
         except Exception as e:
             logger.error(f"Error logging generation: {e}")
     
+    # TODO: Use when implementing user feedback endpoint (thumbs up/down on responses)
     def score_trace(
         self,
         trace_context: Optional[Dict[str, Any]],
@@ -309,6 +311,7 @@ class LangfuseService:
             except Exception as e:
                 logger.error(f"Error flushing Langfuse: {e}")
     
+    # TODO: Consider using instead of manual tracing for automatic LangChain instrumentation
     def get_langchain_callback(self):
         """
         Get Langfuse callback handler for LangChain integration.

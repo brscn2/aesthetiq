@@ -40,11 +40,25 @@ class ConversationalAgent:
         
         logger.info("ConversationalAgent initialized with LangGraph workflow")
     
+    def _start_execution(self, name: str, user_id: str, session_id: str, message: str, **kwargs):
+        """Helper to start execution tracing and logging."""
+        logger.info(
+            f"Starting {name} for user {user_id}",
+            extra={"session_id": session_id}
+        )
+        
+        return self.observability.start_trace(
+            name=name,
+            user_id=user_id,
+            session_id=session_id,
+            metadata={"message_length": len(message), **kwargs}
+        )
+
     async def process_message(
         self,
         message: str,
         user_id: str,
-        session_id: Optional[str] = None,
+        session_id: str,
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
@@ -53,7 +67,7 @@ class ConversationalAgent:
         Args:
             message: User's input message
             user_id: Unique user identifier
-            session_id: Optional session/conversation identifier
+            session_id: Session/conversation identifier
             context: Optional additional context (user preferences, history, etc.)
             
         Returns:
@@ -63,21 +77,15 @@ class ConversationalAgent:
                 - metadata: Additional metadata (tokens used, latency, etc.)
         """
         try:
-            # Generate or use existing session ID
             if not session_id:
-                session_id = f"{user_id}_{datetime.now(timezone.utc).timestamp()}"
-            
-            logger.info(
-                f"Processing message for user {user_id}",
-                extra={"session_id": session_id}
-            )
-            
+                raise ValueError("session_id is required")
+
             # Start Langfuse trace
-            trace_context = self.observability.start_trace(
+            trace_context = self._start_execution(
                 name="conversation",
                 user_id=user_id,
                 session_id=session_id,
-                metadata={"message_length": len(message)}
+                message=message
             )
             
             # Process through LangGraph workflow (intelligent routing)
@@ -108,7 +116,7 @@ class ConversationalAgent:
         self,
         message: str,
         user_id: str,
-        session_id: Optional[str] = None,
+        session_id: str,
         context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[StreamEvent]:
         """
@@ -123,28 +131,23 @@ class ConversationalAgent:
         Args:
             message: User's input message
             user_id: Unique user identifier
-            session_id: Optional session identifier
+            session_id: Session identifier
             context: Optional additional context
             
         Yields:
             StreamEvent objects with type, content, and node info
         """
         try:
-            # Generate session ID if not provided
             if not session_id:
-                session_id = f"{user_id}_{datetime.now(timezone.utc).timestamp()}"
-            
-            logger.info(
-                f"Streaming message for user {user_id}",
-                extra={"session_id": session_id}
-            )
-            
+                raise ValueError("session_id is required")
+
             # Start Langfuse trace
-            trace_context = self.observability.start_trace(
+            trace_context = self._start_execution(
                 name="conversation_stream",
                 user_id=user_id,
                 session_id=session_id,
-                metadata={"message_length": len(message), "streaming": True}
+                message=message,
+                streaming=True
             )
             
             # Stream through LangGraph workflow

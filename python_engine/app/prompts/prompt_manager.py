@@ -81,6 +81,7 @@ class PromptManager:
             logger.error(f"Error loading template {template_name}: {e}")
             raise
     
+    # TODO: Expose via admin/debug endpoint to list available prompts
     def list_templates(self) -> list[str]:
         """
         List all available template names.
@@ -98,6 +99,7 @@ class PromptManager:
         logger.debug(f"Found {len(templates)} templates")
         return sorted(templates)
     
+    # TODO: Use in get_template to provide better error messages
     def template_exists(self, template_name: str) -> bool:
         """
         Check if a template exists.
@@ -111,6 +113,7 @@ class PromptManager:
         template_path = self.templates_dir / f"{template_name}.txt"
         return template_path.exists()
     
+    # TODO: Replace get_template calls with this for graceful fallback handling
     def get_template_safe(
         self, 
         template_name: str, 

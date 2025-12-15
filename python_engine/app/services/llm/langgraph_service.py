@@ -9,10 +9,10 @@ from app.core.logger import get_logger
 from app.services.llm.langchain_service import LangChainService
 from app.services.llm.langfuse_service import LangfuseService
 from app.agents.fashion_expert import FashionExpert
-from app.prompts import PromptManager
+from app.prompts import get_prompt_manager
 
 logger = get_logger(__name__)
-prompt_manager = PromptManager()
+prompt_manager = get_prompt_manager()
 
 
 class StreamEventType(str, Enum):
@@ -396,28 +396,22 @@ class LangGraphService:
             node="classify"
         )
         
-        # Classify intent
-        classification_prompt = prompt_manager.get_template(
-            "intent_classifier",
-            message=message
-        )
+        # Create state for classification
+        state: ConversationState = {
+            "message": message,
+            "user_id": user_id,
+            "session_id": session_id,
+            "context": context or {},
+            "route": "",
+            "response": "",
+            "clothing_data": None,
+            "metadata": {},
+            "trace_context": trace_context
+        }
         
-        classification_result = await self.llm_service.generate_response(
-            message="",
-            system_prompt=classification_prompt
-        )
-        
-        route = classification_result.strip().lower()
-        if route not in ["clothing", "general"]:
-            route = "clothing" if "clothing" in route else "general"
-        
-        # Log to Langfuse
-        self.langfuse.log_event(
-            name="intent_classification",
-            input_data={"message": message},
-            output_data={"intent": route},
-            trace_context=trace_context
-        )
+        # Reuse classification logic
+        state = await self._classify_intent(state)
+        route = state["route"]
         
         # Yield metadata with route decision
         yield StreamEvent(
@@ -519,21 +513,7 @@ class LangGraphService:
         ), None
         
         # Build formatted message for final output
-        message_parts = ["Based on your style profile, here are my recommendations:\n"]
-        
-        for i, rec in enumerate(recommendations, 1):
-            message_parts.append(
-                f"\n{i}. **{rec['item']}** in {rec['color']}\n"
-                f"   - Style: {rec['style']}\n"
-                f"   - Why: {rec['reason']}\n"
-                f"   - Price: {rec['price_range']}\n"
-                f"   - Where: {', '.join(rec['where_to_buy'])}"
-            )
-        
-        if styling_tips:
-            message_parts.append("\n\n**Styling Tips:**")
-            for tip in styling_tips:
-                message_parts.append(f"- {tip}")
+        full_message = await self._format_clothing_response(clothing_data)
         
         # Log to Langfuse
         self.langfuse.log_event(
@@ -559,7 +539,6 @@ class LangGraphService:
         )
         
         # Yield final message part
-        full_message = "\n".join(message_parts)
         yield StreamEvent(
             type=StreamEventType.METADATA,
             content={"message_complete": True},
