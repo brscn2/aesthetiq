@@ -1,0 +1,111 @@
+services:
+  # =============================================================================
+  # GATEWAY - External API Entry Point (Port 8000)
+  # =============================================================================
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: aesthetiq-gateway
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override service URLs to point to internal Docker network
+      - FACE_ANALYSIS_URL=http://face_analysis:8001
+      - CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
+      - GATEWAY_TIMEOUT=120.0
+      - GATEWAY_CONNECT_TIMEOUT=10.0
+    networks:
+      - aesthetiq-network
+    depends_on:
+      - face_analysis
+      - clothing_recommender
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # =============================================================================
+  # FACE ANALYSIS - ML/CV Service (Port 8001 - Internal Only)
+  # =============================================================================
+  face_analysis:
+    build:
+      context: ./face_analysis
+      dockerfile: Dockerfile
+    container_name: aesthetiq-face-analysis
+    # No external port exposure - internal only
+    expose:
+      - "8001"
+    env_file:
+      - .env
+    environment:
+      - PORT=8001
+      - DEVICE=cpu
+    volumes:
+      # Mount weights directory for model files
+      - ./weights:/app/weights:ro
+      # Mount uploads directory if needed for image processing
+      - ./uploads:/app/uploads:rw
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s  # Longer start period for model loading
+    restart: unless-stopped
+    # Resource limits for ML service
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # =============================================================================
+  # CLOTHING RECOMMENDER - LLM/Agent Service (Port 8002 - Internal Only)
+  # =============================================================================
+  clothing_recommender:
+    build:
+      context: ./clothing_recommender
+      dockerfile: Dockerfile
+    container_name: aesthetiq-clothing-recommender
+    # No external port exposure - internal only
+    expose:
+      - "8002"
+    env_file:
+      - .env
+    environment:
+      - PORT=8002
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+networks:
+  aesthetiq-network:
+    driver: bridge
+    name: aesthetiq-network
+
+volumes:
+  weights:
+    driver: local
+  uploads:
+    driver: local

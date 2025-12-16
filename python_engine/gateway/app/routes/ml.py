@@ -1,4 +1,4 @@
-"""ML routes - proxied to fashion_expert service."""
+"""ML routes - proxied to face_analysis service."""
 from fastapi import APIRouter, Request
 
 from app.config import get_settings
@@ -15,16 +15,16 @@ settings = get_settings()
 )
 async def proxy_ml_requests(request: Request, path: str):
     """
-    Proxy all /api/v1/ml/* requests to the fashion_expert service.
+    Proxy all /api/v1/ml/* requests to the face_analysis service.
     
     Args:
         request: Incoming request
         path: Path after /api/v1/ml/
         
     Returns:
-        Response from fashion_expert service
+        Response from face_analysis service
     """
-    target_url = f"{settings.FASHION_EXPERT_URL}/api/v1/ml/{path}"
+    target_url = f"{settings.FACE_ANALYSIS_URL}/api/v1/ml/{path}"
     return await proxy.proxy_request(
         request=request,
         target_url=target_url,

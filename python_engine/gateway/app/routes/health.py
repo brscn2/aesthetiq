@@ -36,18 +36,18 @@ async def health_check():
         Combined health status of gateway and all internal services
     """
     # Check internal services
-    fashion_health = await check_service_health(settings.FASHION_EXPERT_URL)
+    face_analysis_health = await check_service_health(settings.FACE_ANALYSIS_URL)
     recommender_health = await check_service_health(settings.CLOTHING_RECOMMENDER_URL)
     
     # Determine overall status
     all_healthy = (
-        fashion_health["status"] == "healthy" and
+        face_analysis_health["status"] == "healthy" and
         recommender_health["status"] == "healthy"
     )
     
     if all_healthy:
         overall_status = "healthy"
-    elif fashion_health["status"] == "healthy" or recommender_health["status"] == "healthy":
+    elif face_analysis_health["status"] == "healthy" or recommender_health["status"] == "healthy":
         overall_status = "degraded"
     else:
         overall_status = "unhealthy"
@@ -58,7 +58,7 @@ async def health_check():
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "services": {
-            "fashion_expert": fashion_health,
+            "face_analysis": face_analysis_health,
             "clothing_recommender": recommender_health
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
@@ -74,18 +74,18 @@ async def readiness_check():
         Readiness status
     """
     # Check if at least one backend service is available
-    fashion_health = await check_service_health(settings.FASHION_EXPERT_URL)
+    face_analysis_health = await check_service_health(settings.FACE_ANALYSIS_URL)
     recommender_health = await check_service_health(settings.CLOTHING_RECOMMENDER_URL)
     
     any_ready = (
-        fashion_health["status"] == "healthy" or
+        face_analysis_health["status"] == "healthy" or
         recommender_health["status"] == "healthy"
     )
     
     return {
         "status": "ready" if any_ready else "not_ready",
         "checks": {
-            "fashion_expert": fashion_health["status"],
+            "face_analysis": face_analysis_health["status"],
             "clothing_recommender": recommender_health["status"]
         },
         "timestamp": datetime.now(timezone.utc).isoformat()

@@ -1,23 +1,23 @@
-"""Gateway configuration management."""
+"""Face Analysis application configuration."""
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from functools import lru_cache
-from typing import Union
+from typing import Optional, Union
 
 
 class Settings(BaseSettings):
-    """Gateway settings loaded from environment variables."""
+    """Face Analysis settings loaded from environment variables."""
     
     # Application
-    APP_NAME: str = "Aesthetiq Gateway"
+    APP_NAME: str = "Aesthetiq Face Analysis"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     
     # API
     API_V1_PREFIX: str = "/api/v1"
     
-    # CORS
-    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS (internal service, but keep for flexibility)
+    ALLOWED_ORIGINS: Union[list[str], str] = ["*"]
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -27,20 +27,21 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",")]
         return v
     
-    # Internal service URLs
-    FACE_ANALYSIS_URL: str = "http://face_analysis:8001"
-    CLOTHING_RECOMMENDER_URL: str = "http://clothing_recommender:8002"
+    # ML Configuration
+    DEVICE: str = "cpu"  # cuda, cpu, mps
+    WEIGHTS_DIR: str = "weights"
     
-    # Timeouts (seconds) - lenient for agentic workflows
-    ML_SERVICE_TIMEOUT: float = 300.0  # 5 min - ML inference can be slow
-    LLM_SERVICE_TIMEOUT: float = 600.0  # 10 min - agentic workflows can take time
+    # Azure Storage (Future - for image storage)
+    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = None
+    AZURE_STORAGE_CONTAINER_NAME: Optional[str] = None
     
     # Logging
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "console"
     
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8001
     
     class Config:
         env_file = ".env"

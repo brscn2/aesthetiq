@@ -1,0 +1,87 @@
+"""
+Fashion Expert FastAPI application entry point.
+
+This service handles ML/Computer Vision analysis:
+- Face detection and preprocessing
+- Face shape classification
+- Color season analysis
+"""
+import os
+import torch
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+
+from app.core.config import get_settings
+from app.core.logger import get_logger
+from app.api.v1.router import api_router
+from app.api.v1.endpoints import face_analysis
+
+settings = get_settings()
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup and shutdown events."""
+    # Startup
+    logger.info("Starting Fashion Expert Service")
+    
+    # Initialize face analysis service (ML models)
+    try:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        weights_dir = os.environ.get("WEIGHTS_DIR", os.path.join(base_path, "weights"))
+        
+        face_analysis.initialize_service(
+            segmentation_weights=os.path.join(weights_dir, "resnet18.pt"),
+            model_path=os.path.join(weights_dir, "season_resnet18.pth"),
+            device=settings.DEVICE if torch.cuda.is_available() or settings.DEVICE == "cpu" else "cpu"
+        )
+        logger.info("Face analysis service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize face analysis service: {e}", exc_info=True)
+    
+    logger.info("Fashion Expert startup complete")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Fashion Expert Service")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="ML/Computer Vision service for face and style analysis",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
+)
+
+# Add middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs"
+    }
