@@ -15,13 +15,13 @@ services:
       # Override service URLs to point to internal Docker network
       - FACE_ANALYSIS_URL=http://face_analysis:8001
       - CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
-      - GATEWAY_TIMEOUT=120.0
-      - GATEWAY_CONNECT_TIMEOUT=10.0
     networks:
       - aesthetiq-network
     depends_on:
-      - face_analysis
-      - clothing_recommender
+      face_analysis:
+        condition: service_healthy
+      clothing_recommender:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

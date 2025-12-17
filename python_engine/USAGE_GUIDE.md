@@ -5,29 +5,49 @@ This guide explains how to use the aesthetiq Python backend for conversational s
 ## Installation and Setup
 
 ### Prerequisites
-- Python 3.10+
-- API keys: OpenAI, Langfuse
+- Docker Engine 20.10+ and Docker Compose v2 (recommended)
+- Optional (if running services without Docker): Python 3.11 (matches the Docker base images)
+- API keys (recommended for real responses): OpenAI; optional Langfuse
 
-### Installation
+### Recommended: Run via Docker Compose
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+This repository ships a microservices setup:
 
-2. Create `.env` file in project root:
+- `gateway` (public entrypoint) on `http://localhost:8000`
+- `face_analysis` (internal ML/CV) on `http://face_analysis:8001`
+- `clothing_recommender` (internal LLM/agent) on `http://clothing_recommender:8002`
+
+1. Create `python_engine/.env` (or export env vars) with at least:
 ```
 OPENAI_API_KEY=your_openai_key
-LANGFUSE_PUBLIC_KEY=your_langfuse_public_key
-LANGFUSE_SECRET_KEY=your_langfuse_secret_key
+# Optional observability
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
 ```
 
-3. Start the server:
+2. Start services:
 ```bash
+cd python_engine
+docker compose up --build
+```
+
+3. Verify the gateway is up:
+```bash
+curl http://localhost:8000/health
+```
+
+### Advanced: Run a single service locally
+
+If you are iterating on a single service, run its uvicorn app directly from that service folder.
+Example (gateway):
+
+```bash
+cd python_engine/gateway
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Server will run at http://localhost:8000
+Note: the gateway enforces a maximum request body size (default 10 MiB) because it reads
+request bodies into memory before proxying. Configure `MAX_REQUEST_BODY_BYTES` if needed.
 
 ## Core Concepts
 
@@ -52,6 +72,19 @@ For streaming responses, different event types indicate different data:
 - clothing_item - Clothing recommendations (batch)
 - metadata - Route, session, and completion signals
 - done - Final response with complete message
+
+### Conversation Logging (Optional)
+
+By default, the `clothing_recommender` service does **not** write conversations to disk.
+If you enable it, you can optionally redact message content to reduce PII risk.
+
+Relevant environment variables:
+
+```
+ENABLE_CHAT_LOGGING=false
+CHAT_LOG_FILE=logs/chat_history.jsonl
+CHAT_LOG_REDACT_CONTENT=true
+```
 
 ## API Endpoints
 

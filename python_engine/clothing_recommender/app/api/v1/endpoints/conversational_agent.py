@@ -1,5 +1,12 @@
-"""Conversational agent endpoint."""
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+"""Conversational agent endpoints.
+
+Design notes / reasoning:
+- The agent is created during application startup (lifespan) and stored on `app.state`.
+    This ensures we don't accidentally create multiple LLM clients/workflows.
+- Conversation logging is off by default because it may contain PII.
+"""
+
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from typing import Optional, AsyncIterator
@@ -9,6 +16,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 from app.core.logger import get_logger
+from app.core.config import get_settings
 from app.utils.helpers import generate_session_id, validate_session_id
 from app.schemas.requests import ConversationRequest, ConversationStreamRequest
 from app.schemas.responses import ConversationResponse, ConversationStreamResponse
@@ -16,9 +24,23 @@ from app.agents.conversational_agent import ConversationalAgent
 
 router = APIRouter()
 logger = get_logger(__name__)
+settings = get_settings()
 
-# Initialize agent (will be dependency-injected in production)
-agent = ConversationalAgent()
+
+def _get_agent(request: Request) -> ConversationalAgent:
+    """Fetch the initialized agent from app state.
+
+    Reasoning:
+    - Avoids duplicate initialization (startup owns lifecycle).
+    - Provides a single place to validate state.
+    """
+    agent = getattr(request.app.state, "conversational_agent", None)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Conversational agent not initialized",
+        )
+    return agent
 
 
 def _ensure_session_id(session_id: Optional[str], user_id: str) -> str:
@@ -44,7 +66,8 @@ def _ensure_session_id(session_id: Optional[str], user_id: str) -> str:
 
 @router.post("/chat", response_model=ConversationResponse, status_code=status.HTTP_200_OK)
 async def chat(
-    request: ConversationRequest,
+    http_request: Request,
+    convo_request: ConversationRequest,
     background_tasks: BackgroundTasks
 ):
     """
@@ -62,32 +85,34 @@ async def chat(
     """
     try:
         # Validate or generate session_id
-        session_id = _ensure_session_id(request.session_id, request.user_id)
+        session_id = _ensure_session_id(convo_request.session_id, convo_request.user_id)
 
         logger.info(
             "Processing chat request",
             extra={
-                "user_id": request.user_id,
+                "user_id": convo_request.user_id,
                 "session_id": session_id,
-                "message_length": len(request.message)
+                "message_length": len(convo_request.message)
             }
         )
         
         # Process the conversation
+        agent = _get_agent(http_request)
         response = await agent.process_message(
-            message=request.message,
-            user_id=request.user_id,
+            message=convo_request.message,
+            user_id=convo_request.user_id,
             session_id=session_id,
-            context=request.context
+            context=convo_request.context
         )
         
-        # Optional: Log to analytics in background
-        background_tasks.add_task(
-            log_conversation,
-            user_id=request.user_id,
-            message=request.message,
-            response=response
-        )
+        # Optional: Log to analytics in background (disabled by default)
+        if settings.ENABLE_CHAT_LOGGING:
+            background_tasks.add_task(
+                log_conversation,
+                user_id=convo_request.user_id,
+                message=convo_request.message,
+                response=response,
+            )
         
         return ConversationResponse(
             message=response["message"],
@@ -104,7 +129,7 @@ async def chat(
 
 
 @router.post("/chat/stream", status_code=status.HTTP_200_OK)
-async def chat_stream(request: ConversationStreamRequest):
+async def chat_stream(http_request: Request, stream_request: ConversationStreamRequest):
     """
     Stream responses from the conversational agent with workflow progress.
     
@@ -126,14 +151,14 @@ async def chat_stream(request: ConversationStreamRequest):
         """Generate SSE events from workflow."""
         try:
             # Validate or generate session_id
-            session_id = _ensure_session_id(request.session_id, request.user_id)
+            session_id = _ensure_session_id(stream_request.session_id, stream_request.user_id)
             
             logger.info(
                 "Processing streaming chat request",
                 extra={
-                    "user_id": request.user_id,
+                    "user_id": stream_request.user_id,
                     "session_id": session_id,
-                    "message_length": len(request.message)
+                    "message_length": len(stream_request.message)
                 }
             )
             
@@ -141,18 +166,19 @@ async def chat_stream(request: ConversationStreamRequest):
             init_data = {
                 "type": "metadata",
                 "session_id": session_id,
-                "user_id": request.user_id,
+                "user_id": stream_request.user_id,
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
             yield f"data: {json.dumps(init_data)}\n\n"
             
             # Stream through workflow with progress updates
+            agent = _get_agent(http_request)
             full_response_message = ""
             async for event in agent.stream_message(
-                message=request.message,
-                user_id=request.user_id,
+                message=stream_request.message,
+                user_id=stream_request.user_id,
                 session_id=session_id,
-                context=request.context
+                context=stream_request.context
             ):
                 event_data = event.to_dict()
                 
@@ -165,15 +191,16 @@ async def chat_stream(request: ConversationStreamRequest):
             logger.info("Streaming chat completed successfully")
             
             # Log conversation for analytics
-            await run_in_threadpool(
-                log_conversation,
-                user_id=request.user_id,
-                message=request.message,
-                response={
-                    "message": full_response_message,
-                    "session_id": session_id
-                }
-            )
+            if settings.ENABLE_CHAT_LOGGING:
+                await run_in_threadpool(
+                    log_conversation,
+                    user_id=stream_request.user_id,
+                    message=stream_request.message,
+                    response={
+                        "message": full_response_message,
+                        "session_id": session_id,
+                    },
+                )
             
         except Exception as e:
             logger.error(f"Error in stream: {str(e)}", exc_info=True)
@@ -194,8 +221,6 @@ async def chat_stream(request: ConversationStreamRequest):
     )
 
 
-CHAT_LOG_FILE = "logs/chat_history.jsonl"
-
 def log_conversation(user_id: str, message: str, response: dict):
     """
     Background task to log conversation for analytics.
@@ -209,12 +234,16 @@ def log_conversation(user_id: str, message: str, response: dict):
     timestamp = timestamp_dt.isoformat()
     session_id = response.get("session_id")
     
+    # Redact message content by default (reduces risk of storing PII).
+    user_content = "[redacted]" if settings.CHAT_LOG_REDACT_CONTENT else message
+    assistant_content = "[redacted]" if settings.CHAT_LOG_REDACT_CONTENT else response.get("message", "")
+
     user_record = {
         "id": str(uuid.uuid4()),
         "session_id": session_id,
         "user_id": user_id,
         "role": "user",
-        "content": message,
+        "content": user_content,
         "timestamp": timestamp
     }
     
@@ -223,15 +252,15 @@ def log_conversation(user_id: str, message: str, response: dict):
         "session_id": session_id,
         "user_id": user_id,
         "role": "assistant",
-        "content": response.get("message", ""),
+        "content": assistant_content,
         "timestamp": (timestamp_dt + timedelta(milliseconds=100)).isoformat(),
         "metadata": response.get("metadata", {})
     }
     
     try:
-        os.makedirs(os.path.dirname(CHAT_LOG_FILE), exist_ok=True)
+        os.makedirs(os.path.dirname(settings.CHAT_LOG_FILE), exist_ok=True)
         
-        with open(CHAT_LOG_FILE, "a", encoding="utf-8") as f:
+        with open(settings.CHAT_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(user_record) + "\n")
             f.write(json.dumps(assistant_record) + "\n")
             

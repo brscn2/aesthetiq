@@ -1,14 +1,64 @@
-"""Request proxying logic for the gateway."""
-import httpx
-from fastapi import Request, Response, HTTPException
-from fastapi.responses import StreamingResponse
-from typing import Optional
+"""Request proxying logic for the gateway.
+
+This module is intentionally small and explicit.
+
+Key constraints / reasoning:
+- We are not an open proxy: targets are configured and fixed.
+- We forward most headers, but must strip hop-by-hop headers to avoid
+    protocol issues and request smuggling edge cases.
+- We avoid returning raw exception strings to clients (information leakage).
+"""
+
 import logging
+
+import httpx
+from fastapi import HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+# RFC 7230 hop-by-hop headers (plus commonly associated ones).
+# These must not be forwarded by proxies.
+HOP_BY_HOP_HEADERS: set[str] = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+}
+
+
+def _strip_hop_by_hop_headers(headers: dict) -> dict:
+    """Return a copy of headers with hop-by-hop headers removed.
+
+    Reasoning:
+    - Hop-by-hop headers are only meaningful for a single transport-level
+      connection; forwarding them can break semantics or create security issues.
+    """
+    cleaned = dict(headers)
+
+    # Explicit removals.
+    for header in list(cleaned.keys()):
+        if header.lower() in HOP_BY_HOP_HEADERS:
+            cleaned.pop(header, None)
+
+    # "Connection" can list additional hop-by-hop headers to remove.
+    connection_header = headers.get("connection") or headers.get("Connection")
+    if connection_header:
+        for token in str(connection_header).split(","):
+            cleaned.pop(token.strip(), None)
+
+    # Host is derived from the upstream URL.
+    cleaned.pop("host", None)
+    cleaned.pop("Host", None)
+    return cleaned
 
 
 class ServiceProxy:
@@ -50,10 +100,7 @@ class ServiceProxy:
         client = self._get_client(timeout)
         
         # Build headers (exclude hop-by-hop headers)
-        headers = dict(request.headers)
-        headers.pop("host", None)
-        headers.pop("connection", None)
-        headers.pop("transfer-encoding", None)
+        headers = _strip_hop_by_hop_headers(dict(request.headers))
         
         try:
             # Read the request body
@@ -69,10 +116,10 @@ class ServiceProxy:
             )
             
             # Build response headers
-            response_headers = dict(response.headers)
+            # Note: content-length/encoding can be recalculated by the server.
+            response_headers = _strip_hop_by_hop_headers(dict(response.headers))
             response_headers.pop("content-encoding", None)
             response_headers.pop("content-length", None)
-            response_headers.pop("transfer-encoding", None)
             
             return Response(
                 content=response.content,
@@ -88,8 +135,9 @@ class ServiceProxy:
             logger.error(f"Connection error to {target_url}")
             raise HTTPException(status_code=503, detail="Service unavailable")
         except Exception as e:
-            logger.error(f"Error proxying to {target_url}: {e}")
-            raise HTTPException(status_code=502, detail=f"Gateway error: {str(e)}")
+            # Do not leak internal exception detail to clients.
+            logger.error(f"Error proxying to {target_url}: {e}", exc_info=True)
+            raise HTTPException(status_code=502, detail="Gateway error")
     
     async def proxy_streaming_request(
         self,
@@ -111,37 +159,56 @@ class ServiceProxy:
         client = self._get_client(timeout)
         
         # Build headers
-        headers = dict(request.headers)
-        headers.pop("host", None)
-        headers.pop("connection", None)
+        headers = _strip_hop_by_hop_headers(dict(request.headers))
         
         try:
             body = await request.body()
-            
+
+            # We need the upstream status code before returning the StreamingResponse.
+            # httpx `send(..., stream=True)` gives us a response object immediately.
+            upstream_request = client.build_request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body,
+                params=request.query_params,
+            )
+            upstream_response = await client.send(upstream_request, stream=True)
+
+            # If upstream errors, return a normal (non-streaming) response.
+            if upstream_response.status_code >= 400:
+                content = await upstream_response.aread()
+                response_headers = _strip_hop_by_hop_headers(dict(upstream_response.headers))
+                response_headers.pop("content-encoding", None)
+                response_headers.pop("content-length", None)
+                await upstream_response.aclose()
+                return Response(
+                    content=content,
+                    status_code=upstream_response.status_code,
+                    headers=response_headers,
+                    media_type=upstream_response.headers.get("content-type"),
+                )
+
             async def stream_generator():
-                async with client.stream(
-                    method=request.method,
-                    url=target_url,
-                    headers=headers,
-                    content=body,
-                    params=request.query_params,
-                ) as response:
-                    # Use aiter_lines for SSE to get events as they arrive
-                    async for line in response.aiter_lines():
+                try:
+                    async for line in upstream_response.aiter_lines():
                         if line:
                             yield line + "\n"
                         else:
-                            # Empty line marks end of SSE event
+                            # Empty line marks end of SSE event.
                             yield "\n"
-            
+                finally:
+                    await upstream_response.aclose()
+
             return StreamingResponse(
                 stream_generator(),
+                status_code=upstream_response.status_code,
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
                     "X-Accel-Buffering": "no",
-                }
+                },
             )
             
         except httpx.TimeoutException:
@@ -151,8 +218,8 @@ class ServiceProxy:
             logger.error(f"Connection error to {target_url}")
             raise HTTPException(status_code=503, detail="Service unavailable")
         except Exception as e:
-            logger.error(f"Error streaming from {target_url}: {e}")
-            raise HTTPException(status_code=502, detail=f"Gateway error: {str(e)}")
+            logger.error(f"Error streaming from {target_url}: {e}", exc_info=True)
+            raise HTTPException(status_code=502, detail="Gateway error")
 
 
 # Global proxy instance

@@ -1,11 +1,12 @@
 """Face analysis endpoint for color season and face shape detection."""
 import time
-import tempfile
-import shutil
-import os
 from fastapi import APIRouter, File, UploadFile, HTTPException, status
 from PIL import Image
 import io
+
+import os
+import shutil
+import tempfile
 
 from app.core.logger import get_logger
 from app.schemas.responses import FaceAnalysisResponse
@@ -80,8 +81,10 @@ async def analyze_face(file: UploadFile = File(...)):
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
         
-        # Process the image
-        result = service.process_image(image)
+        # Process the image off the event loop.
+        # Reasoning: preprocessing + model inference are CPU/GPU-bound and would otherwise
+        # block the async server, reducing concurrency.
+        result = await service.process_image_async(image)
         
         # Check for errors
         if "error" in result:

@@ -60,6 +60,10 @@ class LangGraphService:
         self.llm_service = llm_service
         self.fashion_expert = FashionExpert()
         self.langfuse = LangfuseService()
+        # Compile workflow once.
+        # Reasoning: compiling the graph on every request is unnecessary overhead.
+        # The graph is deterministic given the code, so it is safe to reuse.
+        self.workflow = self.create_conversation_workflow()
         logger.info("LangGraphService initialized")
     
     async def _classify_intent(self, state: ConversationState) -> ConversationState:
@@ -241,7 +245,7 @@ class LangGraphService:
         trace_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a message through the workflow."""
-        workflow = self.create_conversation_workflow()
+        workflow = self.workflow
         
         initial_state: ConversationState = {
             "message": message,

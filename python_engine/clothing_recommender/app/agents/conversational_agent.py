@@ -21,14 +21,25 @@ class ConversationalAgent:
     - General queries → Standard LLM conversation
     """
     
-    def __init__(self):
-        """Initialize the conversational agent."""
-        self.llm_service = LangChainService(
+    def __init__(
+        self,
+        llm_service: Optional[LangChainService] = None,
+        langgraph_service: Optional[LangGraphService] = None,
+        observability: Optional[LangfuseService] = None,
+    ):
+        """Initialize the conversational agent.
+
+        Reasoning:
+        - In production we want a single, long-lived instance per process.
+          That avoids duplicate LLM clients and repeated workflow compilation.
+        - For tests, injecting mocks keeps unit tests fast and deterministic.
+        """
+        self.llm_service = llm_service or LangChainService(
             provider=settings.LLM_PROVIDER,
-            model=settings.LLM_MODEL
+            model=settings.LLM_MODEL,
         )
-        self.langgraph_service = LangGraphService(self.llm_service)
-        self.observability = LangfuseService()
+        self.langgraph_service = langgraph_service or LangGraphService(self.llm_service)
+        self.observability = observability or LangfuseService()
         
         logger.info("ConversationalAgent initialized with LangGraph workflow")
     

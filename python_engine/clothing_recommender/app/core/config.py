@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     # API
     API_V1_PREFIX: str = "/api/v1"
     
-    # CORS (internal service, but keep for flexibility)
-    ALLOWED_ORIGINS: Union[list[str], str] = ["*"]
+    # CORS (internal service, called via gateway)
+    # Reasoning: This service is not exposed publicly in docker-compose.
+    # Keep a sane default allowlist for local development.
+    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -49,6 +51,12 @@ class Settings(BaseSettings):
     # Redis Cache (Future)
     REDIS_URL: Optional[str] = None
     CACHE_TTL: int = 3600
+
+    # Chat logging (development/analytics)
+    # Reasoning: Persisting raw conversation text can store PII. Default is off.
+    ENABLE_CHAT_LOGGING: bool = False
+    CHAT_LOG_FILE: str = "logs/chat_history.jsonl"
+    CHAT_LOG_REDACT_CONTENT: bool = True
     
     # Logging
     LOG_LEVEL: str = "INFO"

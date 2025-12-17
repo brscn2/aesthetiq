@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     
     # CORS
-    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000"]
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Timeouts (seconds) - lenient for agentic workflows
     ML_SERVICE_TIMEOUT: float = 300.0  # 5 min - ML inference can be slow
     LLM_SERVICE_TIMEOUT: float = 600.0  # 10 min - agentic workflows can take time
+
+    # Request limits
+    # Reasoning: The gateway currently reads request bodies into memory before proxying.
+    # A hard cap prevents accidental/hostile large uploads from exhausting RAM.
+    MAX_REQUEST_BODY_BYTES: int = 10 * 1024 * 1024  # 10 MiB
     
     # Logging
     LOG_LEVEL: str = "INFO"

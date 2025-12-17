@@ -1,5 +1,12 @@
-"""Health check endpoint for Fashion Expert service."""
+"""Health check endpoint for Face Analysis service.
+
+Reasoning:
+- Docker/Kubernetes health checks should reflect whether the service can
+    actually serve requests. For this service, that means the model pipeline
+    has been initialized.
+"""
 from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 
 from app.core.config import get_settings
@@ -18,11 +25,28 @@ async def health_check():
     Returns:
         Health status with timestamp
     """
+    # Import here to avoid circular imports at module load time.
+    from app.api.v1.endpoints.face_analysis import face_analysis_service
+
+    if not face_analysis_service:
+        # Important: docker-compose uses `curl -f` against this endpoint.
+        # Returning 503 marks the container unhealthy if initialization failed.
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "unhealthy",
+                "app_name": settings.APP_NAME,
+                "version": settings.APP_VERSION,
+                "detail": "Model service not initialized",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
     return {
         "status": "healthy",
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

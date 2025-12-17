@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     # API
     API_V1_PREFIX: str = "/api/v1"
     
-    # CORS (internal service, but keep for flexibility)
-    ALLOWED_ORIGINS: Union[list[str], str] = ["*"]
+    # CORS (internal service, called via gateway)
+    # Reasoning: In docker-compose this service is internal-only. Keep a sane
+    # allowlist for local development and avoid wildcard defaults.
+    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
     
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

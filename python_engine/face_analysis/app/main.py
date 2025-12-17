@@ -1,5 +1,5 @@
 """
-Fashion Expert FastAPI application entry point.
+Face Analysis FastAPI application entry point.
 
 This service handles ML/Computer Vision analysis:
 - Face detection and preprocessing
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown events."""
     # Startup
-    logger.info("Starting Fashion Expert Service")
+    logger.info("Starting Face Analysis Service")
     
     # Initialize face analysis service (ML models)
     try:
@@ -37,18 +37,20 @@ async def lifespan(app: FastAPI):
         face_analysis.initialize_service(
             segmentation_weights=os.path.join(weights_dir, "resnet18.pt"),
             model_path=os.path.join(weights_dir, "season_resnet18.pth"),
-            device=settings.DEVICE if torch.cuda.is_available() or settings.DEVICE == "cpu" else "cpu"
+            # Reasoning: The service implementation selects the best device available
+            # (e.g. MPS on Apple Silicon). We pass the configured preference here.
+            device=settings.DEVICE
         )
         logger.info("Face analysis service initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize face analysis service: {e}", exc_info=True)
     
-    logger.info("Fashion Expert startup complete")
+    logger.info("Face Analysis startup complete")
     
     yield
     
     # Shutdown
-    logger.info("Shutting down Fashion Expert Service")
+    logger.info("Shutting down Face Analysis Service")
 
 
 # Create FastAPI app
@@ -66,7 +68,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    # Reasoning: These services are internal-only (called via the gateway).
+    # Wildcard origins plus credentials is unsafe/invalid in browsers.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

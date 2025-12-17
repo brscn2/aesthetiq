@@ -10,7 +10,7 @@ This document describes the microservices architecture for the Aesthetiq Python 
 2. [Architecture Overview](#architecture-overview)
 3. [Services](#services)
    - [Gateway](#gateway-service)
-   - [Face Analysis](#fashion-expert-service)
+  - [Face Analysis](#face-analysis-service)
    - [Clothing Recommender](#clothing-recommender-service)
 4. [API Reference](#api-reference)
 5. [Example Tests](#example-tests)
@@ -73,25 +73,25 @@ Expected output:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          EXTERNAL CLIENTS                            │
-│                     (Frontend, Mobile Apps, etc.)                    │
+│                          EXTERNAL CLIENTS                           │
+│                     (Frontend, Mobile Apps, etc.)                   │
 └─────────────────────────────────┬───────────────────────────────────┘
                                   │
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         GATEWAY (Port 8000)                          │
-│                      Reverse Proxy & Router                          │
+│                         GATEWAY (Port 8000)                         │
+│                      Reverse Proxy & Router                         │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │
 │  │  /health        │  │  /api/v1/ml/*   │  │  /api/v1/agent/*    │  │
-│  │  Aggregated     │  │  → fashion_     │  │  → clothing_        │  │
-│  │  health check   │  │    expert       │  │    recommender      │  │
+│  │  Aggregated     │  │  → face_        │  │  → clothing_        │  │
+│  │  health check   │  │    analysis     │  │    recommender      │  │
 │  └─────────────────┘  └────────┬────────┘  └──────────┬──────────┘  │
 └────────────────────────────────┼──────────────────────┼─────────────┘
                                  │                      │
               ┌──────────────────┘                      └──────────────┐
               ▼                                                        ▼
 ┌─────────────────────────────────┐      ┌─────────────────────────────────┐
-│   FASHION EXPERT (Port 8001)    │      │  CLOTHING RECOMMENDER (8002)    │
+│   FACE ANALYSIS (Port 8001)     │      │  CLOTHING RECOMMENDER (8002)    │
 │        Internal Only            │      │        Internal Only            │
 │  ┌───────────────────────────┐  │      │  ┌───────────────────────────┐  │
 │  │  ML/Computer Vision       │  │      │  │  LLM/Agent Orchestration  │  │
@@ -101,9 +101,9 @@ Expected output:
 │  └───────────────────────────┘  │      │  │  • Streaming Responses    │  │
 │                                 │      │  └───────────────────────────┘  │
 │  Dependencies:                  │      │                                 │
-│  • PyTorch, TorchVision        │      │  Dependencies:                  │
-│  • Transformers, MediaPipe     │      │  • LangChain, LangGraph         │
-│  • OpenCV, scikit-learn        │      │  • OpenAI, Langfuse             │
+│  • PyTorch, TorchVision         │      │  Dependencies:                  │
+│  • Transformers, MediaPipe      │      │  • LangChain, LangGraph         │
+│  • OpenCV, scikit-learn         │      │  • OpenAI, Langfuse             │
 └─────────────────────────────────┘      └─────────────────────────────────┘
 ```
 
@@ -144,6 +144,11 @@ Expected output:
 | `/health` | Aggregated from all services |
 | `/api/v1/ml/*` | `face_analysis:8001/api/v1/ml/*` |
 | `/api/v1/agent/*` | `clothing_recommender:8002/api/v1/agent/*` |
+
+**Gateway Safety Defaults**:
+
+- The gateway enforces a maximum request body size (default: 10 MiB) because it
+  materializes request bodies before proxying. Configure via `MAX_REQUEST_BODY_BYTES`.
 
 ---
 
@@ -508,8 +513,10 @@ WEIGHTS_DIR=/app/weights
 # Gateway (auto-configured in docker-compose)
 FACE_ANALYSIS_URL=http://face_analysis:8001
 CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
-GATEWAY_TIMEOUT=120.0
-GATEWAY_CONNECT_TIMEOUT=10.0
+
+# Gateway timeouts (optional; defaults are lenient)
+ML_SERVICE_TIMEOUT=300.0
+LLM_SERVICE_TIMEOUT=600.0
 ```
 
 ### Docker Compose Configuration

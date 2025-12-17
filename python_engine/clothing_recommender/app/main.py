@@ -1,4 +1,10 @@
-"""Clothing Recommender Service - LLM/Agents for fashion recommendations."""
+"""Clothing Recommender Service - LLM/Agents for fashion recommendations.
+
+Design notes / reasoning:
+- This service is intended to be called by the internal gateway.
+- We build long-lived singletons (LLM client, workflow) once at startup to
+    avoid per-request overhead and accidental duplicate initialization.
+"""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,16 +31,20 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Clothing Recommender Service...")
     
-    # Initialize LLM service
-    llm_service = LangChainService()
+    # Initialize shared services once.
+    # Reasoning: creating these per request is expensive and complicates tracing.
+    llm_service = LangChainService(provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL)
     logger.info("LangChain service initialized")
     
     # Initialize LangGraph service
     langgraph_service = LangGraphService(llm_service)
     logger.info("LangGraph service initialized")
     
-    # Initialize conversational agent
-    conversational_agent = ConversationalAgent()
+    # Initialize conversational agent using the pre-built services.
+    conversational_agent = ConversationalAgent(
+        llm_service=llm_service,
+        langgraph_service=langgraph_service,
+    )
     logger.info("Conversational agent initialized")
     
     # Store in app state for access in routes
@@ -64,8 +74,9 @@ def create_app() -> FastAPI:
     # CORS middleware - internal service, but allows gateway access
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Gateway will handle external CORS
-        allow_credentials=True,
+        allow_origins=settings.ALLOWED_ORIGINS,
+        # Reasoning: internal service; do not enable credentialed wildcard CORS.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
