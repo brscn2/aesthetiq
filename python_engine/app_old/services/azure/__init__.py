@@ -1,1 +1,0 @@
-"""Azure services package."""
