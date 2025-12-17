@@ -1,6 +1,6 @@
 # Basic Usage Guide
 
-This guide explains how to use the aesthetiq Python backend for conversational style recommendations.
+This guide explains how to use the aesthetiq Python backend through the public `gateway` API.
 
 ## Installation and Setup
 
@@ -34,6 +34,11 @@ docker compose up --build
 3. Verify the gateway is up:
 ```bash
 curl http://localhost:8000/health
+```
+
+You can also use readiness (helpful for orchestration):
+```bash
+curl http://localhost:8000/ready
 ```
 
 ### Advanced: Run a single service locally
@@ -88,6 +93,24 @@ CHAT_LOG_REDACT_CONTENT=true
 
 ## API Endpoints
 
+All public endpoints are served by the gateway at `http://localhost:8000`.
+
+### Gateway
+- `GET /` - basic service info
+- `GET /docs` - Swagger UI
+- `GET /openapi.json` - OpenAPI spec
+- `GET /health` - aggregated health across internal services
+- `GET /ready` - readiness for orchestration (marks ready if at least one backend is healthy)
+
+### Conversational Agent
+- `POST /api/v1/agent/chat` - non-streaming JSON response
+- `POST /api/v1/agent/chat/stream` - streaming SSE response (`text/event-stream`)
+
+### Face Analysis (ML/CV)
+These are proxied to the internal `face_analysis` service.
+- `POST /api/v1/ml/analyze-face` - multipart upload (recommended)
+- `POST /api/v1/ml/analyze-face-legacy` - legacy compatibility endpoint
+
 ### Non-Streaming Chat
 **Endpoint:** POST /api/v1/agent/chat
 
@@ -112,9 +135,12 @@ Response:
 ```json
 {
   "message": "Here are my recommendations...",
-  "session_id": "optional_session_id",
+  "session_id": "e2b407d4aae712db",
   "metadata": {
+    "timestamp": "2025-12-17T21:18:54.975295",
+    "workflow_version": "1.0",
     "intent_classification": "clothing",
+    "classification_confidence": "llm_based",
     "agent_used": "ClothingExpert"
   }
 }
@@ -127,12 +153,26 @@ Returns Server-Sent Events stream with real-time progress.
 
 Request format: Same as non-streaming
 
-Response: Stream of SSE events
+Response: stream of SSE events (one JSON object per `data:` line).
+
+Important: the very first event is a gateway/service-level metadata envelope with `session_id`, `user_id`, and `timestamp` at the top level.
+
+Typical stream sequence:
 ```
-data: {"type": "status", "content": "Analyzing your request..."}
-data: {"type": "metadata", "content": {"route": "clothing", "session_id": "..."}}
-data: {"type": "clothing_item", "content": {"recommendations": [...]}}
-data: {"type": "done", "content": {"route": "clothing", "message": "..."}}
+data: {"type": "metadata", "session_id": "...", "user_id": "...", "timestamp": "..."}
+
+data: {"type": "status", "content": "Analyzing your request...", "node": "classify"}
+
+data: {"type": "metadata", "content": {"route": "general", "session_id": "..."}, "node": "classify"}
+
+data: {"type": "status", "content": "Generating response...", "node": "general"}
+
+data: {"type": "chunk", "content": "Seasonal", "node": "general"}
+data: {"type": "chunk", "content": " color", "node": "general"}
+
+data: {"type": "metadata", "content": {"message_complete": true}, "node": "general"}
+
+data: {"type": "done", "content": {"route": "general", "session_id": "...", "message": "Full response..."}, "node": "end"}
 ```
 
 ## Usage Examples
@@ -175,14 +215,40 @@ curl -N -X POST http://localhost:8000/api/v1/agent/chat/stream \
 
 Response (stream of events):
 ```
-data: {"type": "metadata", "session_id": "user_456_..."}
+data: {"type": "metadata", "session_id": "...", "user_id": "user_456", "timestamp": "..."}
 data: {"type": "status", "content": "Analyzing your request..."}
-data: {"type": "status", "content": "Generating response..."}
+data: {"type": "metadata", "content": {"route": "general", "session_id": "..."}}
+data: {"type": "status", "content": "Generating response...", "node": "general"}
 data: {"type": "chunk", "content": "Seasonal"}
 data: {"type": "chunk", "content": " color"}
 data: {"type": "chunk", "content": " palettes"}
 ...
-data: {"type": "done", "content": {"route": "general", "message": "Seasonal color palettes..."}}
+data: {"type": "done", "content": {"route": "general", "session_id": "...", "message": "Seasonal color palettes..."}}
+```
+
+### Example 4: Face Analysis (Image Upload)
+
+Endpoint: `POST /api/v1/ml/analyze-face`
+
+```bash
+curl -X POST http://localhost:8000/api/v1/ml/analyze-face \
+  -F "file=@/path/to/image.jpg"
+```
+
+Response (example):
+```json
+{
+  "face_shape": "Oval",
+  "face_shape_score": 0.87,
+  "palette": "Cool Summer",
+  "palette_scores": {
+    "COOL SUMMER": 0.75,
+    "COOL WINTER": 0.12,
+    "WARM SPRING": 0.05
+  },
+  "features": [],
+  "processing_time_ms": 1234.5
+}
 ```
 
 ### Example 3: Multi-Turn Conversation
@@ -221,7 +287,9 @@ Now the LLM has full context and can give coherent responses about the blue shir
 
 ### Clothing Recommendation Response
 
-Contains structured data:
+When the intent is `clothing`, the non-streaming endpoint returns a normal JSON response with a human-readable `message` plus metadata. In streaming mode you also get a structured `clothing_item` event.
+
+Streaming `clothing_item` event shape:
 ```json
 {
   "type": "clothing_item",
@@ -239,7 +307,8 @@ Contains structured data:
       }
     ],
     "styling_tips": ["Pair with dark jeans", "Layer with a blazer"]
-  }
+  },
+  "node": "clothing"
 }
 ```
 
@@ -249,7 +318,8 @@ Streams text chunks:
 ```json
 {
   "type": "chunk",
-  "content": "Text chunk here"
+  "content": "Text chunk here",
+  "node": "general"
 }
 ```
 
@@ -259,10 +329,21 @@ Then final done event with complete message:
   "type": "done",
   "content": {
     "route": "general",
+    "session_id": "...",
     "message": "Full response text..."
-  }
+  },
+  "node": "end"
 }
 ```
+
+### Face Analysis Response
+
+`POST /api/v1/ml/analyze-face` returns:
+- `face_shape` (string)
+- `face_shape_score` (float 0..1)
+- `palette` (string)
+- `palette_scores` (object mapping label → confidence)
+- `processing_time_ms` (float, optional)
 
 ## Context and History
 
@@ -453,7 +534,7 @@ Roles must be "user" or "assistant", not anything else.
 ## Documentation
 
 For more detailed information:
-- CHANGES_SUMMARY.md - High-level overview of all components
-- app/api/v1/endpoints/conversational_agent.py - Endpoint docstrings
-- app/agents/conversational_agent.py - Agent implementation details
-- app/services/llm/ - LLM service documentation
+- MICROSERVICES.md - Architecture, endpoints, and Compose notes
+- clothing_recommender/app/api/v1/endpoints/conversational_agent.py - Agent API and SSE streaming behavior
+- clothing_recommender/app/services/llm/langgraph_service.py - Stream event types and routing logic
+- face_analysis/app/api/v1/endpoints/face_analysis.py - ML endpoints and upload requirements
