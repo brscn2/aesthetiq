@@ -104,16 +104,16 @@
     - **Property 7: Admin action audit logging**
     - **Validates: Requirements 3.4**
 
-- [ ] 6. Create admin frontend infrastructure
+- [x] 6. Create admin frontend infrastructure
 
-  - [ ] 6.1 Set up admin layout and routing
+  - [x] 6.1 Set up admin layout and routing
 
     - Create admin layout component with navigation
     - Set up admin-specific routes in Next.js
     - Add admin role checking for route protection
     - _Requirements: 4.1_
 
-  - [ ] 6.2 Extend API client with admin endpoints
+  - [x] 6.2 Extend API client with admin endpoints
     - Add admin-specific API methods to existing API client
     - Include proper error handling and authentication
     - _Requirements: 1.1, 2.1, 4.2, 4.3_
