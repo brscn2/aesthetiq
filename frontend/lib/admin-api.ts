@@ -55,6 +55,7 @@ export const useAdminApi = () => {
     // File Upload
     upload: {
       brandLogo: api.uploadApi.uploadBrandLogo,
+      uploadImage: api.uploadApi.uploadImage,
     },
   }
 }
@@ -69,4 +70,9 @@ export type {
   AuditLog,
   AuditLogFilters,
   AuditLogResponse,
+  WardrobeItem,
+  CreateWardrobeItemDto,
+  UpdateWardrobeItemDto,
+  Category,
+  UploadResponse,
 }

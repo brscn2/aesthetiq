@@ -17,7 +17,10 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "promote-admin": "ts-node -r tsconfig-paths/register src/admin/scripts/promote-admin.ts",
+    "promote-admin-simple": "ts-node -r tsconfig-paths/register src/admin/scripts/promote-admin-simple.ts",
+    "list-users": "ts-node -r tsconfig-paths/register src/admin/scripts/list-users.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.29.1",
@@ -33,6 +36,7 @@
     "@types/uuid": "^10.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "dotenv": "^17.2.3",
     "mongoose": "^8.0.0",
     "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
