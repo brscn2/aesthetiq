@@ -33,7 +33,7 @@ const ChatMessageSchema = new MongooseSchema(
 
 @Schema({ timestamps: true })
 export class ChatSession {
-  @Prop({ type: String, required: true, index: true })
+  @Prop({ type: String, required: true })
   userId: string;
 
   @Prop({ required: true, unique: true })

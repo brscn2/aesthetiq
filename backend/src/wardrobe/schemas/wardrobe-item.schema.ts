@@ -12,7 +12,7 @@ export enum Category {
 
 @Schema({ timestamps: true })
 export class WardrobeItem {
-  @Prop({ type: String, required: true, index: true })
+  @Prop({ type: String, required: true })
   userId: string;
 
   @Prop({ required: true })

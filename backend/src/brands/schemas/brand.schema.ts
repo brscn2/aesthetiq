@@ -5,7 +5,7 @@ export type BrandDocument = Brand & Document;
 
 @Schema({ timestamps: true })
 export class Brand {
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   name: string;
 
   @Prop()

@@ -5,7 +5,7 @@ export type StyleProfileDocument = StyleProfile & Document;
 
 @Schema({ timestamps: true })
 export class StyleProfile {
-  @Prop({ type: String, required: true, unique: true, index: true })
+  @Prop({ type: String, required: true, unique: true })
   userId: string;
 
   @Prop({ required: true })
