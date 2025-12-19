@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type WardrobeItemDocument = WardrobeItem & Document;
 
@@ -30,6 +30,9 @@ export class WardrobeItem {
   @Prop()
   brand?: string;
 
+  @Prop({ type: Types.ObjectId, ref: 'Brand' })
+  brandId?: Types.ObjectId;
+
   @Prop()
   colorHex?: string;
 
@@ -45,4 +48,5 @@ export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 // Create indexes for efficient queries
 WardrobeItemSchema.index({ userId: 1, category: 1 });
 WardrobeItemSchema.index({ userId: 1, colorHex: 1 });
+WardrobeItemSchema.index({ brandId: 1 });
 

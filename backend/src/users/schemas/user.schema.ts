@@ -32,6 +32,11 @@ export enum ShoppingRegion {
   APAC = 'APAC',
 }
 
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true, index: true })
@@ -48,6 +53,9 @@ export class User {
 
   @Prop({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   subscriptionStatus: SubscriptionStatus;
+
+  @Prop({ enum: UserRole, default: UserRole.USER })
+  role: UserRole;
 
   @Prop({
     type: {

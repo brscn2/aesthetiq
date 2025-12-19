@@ -49,20 +49,26 @@ export class UsersService {
   }
 
   // Clerk-based methods
-  async findByClerkId(clerkId: string): Promise<User> {
-    let user = await this.userModel.findOne({ clerkId }).exec();
+  async findByClerkId(clerkId: string): Promise<User | null> {
+    const user = await this.userModel.findOne({ clerkId }).exec();
     return user;
   }
 
   async getSettingsByClerkId(clerkId: string): Promise<User['settings']> {
     // Use findByClerkId which will auto-create user if needed
     const user = await this.findByClerkId(clerkId);
+    if (!user) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
     return user.settings;
   }
 
   async updateSettingsByClerkId(clerkId: string, updateSettingsDto: UpdateSettingsDto): Promise<User['settings']> {
     // Ensure user exists first (will auto-create if needed)
     const existingUser = await this.findByClerkId(clerkId);
+    if (!existingUser) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
     
     // Merge new settings with existing settings to avoid overwriting unrelated fields
     const updatedSettings = {

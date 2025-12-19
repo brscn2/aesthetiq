@@ -9,7 +9,9 @@ export class AzureStorageService implements OnModuleInit {
   private readonly logger = new Logger(AzureStorageService.name);
   private blobServiceClient: BlobServiceClient;
   private containerName = 'wardrobe-items';
+  private brandLogosContainerName = 'brand-logos';
   private containerClient: ContainerClient;
+  private brandLogosContainerClient: ContainerClient;
 
   constructor(private configService: ConfigService) {
     const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING');
@@ -21,11 +23,13 @@ export class AzureStorageService implements OnModuleInit {
 
     this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     this.containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+    this.brandLogosContainerClient = this.blobServiceClient.getContainerClient(this.brandLogosContainerName);
   }
 
   async onModuleInit() {
-    // Ensure container exists on module initialization
+    // Ensure containers exist on module initialization
     await this.ensureContainerExists();
+    await this.ensureBrandLogosContainerExists();
   }
 
   private async ensureContainerExists(): Promise<void> {
@@ -47,6 +51,29 @@ export class AzureStorageService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`Failed to ensure container exists: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private async ensureBrandLogosContainerExists(): Promise<void> {
+    try {
+      const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING');
+      if (!connectionString) {
+        this.logger.warn('Skipping brand logos container creation - connection string not configured');
+        return;
+      }
+
+      const exists = await this.brandLogosContainerClient.exists();
+      if (!exists) {
+        await this.brandLogosContainerClient.create({
+          access: 'blob', // Public read access
+        });
+        this.logger.log(`Container '${this.brandLogosContainerName}' created successfully`);
+      } else {
+        this.logger.log(`Container '${this.brandLogosContainerName}' already exists`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to ensure brand logos container exists: ${error.message}`, error.stack);
       throw error;
     }
   }
@@ -122,6 +149,82 @@ export class AzureStorageService implements OnModuleInit {
     }
   }
 
+  async uploadBrandLogo(file: Express.Multer.File, brandName?: string): Promise<string> {
+    // Validate Azure configuration
+    if (!this.blobServiceClient) {
+      this.logger.error('Azure Blob Storage is not configured');
+      throw new Error('Azure Blob Storage is not configured. Please set AZURE_STORAGE_CONNECTION_STRING.');
+    }
+
+    // Validate file buffer
+    if (!file.buffer) {
+      this.logger.error('File buffer is missing');
+      throw new Error('File buffer is missing. Ensure Multer is configured with memoryStorage.');
+    }
+
+    // Generate filename for brand logo
+    const fileExtension = extname(file.originalname);
+    const sanitizedBrandName = brandName ? brandName.toLowerCase().replace(/[^a-z0-9]/g, '-') : '';
+    const uniqueFileName = sanitizedBrandName 
+      ? `${sanitizedBrandName}-${uuidv4()}${fileExtension}`
+      : `brand-logo-${uuidv4()}${fileExtension}`;
+
+    this.logger.log(`Starting brand logo upload for file: ${file.originalname} (${(file.size / 1024).toFixed(2)}KB) as ${uniqueFileName}`);
+
+    try {
+      // Get block blob client for brand logos container
+      const blockBlobClient = this.brandLogosContainerClient.getBlockBlobClient(uniqueFileName);
+
+      // Upload file buffer with metadata
+      const uploadOptions = {
+        blobHTTPHeaders: {
+          blobContentType: file.mimetype,
+        },
+        metadata: {
+          originalName: file.originalname,
+          brandName: brandName || 'unknown',
+          uploadedAt: new Date().toISOString(),
+          type: 'brand-logo',
+        },
+      };
+
+      await blockBlobClient.upload(file.buffer, file.buffer.length, uploadOptions);
+
+      // Verify upload by checking if blob exists
+      const exists = await blockBlobClient.exists();
+      if (!exists) {
+        throw new Error('Upload verification failed - blob does not exist after upload');
+      }
+
+      // Get the public URL
+      const publicUrl = blockBlobClient.url;
+      
+      this.logger.log(`Brand logo uploaded successfully: ${uniqueFileName} -> ${publicUrl}`);
+      
+      return publicUrl;
+    } catch (error) {
+      this.logger.error(
+        `Failed to upload brand logo to Azure Blob Storage: ${error.message}`,
+        error.stack,
+      );
+      
+      // Provide more specific error messages
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new Error('Unable to connect to Azure Blob Storage. Please check your network connection.');
+      }
+      
+      if (error.statusCode === 403) {
+        throw new Error('Access denied to Azure Blob Storage. Please check your credentials.');
+      }
+      
+      if (error.statusCode === 404) {
+        throw new Error(`Container '${this.brandLogosContainerName}' not found. Please ensure it exists.`);
+      }
+      
+      throw new Error(`Failed to upload brand logo: ${error.message}`);
+    }
+  }
+
   async deleteImage(imageUrl: string): Promise<void> {
     // Validate Azure configuration
     if (!this.blobServiceClient) {
@@ -130,10 +233,11 @@ export class AzureStorageService implements OnModuleInit {
     }
 
     try {
-      // Extract blob name from URL
+      // Extract blob name and container from URL
       // URL format: https://accountname.blob.core.windows.net/container/blobname
       const url = new URL(imageUrl);
       const pathParts = url.pathname.split('/');
+      const containerName = pathParts[1];
       const blobName = pathParts[pathParts.length - 1];
 
       if (!blobName) {
@@ -141,10 +245,15 @@ export class AzureStorageService implements OnModuleInit {
         return;
       }
 
-      this.logger.log(`Attempting to delete blob: ${blobName}`);
+      this.logger.log(`Attempting to delete blob: ${blobName} from container: ${containerName}`);
+
+      // Determine which container client to use
+      const containerClient = containerName === this.brandLogosContainerName 
+        ? this.brandLogosContainerClient 
+        : this.containerClient;
 
       // Get block blob client
-      const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
       // Check if blob exists before attempting deletion
       const exists = await blockBlobClient.exists();
