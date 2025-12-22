@@ -68,7 +68,7 @@ export default function AuditPage() {
       setPage(result.page)
     } catch (error) {
       console.error("Failed to fetch audit logs:", error)
-      toast.error("Audit-Logs konnten nicht geladen werden")
+      toast.error("Failed to load audit logs")
     } finally {
       setIsLoading(false)
     }
@@ -113,7 +113,7 @@ export default function AuditPage() {
   }
 
   const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("de-DE", {
+    return new Date(dateString).toLocaleString("en-US", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -134,7 +134,7 @@ export default function AuditPage() {
         </div>
         <Button onClick={() => fetchLogs(page)} variant="outline" disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Aktualisieren
+          Refresh
         </Button>
       </div>
 
@@ -142,44 +142,44 @@ export default function AuditPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Gesamt</CardTitle>
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{total}</div>
-            <p className="text-xs text-muted-foreground">Audit-Einträge</p>
+            <p className="text-xs text-muted-foreground">Audit entries</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Erstellt</CardTitle>
+            <CardTitle className="text-sm font-medium">Created</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               {logs.filter((l) => l.action.includes("CREATE")).length}
             </div>
-            <p className="text-xs text-muted-foreground">Create-Aktionen</p>
+            <p className="text-xs text-muted-foreground">Create actions</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Aktualisiert</CardTitle>
+            <CardTitle className="text-sm font-medium">Updated</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
               {logs.filter((l) => l.action.includes("UPDATE")).length}
             </div>
-            <p className="text-xs text-muted-foreground">Update-Aktionen</p>
+            <p className="text-xs text-muted-foreground">Update actions</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Gelöscht</CardTitle>
+            <CardTitle className="text-sm font-medium">Deleted</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
               {logs.filter((l) => l.action.includes("DELETE")).length}
             </div>
-            <p className="text-xs text-muted-foreground">Delete-Aktionen</p>
+            <p className="text-xs text-muted-foreground">Delete actions</p>
           </CardContent>
         </Card>
       </div>
@@ -189,10 +189,10 @@ export default function AuditPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Aktivitätsprotokoll
+            Activity Log
           </CardTitle>
           <CardDescription>
-            Seite {page} von {totalPages} ({total} Einträge)
+            Page {page} of {totalPages} ({total} entries)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -200,7 +200,7 @@ export default function AuditPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Suche nach Benutzer-ID..."
+                placeholder="Search by user ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchLogs(1)}
@@ -209,24 +209,24 @@ export default function AuditPage() {
             </div>
             <Select value={actionFilter} onValueChange={setActionFilter}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Aktion filtern" />
+                <SelectValue placeholder="Filter by action" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Aktionen</SelectItem>
-                <SelectItem value="CREATE_BRAND">Brand erstellt</SelectItem>
-                <SelectItem value="UPDATE_BRAND">Brand aktualisiert</SelectItem>
-                <SelectItem value="DELETE_BRAND">Brand gelöscht</SelectItem>
-                <SelectItem value="CREATE_WARDROBE_ITEM">Item erstellt</SelectItem>
-                <SelectItem value="UPDATE_WARDROBE_ITEM">Item aktualisiert</SelectItem>
-                <SelectItem value="DELETE_WARDROBE_ITEM">Item gelöscht</SelectItem>
+                <SelectItem value="all">All Actions</SelectItem>
+                <SelectItem value="CREATE_BRAND">Brand Created</SelectItem>
+                <SelectItem value="UPDATE_BRAND">Brand Updated</SelectItem>
+                <SelectItem value="DELETE_BRAND">Brand Deleted</SelectItem>
+                <SelectItem value="CREATE_WARDROBE_ITEM">Item Created</SelectItem>
+                <SelectItem value="UPDATE_WARDROBE_ITEM">Item Updated</SelectItem>
+                <SelectItem value="DELETE_WARDROBE_ITEM">Item Deleted</SelectItem>
               </SelectContent>
             </Select>
             <Select value={resourceFilter} onValueChange={setResourceFilter}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Ressource filtern" />
+                <SelectValue placeholder="Filter by resource" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Ressourcen</SelectItem>
+                <SelectItem value="all">All Resources</SelectItem>
                 <SelectItem value="brand">Brands</SelectItem>
                 <SelectItem value="wardrobe-item">Wardrobe Items</SelectItem>
                 <SelectItem value="user">Users</SelectItem>
@@ -244,17 +244,17 @@ export default function AuditPage() {
           ) : logs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Keine Audit-Logs gefunden</p>
+              <p>No audit logs found</p>
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Zeitpunkt</TableHead>
-                    <TableHead>Aktion</TableHead>
-                    <TableHead>Ressource</TableHead>
-                    <TableHead>Benutzer</TableHead>
+                    <TableHead>Timestamp</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>User</TableHead>
                     <TableHead>Details</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -290,7 +290,7 @@ export default function AuditPage() {
               {/* Pagination */}
               <div className="flex items-center justify-between mt-4">
                 <p className="text-sm text-muted-foreground">
-                  Zeige {(page - 1) * 20 + 1} bis {Math.min(page * 20, total)} von {total}
+                  Showing {(page - 1) * 20 + 1} to {Math.min(page * 20, total)} of {total}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -300,7 +300,7 @@ export default function AuditPage() {
                     disabled={page <= 1 || isLoading}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    Zurück
+                    Previous
                   </Button>
                   <Button
                     variant="outline"
@@ -308,7 +308,7 @@ export default function AuditPage() {
                     onClick={() => fetchLogs(page + 1)}
                     disabled={page >= totalPages || isLoading}
                   >
-                    Weiter
+                    Next
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>

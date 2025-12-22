@@ -15,6 +15,8 @@ import type {
   UpdateWardrobeItemDto,
   Category,
   UploadResponse,
+  SystemSettings,
+  SystemInfo,
 } from "./api"
 
 /**
@@ -60,6 +62,13 @@ export const useAdminApi = () => {
       getStats: api.adminAuditApi.getStats,
     },
 
+    // Settings
+    settings: {
+      get: api.adminSettingsApi.get,
+      update: api.adminSettingsApi.update,
+      getSystemInfo: api.adminSettingsApi.getSystemInfo,
+    },
+
     // File Upload
     upload: {
       brandLogo: api.uploadApi.uploadBrandLogo,
@@ -83,4 +92,6 @@ export type {
   UpdateWardrobeItemDto,
   Category,
   UploadResponse,
+  SystemSettings,
+  SystemInfo,
 }

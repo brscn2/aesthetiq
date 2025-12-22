@@ -349,6 +349,39 @@ const createAdminAuditApi = (client: AxiosInstance) => ({
     client.get(`/admin/audit/user?userId=${userId}`).then((res) => res.data),
 })
 
+export interface SystemSettings {
+  siteName: string
+  siteDescription: string
+  maintenanceMode: boolean
+  allowRegistration: boolean
+  requireEmailVerification: boolean
+  maxUploadSize: number
+  defaultLanguage: string
+  timezone: string
+  sessionTimeout: number
+  enableAuditLogs: boolean
+  enableAnalytics: boolean
+  enableNotifications: boolean
+  smtpHost: string
+  smtpPort: number
+  adminEmail: string
+}
+
+export interface SystemInfo {
+  version: string
+  environment: string
+  apiStatus: string
+  lastDeployment: string
+}
+
+const createAdminSettingsApi = (client: AxiosInstance) => ({
+  get: (): Promise<SystemSettings> => client.get("/admin/settings").then((res) => res.data),
+  update: (data: Partial<SystemSettings>): Promise<SystemSettings> => 
+    client.patch("/admin/settings", data).then((res) => res.data),
+  getSystemInfo: (): Promise<SystemInfo> => 
+    client.get("/admin/settings/system-info").then((res) => res.data),
+})
+
 const createApiHelpers = (client: AxiosInstance) => ({
   userApi: createUserApi(client),
   wardrobeApi: createWardrobeApi(client),
@@ -360,6 +393,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   adminBrandsApi: createAdminBrandsApi(client),
   adminWardrobeApi: createAdminWardrobeApi(client),
   adminAuditApi: createAdminAuditApi(client),
+  adminSettingsApi: createAdminSettingsApi(client),
 })
 
 export const useApiClient = () => {
