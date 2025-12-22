@@ -46,11 +46,13 @@ export interface UserSettings {
 
 export interface User {
   _id: string;
+  clerkId?: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
   name: string;
   avatarUrl?: string;
   subscriptionStatus: SubscriptionStatus;
+  role?: 'USER' | 'ADMIN';
   settings: UserSettings;
   createdAt?: string;
   updatedAt?: string;

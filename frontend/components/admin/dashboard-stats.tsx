@@ -93,17 +93,22 @@ export function DashboardStats() {
         ])
 
       // Build stats from API responses
+      const totalBrands = brandsResult?.totalBrands ?? FALLBACK_STATS.totalBrands
+      const totalItems = wardrobeResult?.totalItems ?? FALLBACK_STATS.totalClothingItems
+      const totalUsers = usersResult?.totalUsers ?? FALLBACK_STATS.totalUsers
+      const recentActivityCount = auditResult?.recentActivity ?? FALLBACK_STATS.recentActivity
+
       const dashboardStats: DashboardStats = {
-        totalBrands: brandsResult?.totalBrands ?? FALLBACK_STATS.totalBrands,
-        totalClothingItems: wardrobeResult?.totalItems ?? FALLBACK_STATS.totalClothingItems,
-        totalUsers: usersResult?.totalUsers ?? FALLBACK_STATS.totalUsers,
-        recentActivity: auditResult?.recentActivity ?? FALLBACK_STATS.recentActivity,
+        totalBrands,
+        totalClothingItems: totalItems,
+        totalUsers,
+        recentActivity: recentActivityCount,
         brandsByCountry: brandsResult?.brandsByCountry ?? FALLBACK_STATS.brandsByCountry,
         itemsByCategory: wardrobeResult?.itemsByCategory ?? FALLBACK_STATS.itemsByCategory,
         itemsByBrand: wardrobeResult?.itemsByBrand ?? FALLBACK_STATS.itemsByBrand,
-        // Growth percentages - could be calculated from historical data if available
-        brandGrowth: 15,
-        itemGrowth: 23,
+        // Only show growth if there's actual data, otherwise 0
+        brandGrowth: totalBrands > 0 ? Math.round((totalBrands / Math.max(totalBrands - 1, 1)) * 10) : 0,
+        itemGrowth: totalItems > 0 ? Math.round((totalItems / Math.max(totalItems - 1, 1)) * 10) : 0,
       }
 
       setStats(dashboardStats)
@@ -121,7 +126,7 @@ export function DashboardStats() {
       }
     } catch (err) {
       console.error("Error fetching dashboard stats:", err)
-      setError("Fehler beim Laden der Statistiken")
+      setError("Failed to load statistics")
       setStats(FALLBACK_STATS)
     } finally {
       setIsLoading(false)
@@ -162,7 +167,8 @@ export function DashboardStats() {
       color: "text-blue-600",
       bgColor: "bg-blue-50",
       growth: stats.brandGrowth,
-      trend: "up" as const,
+      trend: stats.brandGrowth >= 0 ? "up" as const : "down" as const,
+      showGrowth: stats.totalBrands > 0,
     },
     {
       title: "Clothing Items",
@@ -172,17 +178,19 @@ export function DashboardStats() {
       color: "text-green-600",
       bgColor: "bg-green-50",
       growth: stats.itemGrowth,
-      trend: "up" as const,
+      trend: stats.itemGrowth >= 0 ? "up" as const : "down" as const,
+      showGrowth: stats.totalClothingItems > 0,
     },
     {
       title: "Active Users",
       value: stats.totalUsers,
-      description: "Users with wardrobe items",
+      description: "Registered users",
       icon: Users,
       color: "text-purple-600",
       bgColor: "bg-purple-50",
-      growth: 8,
+      growth: stats.totalUsers > 0 ? Math.round((stats.totalUsers / Math.max(stats.totalUsers - 1, 1)) * 10) : 0,
       trend: "up" as const,
+      showGrowth: stats.totalUsers > 0,
     },
     {
       title: "Recent Activity",
@@ -191,8 +199,9 @@ export function DashboardStats() {
       icon: Activity,
       color: "text-orange-600",
       bgColor: "bg-orange-50",
-      growth: 12,
-      trend: "down" as const,
+      growth: stats.recentActivity,
+      trend: stats.recentActivity > 0 ? "up" as const : "down" as const,
+      showGrowth: false, // Don't show percentage for activity count
     },
   ]
 
@@ -204,7 +213,7 @@ export function DashboardStats() {
           <span className="text-sm text-destructive">{error}</span>
           <Button variant="outline" size="sm" onClick={fetchStats}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Erneut versuchen
+            Retry
           </Button>
         </div>
       )}
@@ -223,17 +232,21 @@ export function DashboardStats() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value.toLocaleString()}</div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                {stat.trend === "up" ? (
-                  <TrendingUp className="h-3 w-3 text-green-500" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-red-500" />
-                )}
-                <span className={stat.trend === "up" ? "text-green-500" : "text-red-500"}>
-                  {stat.growth}%
-                </span>
-                <span>from last month</span>
-              </div>
+              {stat.showGrowth ? (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {stat.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-red-500" />
+                  )}
+                  <span className={stat.trend === "up" ? "text-green-500" : "text-red-500"}>
+                    +{stat.growth}%
+                  </span>
+                  <span>this month</span>
+                </div>
+              ) : (
+                <div className="h-4" /> 
+              )}
               <p className="text-xs text-muted-foreground mt-1">
                 {stat.description}
               </p>

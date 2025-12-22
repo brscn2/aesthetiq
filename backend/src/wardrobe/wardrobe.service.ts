@@ -56,7 +56,11 @@ export class WardrobeService {
     colorHex?: string,
     brandId?: string,
   ): Promise<WardrobeItem[]> {
-    const filter: any = { userId };
+    const filter: any = {};
+    // Only filter by userId if provided and not empty
+    if (userId && userId.trim() !== '') {
+      filter.userId = userId;
+    }
     if (category) {
       filter.category = category;
     }

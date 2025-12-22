@@ -1,33 +1,33 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table"
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -38,19 +38,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { 
-  Search, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
+import {
+  Search,
+  MoreHorizontal,
+  Edit,
+  Trash2,
   Plus,
   Shirt,
-  Filter,
   Download,
-  Upload,
   Heart,
   Calendar,
-  User
+  User,
 } from "lucide-react"
 import { useAdminApi, WardrobeItem, Category } from "@/lib/admin-api"
 import { useAdminLoading } from "@/hooks/use-admin-loading"
@@ -61,14 +59,23 @@ interface ClothingListProps {
   onAdd: () => void
 }
 
-const categoryColors = {
+interface UserInfo {
+  _id: string
+  clerkId?: string
+  email: string
+  name?: string
+  firstName?: string
+  lastName?: string
+}
+
+const categoryColors: Record<string, string> = {
   TOP: "bg-blue-50 text-blue-700",
-  BOTTOM: "bg-green-50 text-green-700", 
+  BOTTOM: "bg-green-50 text-green-700",
   SHOE: "bg-purple-50 text-purple-700",
   ACCESSORY: "bg-orange-50 text-orange-700",
 }
 
-const categoryLabels = {
+const categoryLabels: Record<string, string> = {
   TOP: "Top",
   BOTTOM: "Bottom",
   SHOE: "Shoe",
@@ -77,6 +84,7 @@ const categoryLabels = {
 
 export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
   const [items, setItems] = useState<WardrobeItem[]>([])
+  const [userMap, setUserMap] = useState<Map<string, UserInfo>>(new Map())
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<Category | "ALL">("ALL")
   const [selectedBrand, setSelectedBrand] = useState<string>("ALL")
@@ -84,18 +92,73 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [itemToDelete, setItemToDelete] = useState<WardrobeItem | null>(null)
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
-  
+
   const api = useAdminApi()
+  const apiRef = useRef(api)
   const { isLoading, execute } = useAdminLoading()
   const { execute: executeDelete } = useAdminLoading()
 
+  apiRef.current = api
+
+  // Load users once for name lookup
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersData = await apiRef.current.users.getAll()
+        const usersList = usersData as unknown as UserInfo[]
+
+        const map = new Map<string, UserInfo>()
+        usersList.forEach((user) => {
+          // Map by clerkId (primary key for wardrobe items)
+          if (user.clerkId) {
+            map.set(user.clerkId, user)
+          }
+          // Also map by MongoDB _id
+          if (user._id) {
+            map.set(user._id, user)
+          }
+          // Map by email as fallback
+          if (user.email) {
+            map.set(user.email, user)
+          }
+        })
+        setUserMap(map)
+        console.log("Loaded users:", usersList.length, "Map size:", map.size)
+      } catch (error) {
+        console.warn("Failed to load users:", error)
+      }
+    }
+    loadUsers()
+  }, [])
+
+  const getUserDisplayName = (userId: string): string => {
+    // First try direct lookup
+    const user = userMap.get(userId)
+    if (user) {
+      if (user.name) return user.name
+      if (user.firstName && user.lastName) {
+        return `${user.firstName} ${user.lastName}`
+      }
+      if (user.email) return user.email.split("@")[0]
+    }
+
+    // If userId is purely numeric or doesn't look like a Clerk ID, it's likely old test data
+    if (/^\d+$/.test(userId) || (!userId.startsWith("user_") && !userMap.has(userId))) {
+      return "Unknown User"
+    }
+
+    // Show truncated ID as last resort
+    return userId.slice(-8)
+  }
+
   const loadItems = async () => {
     const result = await execute(
-      () => api.wardrobe.getAll({
-        search: searchTerm || undefined,
-        category: selectedCategory !== "ALL" ? selectedCategory : undefined,
-        brand: selectedBrand !== "ALL" ? selectedBrand : undefined,
-      }),
+      () =>
+        api.wardrobe.getAll({
+          search: searchTerm || undefined,
+          category: selectedCategory !== "ALL" ? selectedCategory : undefined,
+          brand: selectedBrand !== "ALL" ? selectedBrand : undefined,
+        }),
       "Loading clothing items"
     )
     if (result) {
@@ -117,7 +180,7 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
 
     if (success !== null) {
       AdminErrorHandler.showSuccess("Clothing item deleted successfully")
-      setItems(items.filter(item => item._id !== itemToDelete._id))
+      setItems(items.filter((item) => item._id !== itemToDelete._id))
       setDeleteDialogOpen(false)
       setItemToDelete(null)
     }
@@ -126,14 +189,12 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return
 
-    const promises = Array.from(selectedItems).map(id => 
-      api.wardrobe.delete(id)
-    )
+    const promises = Array.from(selectedItems).map((id) => api.wardrobe.delete(id))
 
     try {
       await Promise.all(promises)
       AdminErrorHandler.showSuccess(`${selectedItems.size} items deleted successfully`)
-      setItems(items.filter(item => !selectedItems.has(item._id)))
+      setItems(items.filter((item) => !selectedItems.has(item._id)))
       setSelectedItems(new Set())
       setBulkDeleteDialogOpen(false)
     } catch (error) {
@@ -160,31 +221,23 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
     if (selectedItems.size === items.length) {
       setSelectedItems(new Set())
     } else {
-      setSelectedItems(new Set(items.map(item => item._id)))
+      setSelectedItems(new Set(items.map((item) => item._id)))
     }
   }
 
-  // Get unique brands for filter
-  const uniqueBrands = Array.from(new Set(items.map(item => item.brand).filter(Boolean)))
-
+  const uniqueBrands = Array.from(new Set(items.map((item) => item.brand).filter(Boolean)))
   const filteredItems = items
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Clothing Management</h2>
-          <p className="text-muted-foreground">
-            Manage clothing items and wardrobe database
-          </p>
+          <p className="text-muted-foreground">Manage clothing items and wardrobe database</p>
         </div>
         <div className="flex gap-2">
           {selectedItems.size > 0 && (
-            <Button 
-              variant="destructive" 
-              onClick={() => setBulkDeleteDialogOpen(true)}
-            >
+            <Button variant="destructive" onClick={() => setBulkDeleteDialogOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete ({selectedItems.size})
             </Button>
@@ -196,7 +249,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -207,15 +259,20 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
             className="pl-8"
           />
         </div>
-        
-        <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as Category | "ALL")}>
+
+        <Select
+          value={selectedCategory}
+          onValueChange={(value) => setSelectedCategory(value as Category | "ALL")}
+        >
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All Categories</SelectItem>
             {Object.entries(categoryLabels).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
+              <SelectItem key={key} value={key}>
+                {label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -227,7 +284,9 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
           <SelectContent>
             <SelectItem value="ALL">All Brands</SelectItem>
             {uniqueBrands.map((brand) => (
-              <SelectItem key={brand} value={brand!}>{brand}</SelectItem>
+              <SelectItem key={brand} value={brand!}>
+                {brand}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -238,16 +297,13 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
         </Button>
       </div>
 
-      {/* Clothing List */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shirt className="h-5 w-5" />
             Clothing Items ({filteredItems.length})
           </CardTitle>
-          <CardDescription>
-            Manage your clothing database with advanced filtering
-          </CardDescription>
+          <CardDescription>Manage your clothing database with advanced filtering</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -259,10 +315,9 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
               <Shirt className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-2 text-sm font-semibold">No clothing items found</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {searchTerm || selectedCategory !== "ALL" || selectedBrand !== "ALL" 
-                  ? "Try adjusting your search terms or filters" 
-                  : "Get started by adding your first clothing item"
-                }
+                {searchTerm || selectedCategory !== "ALL" || selectedBrand !== "ALL"
+                  ? "Try adjusting your search terms or filters"
+                  : "Get started by adding your first clothing item"}
               </p>
               {!searchTerm && selectedCategory === "ALL" && selectedBrand === "ALL" && (
                 <Button onClick={onAdd} className="mt-4">
@@ -311,9 +366,7 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                           <div className="font-medium">
                             {item.subCategory || categoryLabels[item.category]}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            ID: {item._id.slice(-8)}
-                          </div>
+                          <div className="text-sm text-muted-foreground">ID: {item._id.slice(-8)}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -332,13 +385,13 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <User className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm">{item.userId.slice(-8)}</span>
+                        <span className="text-sm">{getUserDisplayName(item.userId)}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       {item.colorHex ? (
                         <div className="flex items-center gap-2">
-                          <div 
+                          <div
                             className="w-4 h-4 rounded border"
                             style={{ backgroundColor: item.colorHex }}
                           />
@@ -399,7 +452,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
         </CardContent>
       </Card>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -420,13 +472,13 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Multiple Items</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {selectedItems.size} clothing items? This action cannot be undone.
+              Are you sure you want to delete {selectedItems.size} clothing items? This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
