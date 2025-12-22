@@ -10,6 +10,7 @@ const requiresAuth = createRouteMatcher([
   "/dashboard(.*)",
   "/virtual-wardrobe(.*)",
   "/settings(.*)",
+  "/admin(.*)",
 ])
 
 export default clerkMiddleware(async (auth, request) => {

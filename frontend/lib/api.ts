@@ -62,6 +62,11 @@ const createUserApi = (client: AxiosInstance) => ({
   
   // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
+  getStats: (): Promise<{
+    totalUsers: number;
+    usersByRole: { role: string; count: number }[];
+    recentSignups: number;
+  }> => client.get("/users/stats").then((res) => res.data),
   getById: (id: string): Promise<User> => client.get(`/users/${id}`).then((res) => res.data),
   create: (data: CreateUserDto): Promise<User> => client.post("/users", data).then((res) => res.data),
   update: (id: string, data: UpdateUserDto): Promise<User> => client.patch(`/users/${id}`, data).then((res) => res.data),
@@ -270,13 +275,13 @@ const createAdminBrandsApi = (client: AxiosInstance) => ({
     if (options?.offset) params.append("offset", options.offset.toString())
     
     const queryString = params.toString()
-    return client.get(`/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+    return client.get(`/admin/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
   },
-  getById: (id: string): Promise<Brand> => client.get(`/brands/${id}`).then((res) => res.data),
-  create: (data: CreateBrandDto): Promise<Brand> => client.post("/brands", data).then((res) => res.data),
-  update: (id: string, data: UpdateBrandDto): Promise<Brand> => client.patch(`/brands/${id}`, data).then((res) => res.data),
-  delete: (id: string): Promise<void> => client.delete(`/brands/${id}`).then(() => undefined),
-  getStats: (): Promise<BrandStats> => client.get("/brands/stats").then((res) => res.data),
+  getById: (id: string): Promise<Brand> => client.get(`/admin/brands/${id}`).then((res) => res.data),
+  create: (data: CreateBrandDto): Promise<Brand> => client.post("/admin/brands", data).then((res) => res.data),
+  update: (id: string, data: UpdateBrandDto): Promise<Brand> => client.patch(`/admin/brands/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/admin/brands/${id}`).then(() => undefined),
+  getStats: (): Promise<BrandStats> => client.get("/admin/brands/stats").then((res) => res.data),
 })
 
 const createAdminWardrobeApi = (client: AxiosInstance) => ({
@@ -332,6 +337,12 @@ const createAdminAuditApi = (client: AxiosInstance) => ({
     
     return client.get(`/admin/audit?${params.toString()}`).then((res) => res.data)
   },
+  getStats: (): Promise<{
+    totalLogs: number;
+    logsByAction: { action: string; count: number }[];
+    logsByResource: { resource: string; count: number }[];
+    recentActivity: number;
+  }> => client.get("/admin/audit/stats").then((res) => res.data),
   getByResource: (resource: string, resourceId: string): Promise<AuditLog[]> => 
     client.get(`/admin/audit/resource?resource=${resource}&resourceId=${resourceId}`).then((res) => res.data),
   getByUser: (userId: string): Promise<AuditLog[]> => 

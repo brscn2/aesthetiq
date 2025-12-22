@@ -19,6 +19,36 @@ export class UsersService {
     return this.userModel.find().exec();
   }
 
+  async getStats(): Promise<{
+    totalUsers: number;
+    usersByRole: { role: string; count: number }[];
+    recentSignups: number;
+  }> {
+    const allUsers = await this.userModel.find().exec();
+    const totalUsers = allUsers.length;
+    
+    // Group by role
+    const roleMap = new Map<string, number>();
+    allUsers.forEach(user => {
+      const role = user.role || 'USER';
+      roleMap.set(role, (roleMap.get(role) || 0) + 1);
+    });
+    
+    // Count recent signups (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentSignups = allUsers.filter(user => {
+      const userDoc = user as any; // Cast to access timestamps
+      return userDoc.createdAt && new Date(userDoc.createdAt) >= thirtyDaysAgo;
+    }).length;
+    
+    return {
+      totalUsers,
+      usersByRole: Array.from(roleMap.entries()).map(([role, count]) => ({ role, count })),
+      recentSignups,
+    };
+  }
+
   async findOne(id: string): Promise<User> {
     const user = await this.userModel.findById(id).exec();
     if (!user) {

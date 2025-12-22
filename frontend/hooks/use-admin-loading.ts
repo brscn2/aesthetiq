@@ -18,6 +18,11 @@ export interface AdminLoadingActions {
     asyncFn: () => Promise<T>,
     context?: string
   ) => Promise<T | null>
+  executeWithRetry: <T>(
+    asyncFn: () => Promise<T>,
+    context?: string,
+    maxRetries?: number
+  ) => Promise<T | null>
 }
 
 /**
@@ -60,6 +65,26 @@ export const useAdminLoading = (initialData?: any): AdminLoadingState & AdminLoa
     }
   }, [setLoading])
 
+  const executeWithRetry = useCallback(async <T>(
+    asyncFn: () => Promise<T>,
+    context?: string,
+    maxRetries: number = 3
+  ): Promise<T | null> => {
+    setLoading(true)
+    
+    try {
+      const result = await AdminErrorHandler.withRetry(asyncFn, maxRetries, 1000, context)
+      setData(result)
+      return result
+    } catch (err) {
+      const adminError = AdminErrorHandler.handle(err, context)
+      setError(adminError)
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }, [setLoading])
+
   return {
     isLoading,
     error,
@@ -69,6 +94,7 @@ export const useAdminLoading = (initialData?: any): AdminLoadingState & AdminLoa
     setData,
     reset,
     execute,
+    executeWithRetry,
   }
 }
 

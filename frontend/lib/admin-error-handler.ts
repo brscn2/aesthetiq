@@ -7,6 +7,15 @@ export interface AdminError {
   message: string
   code?: string
   details?: any
+  validationErrors?: ValidationError[]
+  timestamp?: string
+  path?: string
+}
+
+export interface ValidationError {
+  field: string
+  value: any
+  constraints: string[]
 }
 
 export class AdminErrorHandler {
@@ -34,6 +43,39 @@ export class AdminErrorHandler {
 
     // Handle specific HTTP status codes
     switch (status) {
+      case 400:
+        // Handle validation errors with detailed field information
+        if (data?.validationErrors) {
+          const fieldErrors = data.validationErrors.map((err: any) => 
+            `${err.field}: ${err.constraints.join(', ')}`
+          ).join('; ')
+          
+          toast.error("Validation Error", {
+            description: fieldErrors,
+            duration: 5000,
+          })
+          
+          return {
+            message: "Validation failed",
+            code: "VALIDATION_ERROR",
+            details: data,
+            validationErrors: data.validationErrors,
+            timestamp: data.timestamp,
+            path: data.path,
+          }
+        }
+        
+        toast.error("Bad Request", {
+          description: data?.message || "Invalid request data",
+        })
+        return {
+          message: data?.message || "Bad request",
+          code: "BAD_REQUEST",
+          details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
+        }
+
       case 401:
         toast.error("Authentication required", {
           description: "Please sign in to access admin features",
@@ -42,6 +84,8 @@ export class AdminErrorHandler {
           message: "Authentication required",
           code: "UNAUTHORIZED",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       case 403:
@@ -52,6 +96,8 @@ export class AdminErrorHandler {
           message: "Access denied",
           code: "FORBIDDEN",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       case 404:
@@ -62,6 +108,8 @@ export class AdminErrorHandler {
           message: data?.message || "Resource not found",
           code: "NOT_FOUND",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       case 409:
@@ -72,6 +120,8 @@ export class AdminErrorHandler {
           message: data?.message || "Conflict occurred",
           code: "CONFLICT",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       case 422:
@@ -82,6 +132,8 @@ export class AdminErrorHandler {
           message: data?.message || "Validation error",
           code: "VALIDATION_ERROR",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       case 500:
@@ -92,6 +144,20 @@ export class AdminErrorHandler {
           message: "Internal server error",
           code: "INTERNAL_ERROR",
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
+        }
+
+      case 503:
+        toast.error("Service unavailable", {
+          description: "The service is temporarily unavailable. Please try again later.",
+        })
+        return {
+          message: "Service unavailable",
+          code: "SERVICE_UNAVAILABLE",
+          details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
 
       default:
@@ -103,6 +169,8 @@ export class AdminErrorHandler {
           message,
           code: `HTTP_${status}`,
           details: data,
+          timestamp: data?.timestamp,
+          path: data?.path,
         }
     }
   }
@@ -135,5 +203,64 @@ export class AdminErrorHandler {
     toast.warning(message, {
       description,
     })
+  }
+
+  static async withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    delay: number = 1000,
+    context?: string
+  ): Promise<T> {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation()
+      } catch (error) {
+        lastError = error
+        
+        // Don't retry on client errors (4xx) except for 408 (timeout) and 429 (rate limit)
+        if (error instanceof AxiosError) {
+          const status = error.response?.status
+          if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+            throw error
+          }
+        }
+
+        if (attempt === maxRetries) {
+          break
+        }
+
+        // Show retry notification
+        toast.info(`Retrying operation (${attempt}/${maxRetries})`, {
+          description: `Attempt ${attempt} failed, retrying in ${delay}ms...`,
+          duration: 2000,
+        })
+
+        // Wait before retrying with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt - 1)))
+      }
+    }
+
+    // All retries failed, handle the error
+    this.handle(lastError, context)
+    throw lastError
+  }
+
+  static isRetryableError(error: unknown): boolean {
+    if (error instanceof AxiosError) {
+      const status = error.response?.status
+      // Retry on network errors, timeouts, and server errors
+      return !status || status >= 500 || status === 408 || status === 429
+    }
+    
+    // Retry on network errors
+    if (error instanceof Error) {
+      return error.message.includes('Network Error') || 
+             error.message.includes('timeout') ||
+             error.message.includes('ECONNREFUSED')
+    }
+    
+    return false
   }
 }

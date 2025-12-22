@@ -98,4 +98,43 @@ export class AuditService {
       .sort({ timestamp: -1 })
       .exec();
   }
+
+  async getStats(): Promise<{
+    totalLogs: number;
+    logsByAction: { action: string; count: number }[];
+    logsByResource: { resource: string; count: number }[];
+    recentActivity: number;
+  }> {
+    const allLogs = await this.auditLogModel.find().exec();
+    const totalLogs = allLogs.length;
+    
+    // Group by action
+    const actionMap = new Map<string, number>();
+    const resourceMap = new Map<string, number>();
+    
+    allLogs.forEach(log => {
+      // Action stats
+      const action = log.action;
+      actionMap.set(action, (actionMap.get(action) || 0) + 1);
+      
+      // Resource stats
+      const resource = log.resource;
+      resourceMap.set(resource, (resourceMap.get(resource) || 0) + 1);
+    });
+    
+    // Count recent activity (last 24 hours)
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+    const recentActivity = allLogs.filter(log => {
+      const logDoc = log as any; // Cast to access timestamps
+      return logDoc.timestamp && new Date(logDoc.timestamp) >= twentyFourHoursAgo;
+    }).length;
+    
+    return {
+      totalLogs,
+      logsByAction: Array.from(actionMap.entries()).map(([action, count]) => ({ action, count })),
+      logsByResource: Array.from(resourceMap.entries()).map(([resource, count]) => ({ resource, count })),
+      recentActivity,
+    };
+  }
 }

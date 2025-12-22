@@ -8,9 +8,10 @@ import {
 } from '@nestjs/common';
 import { AuditService } from './audit.service';
 import { AdminGuard } from '../admin/guards/admin.guard';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 
 @Controller('admin/audit')
-@UseGuards(AdminGuard)
+@UseGuards(ClerkAuthGuard, AdminGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
@@ -32,6 +33,16 @@ export class AuditController {
     if (endDate) filters.endDate = new Date(endDate);
 
     return this.auditService.getAuditLogs(page, limit, filters);
+  }
+
+  @Get('stats')
+  async getStats(): Promise<{
+    totalLogs: number;
+    logsByAction: { action: string; count: number }[];
+    logsByResource: { resource: string; count: number }[];
+    recentActivity: number;
+  }> {
+    return this.auditService.getStats();
   }
 
   @Get('resource')

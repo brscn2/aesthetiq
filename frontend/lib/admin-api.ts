@@ -45,11 +45,19 @@ export const useAdminApi = () => {
       getStats: api.adminWardrobeApi.getStats,
     },
 
+    // User Management
+    users: {
+      getAll: api.userApi.getAll,
+      getById: api.userApi.getById,
+      getStats: api.userApi.getStats,
+    },
+
     // Audit Logs
     audit: {
       getAll: api.adminAuditApi.getAll,
       getByResource: api.adminAuditApi.getByResource,
       getByUser: api.adminAuditApi.getByUser,
+      getStats: api.adminAuditApi.getStats,
     },
 
     // File Upload
