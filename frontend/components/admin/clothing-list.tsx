@@ -228,6 +228,42 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
   const uniqueBrands = Array.from(new Set(items.map((item) => item.brand).filter(Boolean)))
   const filteredItems = items
 
+  const handleExport = () => {
+    if (items.length === 0) {
+      AdminErrorHandler.handle(new Error("No items to export"))
+      return
+    }
+
+    // Create CSV content
+    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Favorite", "Last Worn", "Created"]
+    const rows = items.map((item) => [
+      item._id,
+      item.category,
+      item.subCategory || "",
+      item.brand || "",
+      getUserDisplayName(item.userId),
+      item.colorHex || "",
+      item.isFavorite ? "Yes" : "No",
+      item.lastWorn ? new Date(item.lastWorn).toLocaleDateString() : "",
+      item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
+    ])
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n")
+
+    // Download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = `clothing-items-${new Date().toISOString().split("T")[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
+
+    AdminErrorHandler.showSuccess(`Exported ${items.length} items to CSV`)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -291,7 +327,7 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
           </SelectContent>
         </Select>
 
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={handleExport}>
           <Download className="mr-2 h-4 w-4" />
           Export
         </Button>

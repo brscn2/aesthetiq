@@ -30,7 +30,7 @@ interface ClothingFormProps {
   item?: WardrobeItem | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: (item: WardrobeItem) => void
+  onSuccess: () => void
 }
 
 interface FormData {
@@ -227,7 +227,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
       AdminErrorHandler.showSuccess(
         isEditing ? "Clothing item updated successfully" : "Clothing item created successfully"
       )
-      onSuccess(result)
+      onSuccess()
       onOpenChange(false)
     }
   }
