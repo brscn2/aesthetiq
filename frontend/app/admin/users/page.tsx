@@ -143,6 +143,10 @@ export default function UsersPage() {
     if (user.name) {
       return user.name
     }
+    // Fallback to email (without domain) if no name available
+    if (user.email) {
+      return user.email.split("@")[0]
+    }
     return "Unknown"
   }
 
@@ -270,9 +274,8 @@ export default function UsersPage() {
                     <TableCell>
                       {user.clerkId ? (
                         <div className="flex items-center gap-2">
-                          <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                            {user.clerkId}
-                          </code>
+                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{user.clerkId}</span>
                           <Button
                             variant="ghost"
                             size="icon"

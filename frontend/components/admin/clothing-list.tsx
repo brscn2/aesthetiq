@@ -233,7 +233,7 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
     }
 
     // Create CSV content
-    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Favorite", "Created"]
+    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Created"]
     const rows = items.map((item) => [
       item._id,
       item.category,
@@ -241,7 +241,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
       item.brand || "",
       getUserDisplayName(item.userId),
       item.colorHex || "",
-      item.isFavorite ? "Yes" : "No",
       item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
     ])
 

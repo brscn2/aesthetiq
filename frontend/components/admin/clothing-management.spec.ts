@@ -4,22 +4,25 @@
  * Validates: Requirements 4.2, 4.3, 4.5
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-import * as fc from 'fast-check'
+import { describe, it, expect, jest, beforeEach } from "@jest/globals"
+import * as fc from "fast-check"
 
 // Mock the admin API and error handler
 const mockApi = {
   wardrobe: {
-    getAll: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getAll: jest.fn<(params: any) => Promise<unknown>>(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    create: jest.fn<(data: any) => Promise<unknown>>(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    update: jest.fn<(id: string, data: any) => Promise<unknown>>(),
+    delete: jest.fn<(id: string) => Promise<unknown>>(),
   },
   brands: {
-    getAll: jest.fn(),
+    getAll: jest.fn<() => Promise<unknown>>(),
   },
   upload: {
-    uploadImage: jest.fn(),
+    uploadImage: jest.fn<() => Promise<unknown>>(),
   },
 }
 
@@ -30,15 +33,15 @@ const mockErrorHandler = {
 }
 
 // Mock the hooks
-jest.mock('@/lib/admin-api', () => ({
+jest.mock("@/lib/admin-api", () => ({
   useAdminApi: () => mockApi,
 }))
 
-jest.mock('@/lib/admin-error-handler', () => ({
+jest.mock("@/lib/admin-error-handler", () => ({
   AdminErrorHandler: mockErrorHandler,
 }))
 
-describe('Clothing Management User Feedback Consistency', () => {
+describe("Clothing Management User Feedback Consistency", () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -47,71 +50,98 @@ describe('Clothing Management User Feedback Consistency', () => {
    * Property 8: User feedback consistency
    * Tests that all CRUD operations provide appropriate user feedback
    */
-  it('should provide consistent feedback for any clothing management operation', async () => {
+  it("should provide consistent feedback for any clothing management operation", async () => {
     await fc.assert(
       fc.asyncProperty(
         // Generate random operation scenarios
         fc.record({
-          operation: fc.constantFrom('create', 'update', 'delete', 'load'),
+          operation: fc.constantFrom("create", "update", "delete", "load"),
           success: fc.boolean(),
           validationError: fc.boolean(),
           networkError: fc.boolean(),
           itemData: fc.record({
             userId: fc.string({ minLength: 1, maxLength: 50 }),
-            category: fc.constantFrom('TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'),
-            subCategory: fc.option(fc.string({ minLength: 1, maxLength: 30 }), { nil: undefined }),
-            brand: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: undefined }),
-            colorHex: fc.option(fc.hexaString({ minLength: 6, maxLength: 6 }).map(s => `#${s}`), { nil: undefined }),
-            isFavorite: fc.boolean(),
+            category: fc.constantFrom("TOP", "BOTTOM", "SHOE", "ACCESSORY"),
+            subCategory: fc.option(fc.string({ minLength: 1, maxLength: 30 }), {
+              nil: undefined,
+            }),
+            brand: fc.option(fc.string({ minLength: 1, maxLength: 50 }), {
+              nil: undefined,
+            }),
+            colorHex: fc.option(
+              fc
+                .stringMatching(/^[0-9A-Fa-f]{6}$/)
+                .map((s: string) => `#${s}`),
+              { nil: undefined }
+            ),
           }),
         }),
         async (scenario) => {
-          const { operation, success, validationError, networkError, itemData } = scenario
+          const { operation, success, validationError, networkError, itemData } =
+            scenario
 
           // Reset mocks
           mockErrorHandler.showSuccess.mockClear()
           mockErrorHandler.showError.mockClear()
           mockErrorHandler.handle.mockClear()
 
+          // Get the mock function for the operation
+          const getMockFn = () => {
+            switch (operation) {
+              case "create":
+                return mockApi.wardrobe.create
+              case "update":
+                return mockApi.wardrobe.update
+              case "delete":
+                return mockApi.wardrobe.delete
+              case "load":
+                return mockApi.wardrobe.getAll
+              default:
+                return mockApi.wardrobe.getAll
+            }
+          }
+
+          const mockFn = getMockFn()
+
           // Configure mock responses based on scenario
           if (validationError) {
-            const validationErr = new Error('Validation failed')
-            validationErr.name = 'ValidationError'
-            mockApi.wardrobe[operation as keyof typeof mockApi.wardrobe]?.mockRejectedValue(validationErr)
+            const validationErr = new Error("Validation failed")
+            validationErr.name = "ValidationError"
+            mockFn.mockRejectedValue(validationErr)
           } else if (networkError) {
-            const networkErr = new Error('Network error')
-            networkErr.name = 'NetworkError'
-            mockApi.wardrobe[operation as keyof typeof mockApi.wardrobe]?.mockRejectedValue(networkErr)
+            const networkErr = new Error("Network error")
+            networkErr.name = "NetworkError"
+            mockFn.mockRejectedValue(networkErr)
           } else if (success) {
-            const successResult = { _id: 'test-id', ...itemData }
-            mockApi.wardrobe[operation as keyof typeof mockApi.wardrobe]?.mockResolvedValue(successResult)
+            const successResult = { _id: "test-id", ...itemData }
+            mockFn.mockResolvedValue(successResult)
           } else {
-            const genericErr = new Error('Operation failed')
-            mockApi.wardrobe[operation as keyof typeof mockApi.wardrobe]?.mockRejectedValue(genericErr)
+            const genericErr = new Error("Operation failed")
+            mockFn.mockRejectedValue(genericErr)
           }
 
           // Simulate the operation
           try {
             switch (operation) {
-              case 'create':
+              case "create":
                 await mockApi.wardrobe.create(itemData)
                 if (success) {
-                  mockErrorHandler.showSuccess('Clothing item created successfully')
+                  mockErrorHandler.showSuccess("Clothing item created successfully")
                 }
                 break
-              case 'update':
-                await mockApi.wardrobe.update('test-id', itemData)
+              case "update":
+                await mockApi.wardrobe.update("test-id", itemData)
                 if (success) {
-                  mockErrorHandler.showSuccess('Clothing item updated successfully')
+                  mockErrorHandler.showSuccess("Clothing item updated successfully")
                 }
                 break
-              case 'delete':
-                await mockApi.wardrobe.delete('test-id')
+              case "delete":
+                await mockApi.wardrobe.delete("test-id")
                 if (success) {
-                  mockErrorHandler.showSuccess('Clothing item deleted successfully')
+                  mockErrorHandler.showSuccess("Clothing item deleted successfully")
                 }
                 break
-              case 'load':
+              case "load":
                 await mockApi.wardrobe.getAll({})
                 // Load operations typically don't show success messages
                 break
@@ -121,13 +151,17 @@ describe('Clothing Management User Feedback Consistency', () => {
           }
 
           // Verify feedback consistency
-          if (success && operation !== 'load') {
+          if (success && operation !== "load") {
             // Successful operations (except load) should show success feedback
             expect(mockErrorHandler.showSuccess).toHaveBeenCalledWith(
-              expect.stringContaining('successfully')
+              expect.stringContaining("successfully")
             )
             expect(mockErrorHandler.handle).not.toHaveBeenCalled()
-          } else if (validationError || networkError || (!success && operation !== 'load')) {
+          } else if (
+            validationError ||
+            networkError ||
+            (!success && operation !== "load")
+          ) {
             // Failed operations should show error feedback
             expect(mockErrorHandler.handle).toHaveBeenCalledWith(
               expect.any(Error),
@@ -137,7 +171,7 @@ describe('Clothing Management User Feedback Consistency', () => {
           }
 
           // Load operations should not show success messages
-          if (operation === 'load') {
+          if (operation === "load") {
             expect(mockErrorHandler.showSuccess).not.toHaveBeenCalled()
           }
         }
@@ -146,19 +180,24 @@ describe('Clothing Management User Feedback Consistency', () => {
     )
   })
 
-  it('should provide consistent validation feedback for form submissions', async () => {
+  it("should provide consistent validation feedback for form submissions", async () => {
     await fc.assert(
       fc.asyncProperty(
         // Generate random form data scenarios
         fc.record({
-          userId: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: '' }),
-          category: fc.option(fc.constantFrom('TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'), { nil: '' }),
+          userId: fc.option(fc.string({ minLength: 1, maxLength: 50 }), {
+            nil: "",
+          }),
+          category: fc.option(
+            fc.constantFrom("TOP", "BOTTOM", "SHOE", "ACCESSORY"),
+            { nil: "" }
+          ),
           colorHex: fc.option(
             fc.oneof(
-              fc.hexaString({ minLength: 6, maxLength: 6 }).map(s => `#${s}`), // Valid hex
+              fc.stringMatching(/^[0-9A-Fa-f]{6}$/).map((s: string) => `#${s}`), // Valid hex
               fc.string({ minLength: 1, maxLength: 10 }) // Invalid format
-            ), 
-            { nil: '' }
+            ),
+            { nil: "" }
           ),
           hasImage: fc.boolean(),
         }),
@@ -168,32 +207,32 @@ describe('Clothing Management User Feedback Consistency', () => {
           // Simulate form validation
           const validationErrors: string[] = []
 
-          if (!userId || userId.trim() === '') {
-            validationErrors.push('User ID is required')
+          if (!userId || userId.trim() === "") {
+            validationErrors.push("User ID is required")
           }
 
-          if (!category || category === '') {
-            validationErrors.push('Category is required')
+          if (!category || category === "") {
+            validationErrors.push("Category is required")
           }
 
           if (!hasImage) {
-            validationErrors.push('Image is required for new items')
+            validationErrors.push("Image is required for new items")
           }
 
-          if (colorHex && colorHex !== '' && !colorHex.match(/^#[0-9A-Fa-f]{6}$/)) {
-            validationErrors.push('Color must be a valid hex code')
+          if (colorHex && colorHex !== "" && !colorHex.match(/^#[0-9A-Fa-f]{6}$/)) {
+            validationErrors.push("Color must be a valid hex code")
           }
 
           // Verify validation feedback consistency
           if (validationErrors.length > 0) {
             // Form with validation errors should not proceed
             expect(validationErrors.length).toBeGreaterThan(0)
-            
+
             // Each validation error should be specific and actionable
-            validationErrors.forEach(error => {
+            validationErrors.forEach((error) => {
               expect(error).toMatch(/^[A-Z].*/) // Should start with capital letter
               expect(error.length).toBeGreaterThan(5) // Should be descriptive
-              expect(error).not.toContain('undefined') // Should not contain undefined values
+              expect(error).not.toContain("undefined") // Should not contain undefined values
             })
           } else {
             // Valid form should have no validation errors

@@ -200,7 +200,7 @@ export default function AuditPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by user ID..."
+                placeholder="Search by user email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchLogs(1)}
@@ -272,7 +272,16 @@ export default function AuditPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{log.userEmail}</span>
+                          <span className="text-sm">
+                            {(() => {
+                              const display = log.userEmail || log.userId || "Unknown"
+                              // If it looks like a Clerk ID, show a friendlier name
+                              if (display.startsWith("user_")) {
+                                return "Unknown User"
+                              }
+                              return display
+                            })()}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>

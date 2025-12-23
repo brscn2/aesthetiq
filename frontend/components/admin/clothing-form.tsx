@@ -58,7 +58,7 @@ const categoryOptions = [
 
 const subCategoryOptions = {
   TOP: ["T-Shirt", "Shirt", "Blouse", "Sweater", "Hoodie", "Jacket", "Coat", "Blazer"],
-  BOTTOM: ["Jeans", "Trousers", "Shorts", "Skirt", "Dress", "Leggings"],
+  BOTTOM: ["Jeans", "Trousers", "Shorts", "Skirt", "Dress", "Leggings", "Sweatpants"],
   SHOE: ["Sneakers", "Boots", "Sandals", "Heels", "Flats", "Loafers"],
   ACCESSORY: ["Hat", "Bag", "Belt", "Jewelry", "Scarf", "Sunglasses", "Watch"],
 }

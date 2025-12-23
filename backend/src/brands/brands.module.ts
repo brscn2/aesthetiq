@@ -5,12 +5,14 @@ import { BrandsController } from './brands.controller';
 import { Brand, BrandSchema } from './schemas/brand.schema';
 import { AdminModule } from '../admin/admin.module';
 import { AuditModule } from '../audit/audit.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Brand.name, schema: BrandSchema }]),
     AdminModule,
     AuditModule,
+    UsersModule,
   ],
   controllers: [BrandsController],
   providers: [BrandsService],

@@ -39,7 +39,7 @@ export enum UserRole {
 
 @Schema({ timestamps: true })
 export class User {
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   clerkId: string;
 
   @Prop({ required: true, unique: true, lowercase: true })

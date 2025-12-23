@@ -43,7 +43,6 @@ export const testWardrobeItems = [
     subCategory: 'T-Shirt',
     brand: 'Nike',
     colorHex: '#FF0000',
-    isFavorite: true,
     imageUrl: 'https://example.com/nike-tshirt.jpg',
   },
   {
@@ -52,7 +51,6 @@ export const testWardrobeItems = [
     subCategory: 'Jeans',
     brand: 'Zara',
     colorHex: '#0000FF',
-    isFavorite: false,
     imageUrl: 'https://example.com/zara-jeans.jpg',
   },
   {
@@ -61,7 +59,6 @@ export const testWardrobeItems = [
     subCategory: 'Sneakers',
     brand: 'Adidas',
     colorHex: '#FFFFFF',
-    isFavorite: true,
     imageUrl: 'https://example.com/adidas-sneakers.jpg',
   },
 ];

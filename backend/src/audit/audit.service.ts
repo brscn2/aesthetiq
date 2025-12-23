@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
+import { UsersService } from '../users/users.service';
 
 export interface AuditLogOptions {
   userId: string;
@@ -20,6 +21,7 @@ export interface AuditLogOptions {
 export class AuditService {
   constructor(
     @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
+    private readonly usersService: UsersService,
   ) {}
 
   async logAction(options: AuditLogOptions): Promise<AuditLogDocument> {
@@ -74,8 +76,31 @@ export class AuditService {
       this.auditLogModel.countDocuments(query),
     ]);
 
+    // Resolve user emails for logs that don't have them
+    const enrichedLogs = await Promise.all(
+      logs.map(async (log) => {
+        if (!log.userEmail || log.userEmail === log.userId) {
+          try {
+            const user = await this.usersService.findByClerkId(log.userId);
+            if (user?.email) {
+              // Update the log in database for future requests
+              await this.auditLogModel.updateOne(
+                { _id: log._id },
+                { $set: { userEmail: user.email } }
+              );
+              // Update the current log object
+              log.userEmail = user.email;
+            }
+          } catch (error) {
+            // Silently fail - keep original userEmail
+          }
+        }
+        return log;
+      })
+    );
+
     return {
-      logs,
+      logs: enrichedLogs,
       total,
       page,
       totalPages: Math.ceil(total / limit),

@@ -27,6 +27,6 @@ export class Brand {
 export const BrandSchema = SchemaFactory.createForClass(Brand);
 
 // Create indexes for efficient queries
-BrandSchema.index({ name: 1 });
+// name already has unique index from @Prop decorator, no need for additional index
 BrandSchema.index({ country: 1 });
 BrandSchema.index({ foundedYear: 1 });
