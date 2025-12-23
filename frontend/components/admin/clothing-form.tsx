@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { 
   Select,
   SelectContent,
@@ -73,6 +72,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   const [imagePreview, setImagePreview] = useState<string>("")
   const [brands, setBrands] = useState<Brand[]>([])
   const [errors, setErrors] = useState<Partial<FormData>>({})
+  const [isDragging, setIsDragging] = useState(false)
   
   const api = useAdminApi()
   const { isLoading, execute } = useAdminLoading()
@@ -184,6 +184,29 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     }))
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      handleImageUpload(files[0])
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -260,7 +283,16 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
           {/* Image Upload */}
           <div className="space-y-2">
             <Label>Item Image *</Label>
-            <div className="flex items-center gap-4">
+            <div 
+              className={`flex items-center gap-4 p-4 rounded-lg border-2 border-dashed transition-colors ${
+                isDragging 
+                  ? "border-primary bg-primary/10" 
+                  : "border-muted-foreground/25 hover:border-muted-foreground/50"
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {imagePreview ? (
                 <div className="relative">
                   <img
@@ -282,8 +314,10 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </div>
               ) : (
-                <div className="h-24 w-24 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center">
-                  <Shirt className="h-8 w-8 text-muted-foreground" />
+                <div className={`h-24 w-24 rounded-lg border-2 border-dashed flex items-center justify-center transition-colors ${
+                  isDragging ? "border-primary" : "border-muted-foreground/25"
+                }`}>
+                  <Shirt className={`h-8 w-8 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
                 </div>
               )}
               
@@ -311,7 +345,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  PNG, JPG, WebP up to 10MB
+                  {isDragging ? "Drop image here" : "Drag & drop or click to upload (PNG, JPG, WebP up to 10MB)"}
                 </p>
               </div>
             </div>
