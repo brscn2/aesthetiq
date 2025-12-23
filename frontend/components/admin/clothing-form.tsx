@@ -285,7 +285,15 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             <Label>Item Image *</Label>
             <div className="flex items-center gap-4">
               {imagePreview ? (
-                <div className="relative">
+                <div 
+                  className={`relative cursor-pointer transition-all ${
+                    isDragging ? "ring-2 ring-primary ring-offset-2 rounded-lg" : ""
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('image-upload')?.click()}
+                >
                   <img
                     src={imagePreview}
                     alt="Item preview"
@@ -296,7 +304,8 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                     variant="destructive"
                     size="sm"
                     className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation()
                       setImagePreview("")
                       setImageFile(null)
                     }}
@@ -344,7 +353,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Drag & drop on icon or click to upload (PNG, JPG, WebP up to 10MB)
+                  Drag & drop on image or click to upload (PNG, JPG, WebP up to 10MB)
                 </p>
               </div>
             </div>
