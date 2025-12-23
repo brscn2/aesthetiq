@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { AuditLog, AuditLogDocument } from './schemas/audit-log.schema';
 import { CreateAuditLogDto } from './dto/create-audit-log.dto';
 import { UsersService } from '../users/users.service';
+import { ChangeFormatter, ChangeDetail } from './utils/change-formatter';
 
 export interface AuditLogOptions {
   userId: string;
@@ -25,6 +26,15 @@ export class AuditService {
   ) {}
 
   async logAction(options: AuditLogOptions): Promise<AuditLogDocument> {
+    // Calculate change details if both old and new data are provided
+    let changeDetails: ChangeDetail[] = [];
+    let changeSummary: string = '';
+    
+    if (options.oldData && options.newData) {
+      changeDetails = ChangeFormatter.formatChanges(options.oldData, options.newData);
+      changeSummary = ChangeFormatter.formatChangesSummary(changeDetails);
+    }
+
     const auditLogDto: CreateAuditLogDto = {
       userId: options.userId,
       userEmail: options.userEmail,
@@ -33,6 +43,8 @@ export class AuditService {
       resourceId: options.resourceId ? options.resourceId as any : undefined,
       oldData: options.oldData,
       newData: options.newData,
+      changeDetails,
+      changeSummary,
       ipAddress: options.ipAddress,
       userAgent: options.userAgent,
     };

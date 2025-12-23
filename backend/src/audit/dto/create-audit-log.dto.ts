@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsObject, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsDateString, IsArray } from 'class-validator';
 import { Types } from 'mongoose';
+import { ChangeDetail } from '../schemas/audit-log.schema';
 
 export class CreateAuditLogDto {
   @IsString()
@@ -24,6 +25,14 @@ export class CreateAuditLogDto {
   @IsOptional()
   @IsObject()
   newData?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  changeDetails?: ChangeDetail[];
+
+  @IsOptional()
+  @IsString()
+  changeSummary?: string;
 
   @IsOptional()
   @IsString()

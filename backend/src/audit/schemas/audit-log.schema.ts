@@ -3,6 +3,13 @@ import { Document, Types } from 'mongoose';
 
 export type AuditLogDocument = AuditLog & Document;
 
+export interface ChangeDetail {
+  field: string;
+  oldValue: any;
+  newValue: any;
+  displayName: string;
+}
+
 @Schema({ timestamps: true })
 export class AuditLog {
   @Prop({ required: true })
@@ -25,6 +32,12 @@ export class AuditLog {
 
   @Prop({ type: Object })
   newData?: Record<string, any>; // New state for creates/updates
+
+  @Prop({ type: Array })
+  changeDetails?: ChangeDetail[]; // Detailed list of what changed
+
+  @Prop()
+  changeSummary?: string; // Human-readable summary of changes
 
   @Prop()
   ipAddress?: string;

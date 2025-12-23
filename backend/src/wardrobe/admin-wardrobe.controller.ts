@@ -11,6 +11,7 @@ import {
   HttpStatus,
   HttpCode,
   UseInterceptors,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
@@ -23,6 +24,7 @@ import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { WardrobeItem, Category } from './schemas/wardrobe-item.schema';
 import { AuditLogInterceptor } from '../audit/interceptors/audit-log.interceptor';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
+import { AuditService } from '../audit/audit.service';
 
 export interface AdminWardrobeSearchOptions {
   userId?: string;
@@ -41,7 +43,10 @@ export interface AdminWardrobeSearchOptions {
 @UseInterceptors(AuditLogInterceptor)
 @Roles(UserRole.ADMIN)
 export class AdminWardrobeController {
-  constructor(private readonly wardrobeService: WardrobeService) {}
+  constructor(
+    private readonly wardrobeService: WardrobeService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post()
   @AuditLog({ action: 'CREATE_WARDROBE_ITEM', resource: 'wardrobe-item', includeBody: true })
@@ -164,7 +169,6 @@ export class AdminWardrobeController {
   }
 
   @Patch(':id')
-  @AuditLog({ action: 'UPDATE_WARDROBE_ITEM', resource: 'wardrobe-item', includeBody: true, includeParams: true })
   @ApiOperation({ summary: 'Update a wardrobe item (Admin)' })
   @ApiResponse({ status: 200, description: 'Wardrobe item updated successfully' })
   @ApiResponse({ status: 404, description: 'Wardrobe item not found' })
@@ -172,18 +176,55 @@ export class AdminWardrobeController {
   async update(
     @Param('id') id: string,
     @Body() updateWardrobeItemDto: UpdateWardrobeItemDto,
+    @Req() req: any,
   ): Promise<WardrobeItem> {
-    return this.wardrobeService.update(id, updateWardrobeItemDto);
+    const { updated, oldData } = await this.wardrobeService.update(id, updateWardrobeItemDto);
+    
+    // Manual audit logging for update with old data
+    const user = req.user;
+    if (user) {
+      const userId = user.clerkId || user.id || 'unknown';
+      const userEmail = user.emailAddresses?.[0]?.emailAddress || user.email || user.clerkId || 'unknown';
+      await this.auditService.logAction({
+        userId,
+        userEmail,
+        action: 'UPDATE_WARDROBE_ITEM',
+        resource: 'wardrobe-item',
+        resourceId: id,
+        oldData: JSON.parse(JSON.stringify(oldData)),
+        newData: JSON.parse(JSON.stringify(updated)),
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('User-Agent'),
+      });
+    }
+    
+    return updated;
   }
 
   @Delete(':id')
-  @AuditLog({ action: 'DELETE_WARDROBE_ITEM', resource: 'wardrobe-item', includeParams: true })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a wardrobe item (Admin)' })
   @ApiResponse({ status: 204, description: 'Wardrobe item deleted successfully' })
   @ApiResponse({ status: 404, description: 'Wardrobe item not found' })
   @ApiResponse({ status: 403, description: 'Admin access required' })
-  async remove(@Param('id') id: string): Promise<void> {
-    return this.wardrobeService.remove(id);
+  async remove(@Param('id') id: string, @Req() req: any): Promise<void> {
+    const deletedItem = await this.wardrobeService.remove(id);
+    
+    // Manual audit logging for delete with old data
+    const user = req.user;
+    if (user) {
+      const userId = user.clerkId || user.id || 'unknown';
+      const userEmail = user.emailAddresses?.[0]?.emailAddress || user.email || user.clerkId || 'unknown';
+      await this.auditService.logAction({
+        userId,
+        userEmail,
+        action: 'DELETE_WARDROBE_ITEM',
+        resource: 'wardrobe-item',
+        resourceId: id,
+        oldData: JSON.parse(JSON.stringify(deletedItem)),
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.get('User-Agent'),
+      });
+    }
   }
 }

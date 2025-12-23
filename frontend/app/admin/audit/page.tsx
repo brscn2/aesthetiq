@@ -27,6 +27,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
   FileText,
   Search,
   RefreshCw,
@@ -35,8 +43,10 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  ArrowRight,
 } from "lucide-react"
-import { useAdminApi, AuditLog } from "@/lib/admin-api"
+import { useAdminApi, AuditLog, ChangeDetail } from "@/lib/admin-api"
 import { toast } from "sonner"
 
 export default function AuditPage() {
@@ -120,6 +130,78 @@ export default function AuditPage() {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  const ChangeDetailsDialog = ({ log }: { log: AuditLog }) => {
+    const hasChanges = log.changeDetails && log.changeDetails.length > 0
+    const isUpdate = log.action.includes('UPDATE')
+    
+    if (!hasChanges && !isUpdate) {
+      return null
+    }
+
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Eye className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Change Details</DialogTitle>
+            <DialogDescription>
+              {log.action.replace(/_/g, " ")} on {log.resource} at {formatDateTime(log.timestamp)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {log.changeSummary && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Summary</p>
+                <p className="text-sm">{log.changeSummary}</p>
+              </div>
+            )}
+            
+            {hasChanges && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-muted-foreground">Detailed Changes</p>
+                {log.changeDetails!.map((change, index) => (
+                  <div key={index} className="border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline" className="text-xs">
+                        {change.displayName}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="flex-1">
+                        <p className="text-muted-foreground text-xs mb-1">From</p>
+                        <p className="font-mono bg-red-50 text-red-700 px-2 py-1 rounded text-xs">
+                          {change.oldValue}
+                        </p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex-1">
+                        <p className="text-muted-foreground text-xs mb-1">To</p>
+                        <p className="font-mono bg-green-50 text-green-700 px-2 py-1 rounded text-xs">
+                          {change.newValue}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {!hasChanges && isUpdate && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No detailed changes available for this update</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
@@ -256,6 +338,7 @@ export default function AuditPage() {
                     <TableHead>Resource</TableHead>
                     <TableHead>User</TableHead>
                     <TableHead>Details</TableHead>
+                    <TableHead>Changes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,6 +373,26 @@ export default function AuditPage() {
                             {log.resourceId.slice(0, 12)}...
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {log.changeSummary ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground max-w-[200px] truncate">
+                                {log.changeSummary}
+                              </span>
+                              <ChangeDetailsDialog log={log} />
+                            </div>
+                          ) : log.action.includes('UPDATE') ? (
+                            <span className="text-xs text-muted-foreground">No changes detected</span>
+                          ) : log.action.includes('CREATE') ? (
+                            <span className="text-xs text-green-600">New item created</span>
+                          ) : log.action.includes('DELETE') ? (
+                            <span className="text-xs text-red-600">Item deleted</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

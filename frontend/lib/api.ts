@@ -171,6 +171,13 @@ export interface BrandStats {
   brandsByDecade: { decade: string; count: number }[]
 }
 
+export interface ChangeDetail {
+  field: string
+  oldValue: any
+  newValue: any
+  displayName: string
+}
+
 export interface AuditLog {
   _id: string
   userId: string
@@ -180,6 +187,8 @@ export interface AuditLog {
   resourceId?: string
   oldData?: Record<string, any>
   newData?: Record<string, any>
+  changeDetails?: ChangeDetail[]
+  changeSummary?: string
   ipAddress?: string
   userAgent?: string
   timestamp: string

@@ -88,7 +88,13 @@ export class WardrobeService {
   async update(
     id: string,
     updateWardrobeItemDto: UpdateWardrobeItemDto,
-  ): Promise<WardrobeItem> {
+  ): Promise<{ updated: WardrobeItem; oldData: WardrobeItem }> {
+    // Get the old data first for audit logging
+    const oldItem = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    if (!oldItem) {
+      throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
+    }
+
     // Convert brandId string to ObjectId if provided
     const updateData = {
       ...updateWardrobeItemDto,
@@ -97,16 +103,19 @@ export class WardrobeService {
     
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })
+      .populate('brandId')
       .exec();
+    
     if (!updatedItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
-    return updatedItem;
+    
+    return { updated: updatedItem, oldData: oldItem };
   }
 
-  async remove(id: string): Promise<void> {
-    // Find the item first to get the image URL
-    const item = await this.wardrobeItemModel.findById(id).exec();
+  async remove(id: string): Promise<WardrobeItem> {
+    // Find the item first to get the image URL and return it for audit logging
+    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -136,6 +145,8 @@ export class WardrobeService {
     await this.wardrobeItemModel.findByIdAndDelete(id).exec();
     
     this.logger.log(`Wardrobe item ${id} deleted successfully`);
+    
+    return item;
   }
 }
 
