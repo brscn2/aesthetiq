@@ -34,14 +34,8 @@ import {
   User as UserIcon,
   Mail,
   Calendar,
-  MoreHorizontal,
+  Copy,
 } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useAdminApi } from "@/lib/admin-api"
 import { toast } from "sonner"
 
@@ -80,7 +74,7 @@ export default function UsersPage() {
       setFilteredUsers(adminUsers)
     } catch (error) {
       console.error("Failed to fetch users:", error)
-      toast.error("Benutzer konnten nicht geladen werden")
+      toast.error("Failed to load users")
     } finally {
       setIsLoading(false)
     }
@@ -104,7 +98,8 @@ export default function UsersPage() {
           user.email.toLowerCase().includes(query) ||
           user.name?.toLowerCase().includes(query) ||
           user.firstName?.toLowerCase().includes(query) ||
-          user.lastName?.toLowerCase().includes(query)
+          user.lastName?.toLowerCase().includes(query) ||
+          user.clerkId?.toLowerCase().includes(query)
       )
     }
 
@@ -134,7 +129,7 @@ export default function UsersPage() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "-"
-    return new Date(dateString).toLocaleDateString("de-DE", {
+    return new Date(dateString).toLocaleDateString("en-US", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -148,7 +143,12 @@ export default function UsersPage() {
     if (user.name) {
       return user.name
     }
-    return "Unbekannt"
+    return "Unknown"
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success("Copied to clipboard!")
   }
 
   const stats = {
@@ -163,13 +163,11 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">
-            Manage platform users and their roles
-          </p>
+          <p className="text-muted-foreground">Manage platform users and their roles</p>
         </div>
         <Button onClick={fetchUsers} variant="outline" disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Aktualisieren
+          Refresh
         </Button>
       </div>
 
@@ -177,29 +175,29 @@ export default function UsersPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Gesamt</CardTitle>
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">Registrierte Benutzer</p>
+            <p className="text-xs text-muted-foreground">Registered users</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Administratoren</CardTitle>
+            <CardTitle className="text-sm font-medium">Administrators</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">{stats.admins}</div>
-            <p className="text-xs text-muted-foreground">Mit Admin-Rechten</p>
+            <p className="text-xs text-muted-foreground">With admin rights</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Benutzer</CardTitle>
+            <CardTitle className="text-sm font-medium">Users</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{stats.users}</div>
-            <p className="text-xs text-muted-foreground">Standard-Benutzer</p>
+            <p className="text-xs text-muted-foreground">Standard users</p>
           </CardContent>
         </Card>
       </div>
@@ -209,10 +207,10 @@ export default function UsersPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Benutzerliste
+            User List
           </CardTitle>
           <CardDescription>
-            {filteredUsers.length} von {users.length} Benutzern
+            {filteredUsers.length} of {users.length} users
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -220,7 +218,7 @@ export default function UsersPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Suche nach Name oder E-Mail..."
+                placeholder="Search by name, email, or user ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -228,12 +226,12 @@ export default function UsersPage() {
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Rolle filtern" />
+                <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle Rollen</SelectItem>
-                <SelectItem value="ADMIN">Administratoren</SelectItem>
-                <SelectItem value="USER">Benutzer</SelectItem>
+                <SelectItem value="all">All Roles</SelectItem>
+                <SelectItem value="ADMIN">Administrators</SelectItem>
+                <SelectItem value="USER">Users</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -246,18 +244,16 @@ export default function UsersPage() {
               ))}
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Keine Benutzer gefunden
-            </div>
+            <div className="text-center py-8 text-muted-foreground">No users found</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Benutzer</TableHead>
-                  <TableHead>E-Mail</TableHead>
-                  <TableHead>Rolle</TableHead>
-                  <TableHead>Registriert</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>User ID (Clerk)</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Registered</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -268,17 +264,27 @@ export default function UsersPage() {
                         <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
                           <UserIcon className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <div>
-                          <div className="font-medium">
-                            {getUserDisplayName(user)}
-                          </div>
-                          {user.clerkId && (
-                            <div className="text-xs text-muted-foreground">
-                              ID: {user.clerkId.slice(0, 12)}...
-                            </div>
-                          )}
-                        </div>
+                        <div className="font-medium">{getUserDisplayName(user)}</div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {user.clerkId ? (
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                            {user.clerkId}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => copyToClipboard(user.clerkId!)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -292,19 +298,6 @@ export default function UsersPage() {
                         <Calendar className="h-4 w-4" />
                         {formatDate(user.createdAt)}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Details anzeigen</DropdownMenuItem>
-                          <DropdownMenuItem>Aktivität anzeigen</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
