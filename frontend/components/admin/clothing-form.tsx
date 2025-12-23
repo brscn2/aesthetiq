@@ -283,16 +283,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
           {/* Image Upload */}
           <div className="space-y-2">
             <Label>Item Image *</Label>
-            <div 
-              className={`flex items-center gap-4 p-4 rounded-lg border-2 border-dashed transition-colors ${
-                isDragging 
-                  ? "border-primary bg-primary/10" 
-                  : "border-muted-foreground/25 hover:border-muted-foreground/50"
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
+            <div className="flex items-center gap-4">
               {imagePreview ? (
                 <div className="relative">
                   <img
@@ -314,9 +305,17 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </div>
               ) : (
-                <div className={`h-24 w-24 rounded-lg border-2 border-dashed flex items-center justify-center transition-colors ${
-                  isDragging ? "border-primary" : "border-muted-foreground/25"
-                }`}>
+                <div 
+                  className={`h-24 w-24 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors ${
+                    isDragging 
+                      ? "border-primary bg-primary/10" 
+                      : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('image-upload')?.click()}
+                >
                   <Shirt className={`h-8 w-8 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
                 </div>
               )}
@@ -345,7 +344,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {isDragging ? "Drop image here" : "Drag & drop or click to upload (PNG, JPG, WebP up to 10MB)"}
+                  Drag & drop on icon or click to upload (PNG, JPG, WebP up to 10MB)
                 </p>
               </div>
             </div>
