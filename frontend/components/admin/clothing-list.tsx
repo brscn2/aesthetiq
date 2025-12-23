@@ -47,7 +47,6 @@ import {
   Shirt,
   Download,
   Heart,
-  Calendar,
   User,
 } from "lucide-react"
 import { useAdminApi, WardrobeItem, Category } from "@/lib/admin-api"
@@ -235,7 +234,7 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
     }
 
     // Create CSV content
-    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Favorite", "Last Worn", "Created"]
+    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Favorite", "Created"]
     const rows = items.map((item) => [
       item._id,
       item.category,
@@ -244,7 +243,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
       getUserDisplayName(item.userId),
       item.colorHex || "",
       item.isFavorite ? "Yes" : "No",
-      item.lastWorn ? new Date(item.lastWorn).toLocaleDateString() : "",
       item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
     ])
 
@@ -378,7 +376,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                   <TableHead>User</TableHead>
                   <TableHead>Color</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last Worn</TableHead>
                   <TableHead className="w-[70px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -443,18 +440,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                           <Heart className="mr-1 h-3 w-3" />
                           Favorite
                         </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.lastWorn ? (
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">
-                            {new Date(item.lastWorn).toLocaleDateString()}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Never</span>
                       )}
                     </TableCell>
                     <TableCell>

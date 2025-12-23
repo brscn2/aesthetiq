@@ -41,7 +41,6 @@ interface FormData {
   brandId: string
   colorHex: string
   isFavorite: boolean
-  lastWorn: string
 }
 
 const initialFormData: FormData = {
@@ -52,7 +51,6 @@ const initialFormData: FormData = {
   brandId: "",
   colorHex: "",
   isFavorite: false,
-  lastWorn: "",
 }
 
 const categoryOptions = [
@@ -107,7 +105,6 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
         brandId: (item as any).brandId?.toString() || "",
         colorHex: item.colorHex || "",
         isFavorite: item.isFavorite,
-        lastWorn: item.lastWorn ? new Date(item.lastWorn).toISOString().split('T')[0] : "",
       })
       setImagePreview(item.processedImageUrl || item.imageUrl)
     } else {
@@ -220,7 +217,6 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
       brandId: formData.brandId || undefined,
       colorHex: formData.colorHex.trim() || undefined,
       isFavorite: formData.isFavorite,
-      lastWorn: formData.lastWorn ? new Date(formData.lastWorn) : undefined,
     }
 
     // Create or update item
@@ -425,17 +421,6 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             {errors.colorHex && (
               <p className="text-sm text-destructive">{errors.colorHex}</p>
             )}
-          </div>
-
-          {/* Last Worn */}
-          <div className="space-y-2">
-            <Label htmlFor="lastWorn">Last Worn</Label>
-            <Input
-              id="lastWorn"
-              type="date"
-              value={formData.lastWorn}
-              onChange={(e) => handleInputChange("lastWorn", e.target.value)}
-            />
           </div>
 
           {/* Favorite */}
