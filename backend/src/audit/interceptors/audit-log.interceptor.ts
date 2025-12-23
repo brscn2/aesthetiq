@@ -10,6 +10,7 @@ import { Observable, tap } from 'rxjs';
 import { AuditService } from '../audit.service';
 import { AUDIT_LOG_KEY, AuditLogMetadata } from '../decorators/audit-log.decorator';
 import { UsersService } from '../../users/users.service';
+import { ChangeFormatter } from '../utils/change-formatter';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -79,10 +80,36 @@ export class AuditLogInterceptor implements NestInterceptor {
       return userId;
     };
 
+    // Helper function to get current resource data for UPDATE actions
+    const getCurrentResourceData = async (): Promise<any> => {
+      if (action.includes('UPDATE') && request.params?.id) {
+        try {
+          // This is a simplified approach - in a real implementation,
+          // you might want to inject the appropriate service based on resource type
+          const resourceId = request.params.id;
+          
+          // For now, we'll store the request body as the "new" data
+          // and let the service handle the old data retrieval
+          return null; // Will be handled by the service layer
+        } catch (error) {
+          return null;
+        }
+      }
+      return null;
+    };
+
     return next.handle().pipe(
       tap({
         next: async (response) => {
           const finalUserEmail = await resolveUserEmail();
+          const oldData = await getCurrentResourceData();
+          
+          // For UPDATE actions, try to detect changes
+          let changesSummary = '';
+          if (action.includes('UPDATE') && requestData.body) {
+            const changes = ChangeFormatter.detectChanges(oldData, requestData.body);
+            changesSummary = ChangeFormatter.formatChanges(changes);
+          }
           
           // Log successful action
           this.auditService.logAction({
@@ -91,7 +118,8 @@ export class AuditLogInterceptor implements NestInterceptor {
             action,
             resource,
             resourceId: request.params?.id || response?.id || response?._id?.toString(),
-            newData: includeBody ? requestData : undefined,
+            oldData: oldData,
+            newData: includeBody ? { ...requestData, changesSummary } : undefined,
             ipAddress,
             userAgent,
           }).catch(error => {

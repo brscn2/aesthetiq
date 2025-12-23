@@ -175,7 +175,7 @@ export interface ChangeDetail {
   field: string
   oldValue: any
   newValue: any
-  displayName: string
+  type: 'added' | 'modified' | 'removed'
 }
 
 export interface AuditLog {

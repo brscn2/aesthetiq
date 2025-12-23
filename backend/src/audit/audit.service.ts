@@ -31,8 +31,8 @@ export class AuditService {
     let changeSummary: string = '';
     
     if (options.oldData && options.newData) {
-      changeDetails = ChangeFormatter.formatChanges(options.oldData, options.newData);
-      changeSummary = ChangeFormatter.formatChangesSummary(changeDetails);
+      changeDetails = ChangeFormatter.detectChanges(options.oldData, options.newData);
+      changeSummary = ChangeFormatter.formatChanges(changeDetails);
     }
 
     const auditLogDto: CreateAuditLogDto = {

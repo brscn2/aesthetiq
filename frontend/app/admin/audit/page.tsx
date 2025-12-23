@@ -169,21 +169,28 @@ export default function AuditPage() {
                   <div key={index} className="border rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline" className="text-xs">
-                        {change.displayName}
+                        {change.field}
+                      </Badge>
+                      <Badge variant="outline" className={`text-xs ${
+                        change.type === 'added' ? 'bg-green-50 text-green-700' :
+                        change.type === 'removed' ? 'bg-red-50 text-red-700' :
+                        'bg-blue-50 text-blue-700'
+                      }`}>
+                        {change.type}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <div className="flex-1">
                         <p className="text-muted-foreground text-xs mb-1">From</p>
                         <p className="font-mono bg-red-50 text-red-700 px-2 py-1 rounded text-xs">
-                          {change.oldValue}
+                          {change.oldValue || 'null'}
                         </p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
                       <div className="flex-1">
                         <p className="text-muted-foreground text-xs mb-1">To</p>
                         <p className="font-mono bg-green-50 text-green-700 px-2 py-1 rounded text-xs">
-                          {change.newValue}
+                          {change.newValue || 'null'}
                         </p>
                       </div>
                     </div>
@@ -368,10 +375,47 @@ export default function AuditPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {log.resourceId && (
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {log.resourceId.slice(0, 12)}...
-                          </span>
+                        <div className="text-xs">
+                          {log.resourceId && (
+                            <div className="text-muted-foreground font-mono mb-1">
+                              ID: {log.resourceId.slice(0, 12)}...
+                            </div>
+                          )}
+                          {log.changeSummary && (
+                            <div className="text-green-600 font-medium">
+                              {log.changeSummary}
+                            </div>
+                          )}
+                          {!log.changeSummary && log.action.includes('UPDATE') && (
+                            <div className="text-muted-foreground">
+                              No changes detected
+                            </div>
+                          )}
+                          {log.action.includes('CREATE') && (
+                            <div className="text-green-600">
+                              New item created
+                            </div>
+                          )}
+                          {log.action.includes('DELETE') && (
+                            <div className="text-red-600">
+                              Item deleted
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {log.changeSummary ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700">
+                            Changes detected
+                          </Badge>
+                        ) : log.action.includes('UPDATE') ? (
+                          <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                            No changes
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                            {log.action.includes('CREATE') ? 'Created' : 'Action completed'}
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell>
