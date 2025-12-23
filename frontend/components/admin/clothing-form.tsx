@@ -171,8 +171,16 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   }
 
   const handleBrandChange = (brandId: string) => {
-    const selectedBrand = brands.find(b => b._id === brandId)
-    setFormData(prev => ({
+    if (brandId === "none") {
+      setFormData(prev => ({
+        ...prev,
+        brandId: "",
+        brand: "",
+      }))
+      return
+    }
+    const selectedBrand = brands.find((b) => b._id === brandId)
+    setFormData((prev) => ({
       ...prev,
       brandId,
       brand: selectedBrand?.name || "",
@@ -376,8 +384,8 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
           {/* Brand Selection */}
           <div className="space-y-2">
             <Label>Brand</Label>
-            <Select 
-              value={formData.brandId} 
+            <Select
+              value={formData.brandId || "none"}
               onValueChange={handleBrandChange}
               disabled={brandsLoading}
             >
@@ -385,7 +393,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                 <SelectValue placeholder={brandsLoading ? "Loading brands..." : "Select brand"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No brand</SelectItem>
+                <SelectItem value="none">No brand</SelectItem>
                 {brands.map((brand) => (
                   <SelectItem key={brand._id} value={brand._id}>
                     {brand.name}
