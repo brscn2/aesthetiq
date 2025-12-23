@@ -4,6 +4,7 @@ import { AuditService } from './audit.service';
 import { AuditController } from './audit.controller';
 import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
 import { AdminModule } from '../admin/admin.module';
+import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { AdminModule } from '../admin/admin.module';
     AdminModule,
   ],
   controllers: [AuditController],
-  providers: [AuditService],
-  exports: [AuditService],
+  providers: [AuditService, AuditLogInterceptor],
+  exports: [AuditService, AuditLogInterceptor],
 })
 export class AuditModule {}

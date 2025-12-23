@@ -19,7 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Upload, X, Shirt, Loader2, Palette } from "lucide-react"
 import { useAdminApi, WardrobeItem, Category, CreateWardrobeItemDto, UpdateWardrobeItemDto, Brand } from "@/lib/admin-api"
 import { useAdminLoading } from "@/hooks/use-admin-loading"
@@ -39,7 +38,6 @@ interface FormData {
   brand: string
   brandId: string
   colorHex: string
-  isFavorite: boolean
 }
 
 const initialFormData: FormData = {
@@ -49,7 +47,6 @@ const initialFormData: FormData = {
   brand: "",
   brandId: "",
   colorHex: "",
-  isFavorite: false,
 }
 
 const categoryOptions = [
@@ -96,24 +93,28 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   }, [])
 
   useEffect(() => {
-    if (item) {
+    if (item && brands.length > 0) {
+      // Find brandId by matching brand name
+      const matchingBrand = item.brand 
+        ? brands.find(b => b.name === item.brand)
+        : null
+      
       setFormData({
         userId: item.userId,
         category: item.category,
         subCategory: item.subCategory || "",
         brand: item.brand || "",
-        brandId: (item as any).brandId?.toString() || "",
+        brandId: matchingBrand?._id || (item as any).brandId?.toString() || "",
         colorHex: item.colorHex || "",
-        isFavorite: item.isFavorite,
       })
       setImagePreview(item.processedImageUrl || item.imageUrl)
-    } else {
+    } else if (!item) {
       setFormData(initialFormData)
       setImagePreview("")
     }
     setImageFile(null)
     setErrors({})
-  }, [item, open])
+  }, [item, open, brands])
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
@@ -231,16 +232,19 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     }
 
     // Prepare clothing item data
-    const itemData = {
-      userId: formData.userId.trim(),
+    const baseData = {
       imageUrl,
       category: formData.category as Category,
       subCategory: formData.subCategory.trim() || undefined,
       brand: formData.brand.trim() || undefined,
       brandId: formData.brandId || undefined,
       colorHex: formData.colorHex.trim() || undefined,
-      isFavorite: formData.isFavorite,
     }
+
+    // For create, include userId. For update, don't include userId
+    const itemData = isEditing 
+      ? baseData 
+      : { ...baseData, userId: formData.userId.trim() }
 
     // Create or update item
     const result = await execute(
@@ -458,21 +462,20 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                 placeholder="#FF0000"
                 className={`font-mono ${errors.colorHex ? "border-destructive" : ""}`}
               />
-              <Palette className="h-4 w-4 text-muted-foreground" />
+              <label className="relative cursor-pointer">
+                <Palette className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                <input
+                  type="color"
+                  value={formData.colorHex || "#000000"}
+                  onChange={(e) => handleInputChange("colorHex", e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  title="Pick a color"
+                />
+              </label>
             </div>
             {errors.colorHex && (
               <p className="text-sm text-destructive">{errors.colorHex}</p>
             )}
-          </div>
-
-          {/* Favorite */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isFavorite"
-              checked={formData.isFavorite}
-              onCheckedChange={(checked) => handleInputChange("isFavorite", checked as boolean)}
-            />
-            <Label htmlFor="isFavorite">Mark as favorite</Label>
           </div>
 
           <DialogFooter>

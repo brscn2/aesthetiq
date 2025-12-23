@@ -46,7 +46,6 @@ import {
   Plus,
   Shirt,
   Download,
-  Heart,
   User,
 } from "lucide-react"
 import { useAdminApi, WardrobeItem, Category } from "@/lib/admin-api"
@@ -375,7 +374,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                   <TableHead>Brand</TableHead>
                   <TableHead>User</TableHead>
                   <TableHead>Color</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="w-[70px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -432,14 +430,6 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                         </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.isFavorite && (
-                        <Badge variant="secondary" className="bg-red-50 text-red-700">
-                          <Heart className="mr-1 h-3 w-3" />
-                          Favorite
-                        </Badge>
                       )}
                     </TableCell>
                     <TableCell>

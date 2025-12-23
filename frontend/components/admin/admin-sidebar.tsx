@@ -77,14 +77,14 @@ export function AdminSidebar({ onClose }: AdminSidebarProps) {
           </h3>
           <div className="space-y-1">
             <Link
-              href="/admin/brands/new"
+              href="/admin/brands?action=add"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
             >
               <Package className="h-3 w-3" />
               Add Brand
             </Link>
             <Link
-              href="/admin/clothing/new"
+              href="/admin/clothing?action=add"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
             >
               <Shirt className="h-3 w-3" />

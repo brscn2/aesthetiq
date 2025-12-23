@@ -50,16 +50,20 @@ export class AuditLogInterceptor implements NestInterceptor {
     const ipAddress = request.ip || request.connection?.remoteAddress;
     const userAgent = request.get('User-Agent');
 
+    // Get user ID - support both clerkId and id formats
+    const userId = user.clerkId || user.id || 'unknown';
+    const userEmail = user.emailAddresses?.[0]?.emailAddress || user.email || user.clerkId || 'unknown';
+
     return next.handle().pipe(
       tap({
         next: (response) => {
           // Log successful action
           this.auditService.logAction({
-            userId: user.id,
-            userEmail: user.emailAddresses?.[0]?.emailAddress || user.email || 'unknown',
+            userId,
+            userEmail,
             action,
             resource,
-            resourceId: request.params?.id || response?.id || response?._id,
+            resourceId: request.params?.id || response?.id || response?._id?.toString(),
             newData: includeBody ? requestData : undefined,
             ipAddress,
             userAgent,
@@ -70,8 +74,8 @@ export class AuditLogInterceptor implements NestInterceptor {
         error: (error) => {
           // Log failed action
           this.auditService.logAction({
-            userId: user.id,
-            userEmail: user.emailAddresses?.[0]?.emailAddress || user.email || 'unknown',
+            userId,
+            userEmail,
             action: `${action}_FAILED`,
             resource,
             resourceId: request.params?.id,

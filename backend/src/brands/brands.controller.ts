@@ -119,9 +119,11 @@ export class BrandsController {
     // Manual audit logging for update with old data
     const user = req.user;
     if (user) {
+      const userId = user.clerkId || user.id || 'unknown';
+      const userEmail = user.emailAddresses?.[0]?.emailAddress || user.email || user.clerkId || 'unknown';
       await this.auditService.logAction({
-        userId: user.id,
-        userEmail: user.emailAddresses?.[0]?.emailAddress || user.email || 'unknown',
+        userId,
+        userEmail,
         action: 'UPDATE_BRAND',
         resource: 'brand',
         resourceId: id,
@@ -148,9 +150,11 @@ export class BrandsController {
     // Manual audit logging for delete with old data
     const user = req.user;
     if (user) {
+      const userId = user.clerkId || user.id || 'unknown';
+      const userEmail = user.emailAddresses?.[0]?.emailAddress || user.email || user.clerkId || 'unknown';
       await this.auditService.logAction({
-        userId: user.id,
-        userEmail: user.emailAddresses?.[0]?.emailAddress || user.email || 'unknown',
+        userId,
+        userEmail,
         action: 'DELETE_BRAND',
         resource: 'brand',
         resourceId: id,

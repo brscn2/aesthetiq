@@ -22,7 +22,8 @@
     "promote-admin-simple": "ts-node -r tsconfig-paths/register src/admin/scripts/promote-admin-simple.ts",
     "promote-admin-clerk": "ts-node -r tsconfig-paths/register src/admin/scripts/promote-admin-clerk.ts",
     "promote-all-users": "ts-node -r tsconfig-paths/register src/admin/scripts/promote-all-users.ts",
-    "list-users": "ts-node -r tsconfig-paths/register src/admin/scripts/list-users.ts"
+    "list-users": "ts-node -r tsconfig-paths/register src/admin/scripts/list-users.ts",
+    "seed-brands": "ts-node -r tsconfig-paths/register src/brands/scripts/seed-brands.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.29.1",
