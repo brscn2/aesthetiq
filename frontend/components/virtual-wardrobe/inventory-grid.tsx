@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/lib/api"
 import { Category, WardrobeItem } from "@/types/api"
 import { formatDistanceToNow } from "date-fns"
+import { colorMatchesFilter } from "@/lib/colors"
 
 interface ClothingItem {
   id: string
@@ -21,8 +22,15 @@ interface ClothingItem {
 // Temporary userId - in production, get from auth context
 const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
 
+interface WardrobeFilters {
+  category: Category | null
+  brand: string | null
+  color: string | null
+}
+
 interface InventoryGridProps {
   searchQuery?: string
+  filters?: WardrobeFilters
 }
 
 function ItemCard({ item }: { item: WardrobeItem }) {
@@ -86,13 +94,22 @@ function LoadingSkeleton() {
   )
 }
 
-export function InventoryGrid({ searchQuery }: InventoryGridProps) {
+export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
   const { wardrobeApi } = useApi()
+  
+  // Fetch all items (without search) to know if wardrobe is truly empty
+  const { data: allItems } = useQuery({
+    queryKey: ["wardrobe", TEMP_USER_ID],
+    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+  })
+  
   const { data: wardrobeItems, isLoading, isFetching, error } = useQuery({
-    queryKey: ["wardrobe", TEMP_USER_ID, searchQuery],
+    queryKey: ["wardrobe", TEMP_USER_ID, searchQuery, filters],
     queryFn: () => wardrobeApi.getAll(TEMP_USER_ID, undefined, undefined, searchQuery),
     placeholderData: (previousData) => previousData, // Keep previous data while fetching
   })
+  
+  const hasSearchOrFilters = !!(searchQuery || filters?.category || filters?.brand || filters?.color)
 
   if (isLoading) {
     return (
@@ -127,11 +144,28 @@ export function InventoryGrid({ searchQuery }: InventoryGridProps) {
     return dateB - dateA // Newest first
   })
 
+  // Apply filters
+  const filteredItems = sortedItems.filter((item: WardrobeItem) => {
+    // Category filter
+    if (filters?.category) {
+      if (item.category !== filters.category) return false
+    }
+    // Brand filter
+    if (filters?.brand) {
+      if (!item.brand || item.brand !== filters.brand) return false
+    }
+    // Color filter (with tolerance matching)
+    if (filters?.color) {
+      if (!item.colorHex || !colorMatchesFilter(item.colorHex, filters.color)) return false
+    }
+    return true
+  })
+
   // Group items by category
-  const tops = sortedItems.filter((item: WardrobeItem) => item.category === Category.TOP)
-  const bottoms = sortedItems.filter((item: WardrobeItem) => item.category === Category.BOTTOM)
-  const footwear = sortedItems.filter((item: WardrobeItem) => item.category === Category.SHOE)
-  const accessories = sortedItems.filter((item: WardrobeItem) => item.category === Category.ACCESSORY)
+  const tops = filteredItems.filter((item: WardrobeItem) => item.category === Category.TOP)
+  const bottoms = filteredItems.filter((item: WardrobeItem) => item.category === Category.BOTTOM)
+  const footwear = filteredItems.filter((item: WardrobeItem) => item.category === Category.SHOE)
+  const accessories = filteredItems.filter((item: WardrobeItem) => item.category === Category.ACCESSORY)
 
   return (
     <div className="space-y-10 pb-10">
@@ -179,7 +213,7 @@ export function InventoryGrid({ searchQuery }: InventoryGridProps) {
         </section>
       )}
 
-      {wardrobeItems?.length === 0 && (
+      {(!allItems || allItems.length === 0) && !hasSearchOrFilters && (
         <section>
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="mb-4 font-serif text-xl text-muted-foreground">
@@ -187,6 +221,19 @@ export function InventoryGrid({ searchQuery }: InventoryGridProps) {
             </p>
             <p className="text-sm text-muted-foreground">
               Add your first item to get started
+            </p>
+          </div>
+        </section>
+      )}
+
+      {allItems && allItems.length > 0 && filteredItems.length === 0 && (
+        <section>
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="mb-4 font-serif text-xl text-muted-foreground">
+              No items match your filters
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Try adjusting your search or filter criteria
             </p>
           </div>
         </section>
