@@ -202,8 +202,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setProcessedPreviewUrl(processedPreview)
       setImagePreview(processedPreview)
       
-      toast.success('✨ Hintergrund entfernt!', {
-        description: 'Du kannst jetzt zwischen Original und bearbeitet wechseln.',
+      toast.success('✨ Background removed!', {
+        description: 'You can now switch between original and processed.',
         duration: 3000,
       })
     } catch (error: any) {
@@ -807,7 +807,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 <div 
                   className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-background/80 border border-border px-3 py-1.5 backdrop-blur-md"
                   onClick={(e) => e.stopPropagation()}
-                  title={isProcessing ? "AI verarbeitet gerade..." : "Zwischen Original und ohne Hintergrund wechseln"}
+                  title={isProcessing ? "AI is processing..." : "Toggle between original and background removed"}
                 >
                   {isProcessing ? (
                     <Loader2 className="h-3 w-3 animate-spin text-purple-400" />

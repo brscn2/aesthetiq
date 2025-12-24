@@ -1,23 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/lib/api"
 import { Category, WardrobeItem } from "@/types/api"
-import { formatDistanceToNow } from "date-fns"
 import { colorMatchesFilter } from "@/lib/colors"
-
-interface ClothingItem {
-  id: string
-  image: string
-  brand: string
-  lastWorn: string
-  isNew?: boolean
-  isProcessing?: boolean
-}
+import { ItemDetailModal } from "./item-detail-modal"
 
 // Temporary userId - in production, get from auth context
 const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
@@ -33,13 +24,17 @@ interface InventoryGridProps {
   filters?: WardrobeFilters
 }
 
-function ItemCard({ item }: { item: WardrobeItem }) {
-  const lastWornText = item.lastWorn
-    ? formatDistanceToNow(new Date(item.lastWorn), { addSuffix: true })
-    : "Never"
+interface ItemCardProps {
+  item: WardrobeItem
+  onClick: () => void
+}
 
+function ItemCard({ item, onClick }: ItemCardProps) {
   return (
-    <Card className="group relative overflow-hidden border-border bg-card transition-all hover:border-purple-500/30 hover:bg-accent">
+    <Card 
+      className="group relative overflow-hidden border-border bg-card transition-all hover:border-purple-500/30 hover:bg-accent cursor-pointer"
+      onClick={onClick}
+    >
       <CardContent className="p-4">
         <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-muted">
           {/* Checkerboard pattern for transparent backgrounds */}
@@ -64,12 +59,9 @@ function ItemCard({ item }: { item: WardrobeItem }) {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="font-serif text-sm font-medium text-foreground">
-            {item.brand || "Unknown Brand"}
-          </span>
-          <span className="text-[10px] text-muted-foreground">{lastWornText}</span>
-        </div>
+        <span className="font-serif text-sm font-medium text-foreground">
+          {item.brand || "Unknown Brand"}
+        </span>
       </CardContent>
     </Card>
   )
@@ -96,6 +88,8 @@ function LoadingSkeleton() {
 
 export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
   const { wardrobeApi } = useApi()
+  const [selectedItem, setSelectedItem] = useState<WardrobeItem | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   
   // Fetch all items (without search) to know if wardrobe is truly empty
   const { data: allItems } = useQuery({
@@ -103,7 +97,7 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
     queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
   })
   
-  const { data: wardrobeItems, isLoading, isFetching, error } = useQuery({
+  const { data: wardrobeItems, isLoading, error } = useQuery({
     queryKey: ["wardrobe", TEMP_USER_ID, searchQuery, filters],
     queryFn: () => wardrobeApi.getAll(TEMP_USER_ID, undefined, undefined, searchQuery),
     placeholderData: (previousData) => previousData, // Keep previous data while fetching
@@ -174,7 +168,14 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Tops</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {tops.map((item: WardrobeItem) => (
-              <ItemCard key={item._id} item={item} />
+              <ItemCard 
+                key={item._id} 
+                item={item} 
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
             ))}
           </div>
         </section>
@@ -185,7 +186,14 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Bottoms</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {bottoms.map((item: WardrobeItem) => (
-              <ItemCard key={item._id} item={item} />
+              <ItemCard 
+                key={item._id} 
+                item={item}
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
             ))}
           </div>
         </section>
@@ -196,7 +204,14 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Footwear</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {footwear.map((item: WardrobeItem) => (
-              <ItemCard key={item._id} item={item} />
+              <ItemCard 
+                key={item._id} 
+                item={item}
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
             ))}
           </div>
         </section>
@@ -207,7 +222,14 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Accessories</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {accessories.map((item: WardrobeItem) => (
-              <ItemCard key={item._id} item={item} />
+              <ItemCard 
+                key={item._id} 
+                item={item}
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
             ))}
           </div>
         </section>
@@ -238,6 +260,12 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           </div>
         </section>
       )}
+
+      <ItemDetailModal
+        item={selectedItem}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+      />
     </div>
   )
 }
