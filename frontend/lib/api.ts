@@ -74,10 +74,11 @@ const createUserApi = (client: AxiosInstance) => ({
 })
 
 const createWardrobeApi = (client: AxiosInstance) => ({
-  getAll: (userId: string, category?: Category, colorHex?: string): Promise<WardrobeItem[]> => {
+  getAll: (userId: string, category?: Category, colorHex?: string, search?: string): Promise<WardrobeItem[]> => {
     const params = new URLSearchParams({ userId })
     if (category) params.append("category", category)
     if (colorHex) params.append("colorHex", colorHex)
+    if (search) params.append("search", search)
     return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data)
   },
   getById: (id: string): Promise<WardrobeItem> => client.get(`/wardrobe/${id}`).then((res) => res.data),

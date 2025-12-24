@@ -36,6 +36,7 @@ export class WardrobeService {
     category?: Category,
     colorHex?: string,
     brandId?: string,
+    search?: string,
   ): Promise<WardrobeItem[]> {
     const filter: any = { userId };
     if (category) {
@@ -46,6 +47,14 @@ export class WardrobeService {
     }
     if (brandId) {
       filter.brandId = new Types.ObjectId(brandId);
+    }
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      filter.$or = [
+        { brand: searchRegex },
+        { subCategory: searchRegex },
+        { notes: searchRegex },
+      ];
     }
     return this.wardrobeItemModel.find(filter).populate('brandId').exec();
   }

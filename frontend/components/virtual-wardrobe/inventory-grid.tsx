@@ -21,6 +21,10 @@ interface ClothingItem {
 // Temporary userId - in production, get from auth context
 const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
 
+interface InventoryGridProps {
+  searchQuery?: string
+}
+
 function ItemCard({ item }: { item: WardrobeItem }) {
   const lastWornText = item.lastWorn
     ? formatDistanceToNow(new Date(item.lastWorn), { addSuffix: true })
@@ -82,11 +86,12 @@ function LoadingSkeleton() {
   )
 }
 
-export function InventoryGrid() {
+export function InventoryGrid({ searchQuery }: InventoryGridProps) {
   const { wardrobeApi } = useApi()
-  const { data: wardrobeItems, isLoading, error } = useQuery({
-    queryKey: ["wardrobe", TEMP_USER_ID],
-    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+  const { data: wardrobeItems, isLoading, isFetching, error } = useQuery({
+    queryKey: ["wardrobe", TEMP_USER_ID, searchQuery],
+    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID, undefined, undefined, searchQuery),
+    placeholderData: (previousData) => previousData, // Keep previous data while fetching
   })
 
   if (isLoading) {

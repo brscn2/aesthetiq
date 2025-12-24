@@ -10,9 +10,11 @@ interface WardrobeControlBarProps {
   activeTab: string
   onTabChange: (value: string) => void
   onAddItem: () => void
+  searchQuery: string
+  onSearchChange: (value: string) => void
 }
 
-export function WardrobeControlBar({ activeTab, onTabChange, onAddItem }: WardrobeControlBarProps) {
+export function WardrobeControlBar({ activeTab, onTabChange, onAddItem, searchQuery, onSearchChange }: WardrobeControlBarProps) {
   return (
     <div className="sticky top-0 z-10 flex h-auto flex-col gap-4 border-b border-border bg-background/95 px-6 py-4 backdrop-blur-md md:h-20 md:flex-row md:items-center md:justify-between md:gap-0">
       <div className="flex flex-1 items-center gap-4">
@@ -21,6 +23,8 @@ export function WardrobeControlBar({ activeTab, onTabChange, onAddItem }: Wardro
           <Input
             type="search"
             placeholder="Search wardrobe..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="h-10 border-border bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-purple-500"
           />
         </div>

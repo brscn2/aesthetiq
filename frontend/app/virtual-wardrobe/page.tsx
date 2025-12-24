@@ -13,6 +13,7 @@ export default function VirtualWardrobePage() {
   const [activeTab, setActiveTab] = useState("all-items")
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   return (
     <DashboardLayout>
@@ -22,12 +23,14 @@ export default function VirtualWardrobePage() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           onAddItem={() => setIsAddModalOpen(true)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <div className="flex flex-1 overflow-hidden">
           {/* Main Inventory Grid */}
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-            <InventoryGrid />
+            <InventoryGrid searchQuery={searchQuery} />
           </main>
 
           {/* Intelligence Sidebar - Desktop */}
