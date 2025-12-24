@@ -83,6 +83,9 @@ services:
       - .env
     environment:
       - PORT=8002
+    volumes:
+      # Mount logs directory for chat history
+      - ./logs:/app/logs:rw
     networks:
       - aesthetiq-network
     healthcheck:
