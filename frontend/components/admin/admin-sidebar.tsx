@@ -8,12 +8,15 @@ import {
   Users, 
   FileText, 
   Settings,
-  Shield
+  Shield,
+  Home,
+  ArrowLeft
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: LayoutDashboard },
@@ -68,6 +71,19 @@ export function AdminSidebar({ onClose }: AdminSidebarProps) {
           )
         })}
       </nav>
+
+      {/* Back to Dashboard Button */}
+      <div className="border-t border-sidebar-border px-3 py-4">
+        <Link href="/dashboard">
+          <Button 
+            variant="outline" 
+            className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent/50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
 
       {/* Quick Actions */}
       <div className="border-t border-sidebar-border px-3 py-4">
