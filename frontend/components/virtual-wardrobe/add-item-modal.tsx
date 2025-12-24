@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { Upload, Check, Loader2, Palette } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Upload, Check, Loader2, Palette, ChevronDown } from "lucide-react"
 import { HexColorPicker } from "react-colorful"
 import { useForm } from "react-hook-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -67,7 +67,14 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   
   const queryClient = useQueryClient()
-  const { wardrobeApi, uploadApi } = useApi()
+  const { wardrobeApi, uploadApi, brandsApi } = useApi()
+  
+  // Brands state for autocomplete
+  const [availableBrands, setAvailableBrands] = useState<string[]>([])
+  const [brandSearch, setBrandSearch] = useState("")
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false)
+  const brandInputRef = useRef<HTMLInputElement>(null)
+  const brandDropdownRef = useRef<HTMLDivElement>(null)
 
   // Cleanup function to revoke all object URLs
   const cleanupObjectUrls = () => {
@@ -95,6 +102,37 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showColorPicker])
+
+  // Load available brands when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      brandsApi.getAll().then(({ brands }) => {
+        setAvailableBrands(brands.map(b => b.name))
+      }).catch(() => {
+        // Silently fail - user can still type custom brand
+      })
+    }
+  }, [isOpen, brandsApi])
+
+  // Close brand dropdown when clicking outside
+  useEffect(() => {
+    if (!showBrandDropdown) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!brandDropdownRef.current?.contains(target) && !brandInputRef.current?.contains(target)) {
+        setShowBrandDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showBrandDropdown])
+
+  // Filter brands based on search
+  const filteredBrands = availableBrands.filter(brand =>
+    brand.toLowerCase().includes(brandSearch.toLowerCase())
+  )
 
   // Smooth progress animation with fake progress
   useEffect(() => {
@@ -919,16 +957,44 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                   Brand
                 </Label>
-                <Input
-                  placeholder="e.g., Nike, Zara"
-                  className="border-border bg-card text-foreground"
-                  {...register("brand", {
-                    pattern: {
-                      value: /^[a-zA-Z0-9\s\-&.]+$/,
-                      message: "Brand name can only contain letters, numbers, spaces, hyphens, ampersands, and periods",
-                    },
-                  })}
-                />
+                <div className="relative">
+                  <Input
+                    ref={brandInputRef}
+                    placeholder="e.g., Nike, Zara"
+                    className="border-border bg-card text-foreground pr-8"
+                    value={brandSearch}
+                    onChange={(e) => {
+                      setBrandSearch(e.target.value)
+                      setValue("brand", e.target.value)
+                      setShowBrandDropdown(true)
+                    }}
+                    onFocus={() => setShowBrandDropdown(true)}
+                  />
+                  <ChevronDown 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
+                    onClick={() => setShowBrandDropdown(!showBrandDropdown)}
+                  />
+                  {showBrandDropdown && filteredBrands.length > 0 && (
+                    <div 
+                      ref={brandDropdownRef}
+                      className="absolute z-50 w-full mt-1 max-h-48 overflow-auto rounded-md border border-border bg-card shadow-lg"
+                    >
+                      {filteredBrands.map((brand) => (
+                        <div
+                          key={brand}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                          onClick={() => {
+                            setBrandSearch(brand)
+                            setValue("brand", brand)
+                            setShowBrandDropdown(false)
+                          }}
+                        >
+                          {brand}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {errors.brand && (
                   <p className="text-xs text-red-400">{errors.brand.message}</p>
                 )}

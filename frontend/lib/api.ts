@@ -391,6 +391,17 @@ const createAdminSettingsApi = (client: AxiosInstance) => ({
     client.get("/admin/settings/system-info").then((res) => res.data),
 })
 
+// Public Brands API (for user-facing brand selection)
+const createBrandsApi = (client: AxiosInstance) => ({
+  getAll: (search?: string, limit?: number): Promise<{ brands: Brand[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (search) params.append("search", search)
+    if (limit) params.append("limit", limit.toString())
+    const queryString = params.toString()
+    return client.get(`/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
+})
+
 const createApiHelpers = (client: AxiosInstance) => ({
   userApi: createUserApi(client),
   wardrobeApi: createWardrobeApi(client),
@@ -398,6 +409,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   styleProfileApi: createStyleProfileApi(client),
   chatApi: createChatApi(client),
   uploadApi: createUploadApi(client),
+  brandsApi: createBrandsApi(client),
   // Admin APIs
   adminBrandsApi: createAdminBrandsApi(client),
   adminWardrobeApi: createAdminWardrobeApi(client),
