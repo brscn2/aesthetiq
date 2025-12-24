@@ -14,6 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
 from PIL import Image
 import pandas as pd
+import pickle
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -112,6 +113,13 @@ def train_resnet(dataset_root, epochs=20, batch_size=32, lr=0.001):
     le = LabelEncoder()
     le.fit(SEASON_ORDER)
     df['encoded_label'] = le.transform(df['mapped_label'])
+    
+    # Save LabelEncoder artifact
+    os.makedirs("weights", exist_ok=True)
+    le_path = os.path.join("weights", "season_label_encoder.pkl")
+    with open(le_path, 'wb') as f:
+        pickle.dump(le, f)
+    print(f"LabelEncoder saved to {le_path}")
     
     # Split
     train_df, val_df = train_test_split(df, test_size=0.2, stratify=df['encoded_label'], random_state=42)

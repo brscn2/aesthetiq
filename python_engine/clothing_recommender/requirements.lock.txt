@@ -1,0 +1,26 @@
+# Pinned dependencies for reproducible builds.
+#
+# Why this file exists:
+# - `requirements.txt` uses version ranges.
+# - Production deployments should be deterministic.
+#
+# How to use:
+#   pip install -r requirements.lock.txt
+#
+# Python: 3.11 (matches Docker base image)
+
+fastapi==0.124.2
+uvicorn[standard]==0.38.0
+
+langchain==1.1.3
+langchain-openai==1.1.3
+langchain-core==1.2.0
+langgraph==1.0.5
+langfuse==3.10.6
+openai==2.11.0
+tiktoken==0.12.0
+
+pydantic==2.12.5
+pydantic-settings==2.12.0
+python-dotenv==1.2.1
+httpx==0.28.1

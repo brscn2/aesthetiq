@@ -1,0 +1,32 @@
+# Pinned dependencies for reproducible builds.
+#
+# Why this file exists:
+# - `requirements.txt` uses version ranges.
+# - Production deployments benefit from deterministic resolution.
+#
+# How to use:
+#   pip install -r requirements.lock.txt
+#
+# Python: 3.11 (matches Docker base image)
+
+fastapi==0.124.2
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+
+# PyTorch wheels are hosted on the official PyTorch index.
+# Keeping this as extra-index-url allows pip to resolve wheels in typical CPU containers.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.9.1
+torchvision==0.24.1
+
+transformers==4.57.3
+mediapipe==0.10.14
+opencv-python-headless==4.12.0.88
+pillow==12.0.0
+scikit-image==0.25.2
+scikit-learn==1.8.0
+numpy==2.2.6
+
+pydantic==2.12.5
+pydantic-settings==2.12.0
+python-dotenv==1.2.1

@@ -2,8 +2,14 @@
 **/.DS_Store    
 
 /data/RGB
+/data/RGB.zip
 
 **/__pycache__/**
 *.zip
 *.xlsx
 **/aesthetiq-env/**
+
+.env
+/logs/app.log
+
+.venv*/
