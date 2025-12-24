@@ -3,6 +3,20 @@ import { Document } from 'mongoose';
 
 export type StyleProfileDocument = StyleProfile & Document;
 
+export enum FitPreference {
+  SLIM = 'slim',
+  REGULAR = 'regular',
+  RELAXED = 'relaxed',
+  OVERSIZED = 'oversized',
+}
+
+export enum BudgetRange {
+  BUDGET = 'budget',
+  MID_RANGE = 'mid-range',
+  PREMIUM = 'premium',
+  LUXURY = 'luxury',
+}
+
 @Schema({ timestamps: true })
 export class StyleProfile {
   @Prop({ type: String, required: true, unique: true })
@@ -40,6 +54,26 @@ export class StyleProfile {
     bottom?: string;
     shoe?: string;
   };
+
+  @Prop({
+    type: {
+      top: { type: String, enum: Object.values(FitPreference) },
+      bottom: { type: String, enum: Object.values(FitPreference) },
+      outerwear: { type: String, enum: Object.values(FitPreference) },
+    },
+    default: {},
+  })
+  fitPreferences: {
+    top?: FitPreference;
+    bottom?: FitPreference;
+    outerwear?: FitPreference;
+  };
+
+  @Prop({ type: String, enum: Object.values(BudgetRange), default: BudgetRange.MID_RANGE })
+  budgetRange: BudgetRange;
+
+  @Prop({ type: Number, min: 0 })
+  maxPricePerItem?: number;
 }
 
 export const StyleProfileSchema = SchemaFactory.createForClass(StyleProfile);

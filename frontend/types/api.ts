@@ -146,6 +146,9 @@ export interface CreateColorAnalysisDto {
 }
 
 // Style Profile Types
+export type FitPreference = 'slim' | 'regular' | 'relaxed' | 'oversized';
+export type BudgetRange = 'budget' | 'mid-range' | 'premium' | 'luxury';
+
 export interface StyleProfile {
   _id: string;
   userId: string;
@@ -159,6 +162,13 @@ export interface StyleProfile {
     bottom?: string;
     shoe?: string;
   };
+  fitPreferences?: {
+    top?: FitPreference;
+    bottom?: FitPreference;
+    outerwear?: FitPreference;
+  };
+  budgetRange?: BudgetRange;
+  maxPricePerItem?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -175,6 +185,13 @@ export interface CreateStyleProfileDto {
     bottom?: string;
     shoe?: string;
   };
+  fitPreferences?: {
+    top?: FitPreference;
+    bottom?: FitPreference;
+    outerwear?: FitPreference;
+  };
+  budgetRange?: BudgetRange;
+  maxPricePerItem?: number;
 }
 
 export interface UpdateStyleProfileDto {
@@ -188,6 +205,13 @@ export interface UpdateStyleProfileDto {
     bottom?: string;
     shoe?: string;
   };
+  fitPreferences?: {
+    top?: FitPreference;
+    bottom?: FitPreference;
+    outerwear?: FitPreference;
+  };
+  budgetRange?: BudgetRange;
+  maxPricePerItem?: number;
 }
 
 // Chat Types
