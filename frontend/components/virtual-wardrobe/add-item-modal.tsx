@@ -76,6 +76,20 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const brandInputRef = useRef<HTMLInputElement>(null)
   const brandDropdownRef = useRef<HTMLDivElement>(null)
 
+  // Subcategory state for autocomplete
+  const [subCategorySearch, setSubCategorySearch] = useState("")
+  const [showSubCategoryDropdown, setShowSubCategoryDropdown] = useState(false)
+  const subCategoryInputRef = useRef<HTMLInputElement>(null)
+  const subCategoryDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Predefined subcategories per category
+  const subCategoriesByCategory: Record<Category, string[]> = {
+    [Category.TOP]: ['T-Shirt', 'Shirt', 'Polo', 'Hoodie', 'Sweater', 'Jacket', 'Coat', 'Blazer', 'Tank Top', 'Cardigan'],
+    [Category.BOTTOM]: ['Jeans', 'Chinos', 'Shorts', 'Joggers', 'Trousers', 'Sweatpants', 'Skirt', 'Leggings'],
+    [Category.SHOE]: ['Sneakers', 'Boots', 'Loafers', 'Sandals', 'Running Shoes', 'Dress Shoes', 'Slippers', 'High Heels'],
+    [Category.ACCESSORY]: ['Watch', 'Sunglasses', 'Cap', 'Hat', 'Belt', 'Bag', 'Backpack', 'Scarf', 'Gloves', 'Jewelry'],
+  }
+
   // Cleanup function to revoke all object URLs
   const cleanupObjectUrls = () => {
     objectUrls.forEach(url => {
@@ -128,6 +142,21 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showBrandDropdown])
+
+  // Close subcategory dropdown when clicking outside
+  useEffect(() => {
+    if (!showSubCategoryDropdown) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!subCategoryDropdownRef.current?.contains(target) && !subCategoryInputRef.current?.contains(target)) {
+        setShowSubCategoryDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSubCategoryDropdown])
 
   // Filter brands based on search
   const filteredBrands = availableBrands.filter(brand =>
@@ -277,6 +306,11 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const colorHex = watch("colorHex")
   const formValues = watch()
 
+  // Get filtered subcategories based on current category and search
+  const filteredSubCategories = (subCategoriesByCategory[category] || []).filter(sub =>
+    sub.toLowerCase().includes(subCategorySearch.toLowerCase())
+  )
+
   // Check if form has unsaved changes
   const hasUnsavedChanges = () => {
     return (
@@ -321,7 +355,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Invalidate and refetch to get the real data from server
       queryClient.invalidateQueries({ queryKey: ["wardrobe", TEMP_USER_ID] })
       
-      toast.success("Item added to wardrobe successfully!")
+      toast.success("Item added to wardrobe successfully!", { duration: 2000 })
       
       // Clean up object URLs
       cleanupObjectUrls()
@@ -340,6 +374,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setBgRemovalError(null)
       setUploadedFile(null)
       setOriginalImageUrl(null)
+      setBrandSearch("") // Reset brand search input
+      setSubCategorySearch("") // Reset subcategory search input
       
       onClose()
     },
@@ -444,11 +480,79 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     }
   }
 
-  const handleImageUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const extractColorFromUrl = async (imageUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous' // Enable CORS for external images
+      img.src = imageUrl
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
+
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx.drawImage(img, 0, 0)
+
+        // Get pixel from center of image
+        const centerX = Math.floor(img.width / 2)
+        const centerY = Math.floor(img.height / 2)
+        
+        try {
+          const pixelData = ctx.getImageData(centerX, centerY, 1, 1).data
+          const r = pixelData[0]
+          const g = pixelData[1]
+          const b = pixelData[2]
+          const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+          resolve(hex.toUpperCase())
+        } catch (error) {
+          // CORS error - can't read pixel data from cross-origin image
+          reject(new Error('Cannot read color from cross-origin image'))
+        }
+      }
+      img.onerror = () => reject(new Error('Failed to load image'))
+    })
+  }
+
+  // Fetch image as blob to bypass CORS for color extraction
+  const fetchImageAsBlob = async (imageUrl: string): Promise<File> => {
+    const response = await fetch(imageUrl)
+    if (!response.ok) throw new Error('Failed to fetch image')
+    const blob = await response.blob()
+    return new File([blob], 'url-image.jpg', { type: blob.type || 'image/jpeg' })
+  }
+
+  const handleImageUrlChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value
     setValue("imageUrl", url)
+    
     if (url) {
       setImagePreview(url)
+      
+      // Try to extract color - first try direct canvas approach
+      try {
+        const centerColor = await extractColorFromUrl(url)
+        setValue("colorHex", centerColor, { shouldValidate: true })
+        toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
+      } catch (corsError) {
+        // CORS blocked - try fetching as blob through our proxy/directly
+        console.warn('CORS blocked, trying fetch approach...')
+        try {
+          const file = await fetchImageAsBlob(url)
+          const centerColor = await extractCenterColor(file)
+          setValue("colorHex", centerColor, { shouldValidate: true })
+          toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
+        } catch (fetchError) {
+          console.warn('Could not auto-detect color from URL:', fetchError)
+          toast.info('Color detection not available for this image. Please select manually.', {
+            duration: 2000,
+          })
+        }
+      }
     }
   }
 
@@ -574,14 +678,14 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     
     if (file.size > compressionThreshold && file.type !== 'image/heic' && file.type !== 'image/heif') {
       try {
-        toast.info('Compressing image...')
+        toast.info('Compressing image...', { duration: 2000 })
         fileToUpload = await compressImage(file)
         const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2)
         const compressedSizeMB = (fileToUpload.size / (1024 * 1024)).toFixed(2)
-        toast.success(`Image compressed: ${originalSizeMB}MB → ${compressedSizeMB}MB`)
+        toast.success(`Image compressed: ${originalSizeMB}MB → ${compressedSizeMB}MB`, { duration: 2000 })
       } catch (error) {
         console.error('Compression failed, using original:', error)
-        toast.warning('Compression failed, using original image')
+        toast.warning('Compression failed, using original image', { duration: 2000 })
         fileToUpload = file
       }
     }
@@ -592,16 +696,16 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setObjectUrls(prev => [...prev, localPreview])
       setImagePreview(localPreview)
 
-      toast.success(`Image ready! (${(fileToUpload.size / 1024).toFixed(0)}KB)`)
+      toast.success(`Image ready! (${(fileToUpload.size / 1024).toFixed(0)}KB)`, { duration: 2000 })
 
       // Extract color from center of image
       try {
         const centerColor = await extractCenterColor(fileToUpload)
         setValue("colorHex", centerColor, { shouldValidate: true })
-        toast.success(`Color detected: ${centerColor}`)
+        toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
       } catch (error) {
         console.error('Failed to extract color:', error)
-        toast.warning('Could not detect color automatically')
+        toast.warning('Could not detect color automatically', { duration: 2000 })
       }
 
       // Store the file locally - will upload on submit
@@ -706,6 +810,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setBgRemovalError(null)
       setUploadedFile(null)
       setOriginalImageUrl(null)
+      setBrandSearch("") // Reset brand search input
+      setSubCategorySearch("") // Reset subcategory search input
     }
 
     onClose()
@@ -928,7 +1034,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 </Label>
                 <Select
                   value={category}
-                  onValueChange={(value) => setValue("category", value as Category, { shouldValidate: true })}
+                  onValueChange={(value) => {
+                    setValue("category", value as Category, { shouldValidate: true })
+                    // Reset subcategory when category changes
+                    setSubCategorySearch("")
+                    setValue("subCategory", "")
+                  }}
                 >
                   <SelectTrigger className="border-border bg-card text-foreground">
                     <SelectValue placeholder="Select category" />
@@ -946,11 +1057,40 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
                   Sub Category
                 </Label>
-                <Input
-                  placeholder="e.g., T-Shirt, Jeans, Sneakers"
-                  className="border-border bg-card text-foreground"
-                  {...register("subCategory")}
-                />
+                <div className="relative">
+                  <Input
+                    ref={subCategoryInputRef}
+                    placeholder="e.g., T-Shirt, Jeans, Sneakers"
+                    className="border-border bg-card text-foreground"
+                    value={subCategorySearch}
+                    onChange={(e) => {
+                      setSubCategorySearch(e.target.value)
+                      setValue("subCategory", e.target.value)
+                      setShowSubCategoryDropdown(true)
+                    }}
+                    onFocus={() => setShowSubCategoryDropdown(true)}
+                  />
+                  {showSubCategoryDropdown && filteredSubCategories.length > 0 && (
+                    <div
+                      ref={subCategoryDropdownRef}
+                      className="absolute z-50 w-full mt-1 max-h-48 overflow-auto rounded-md border border-border bg-background shadow-lg"
+                    >
+                      {filteredSubCategories.map((sub) => (
+                        <div
+                          key={sub}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                          onClick={() => {
+                            setSubCategorySearch(sub)
+                            setValue("subCategory", sub)
+                            setShowSubCategoryDropdown(false)
+                          }}
+                        >
+                          {sub}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1021,8 +1161,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     className="border-border bg-card text-foreground"
                     pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
                   />
-                  {colorHex && (
-                    <div className="relative color-picker-container">
+                  <div className="relative color-picker-container">
+                    {colorHex ? (
                       <button
                         type="button"
                         onClick={() => setShowColorPicker(!showColorPicker)}
@@ -1031,40 +1171,39 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                         aria-label="Open color picker"
                         title="Click to change color"
                       />
-                      {showColorPicker && (
-                        <div className="absolute top-12 right-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-muted-foreground">Pick a color</span>
-                            <button
-                              type="button"
-                              onClick={() => setShowColorPicker(false)}
-                              className="text-xs text-muted-foreground hover:text-foreground"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <HexColorPicker
-                            color={colorHex}
-                            onChange={(color) => setValue("colorHex", color, { shouldValidate: true })}
-                          />
-                          <div className="mt-2 text-center">
-                            <span className="text-xs font-mono text-muted-foreground">{colorHex}</span>
-                          </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowColorPicker(!showColorPicker)}
+                        className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors flex items-center justify-center"
+                        aria-label="Open color picker"
+                        title="Pick a color"
+                      >
+                        <Palette className="h-5 w-5 text-muted-foreground" />
+                      </button>
+                    )}
+                    {showColorPicker && (
+                      <div className="absolute top-12 right-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-muted-foreground">Pick a color</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowColorPicker(false)}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            ✕
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  )}
-                  {!colorHex && (
-                    <button
-                      type="button"
-                      onClick={() => setShowColorPicker(!showColorPicker)}
-                      className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors flex items-center justify-center"
-                      aria-label="Open color picker"
-                      title="Pick a color"
-                    >
-                      <Palette className="h-5 w-5 text-muted-foreground" />
-                    </button>
-                  )}
+                        <HexColorPicker
+                          color={colorHex || '#808080'}
+                          onChange={(color) => setValue("colorHex", color, { shouldValidate: true })}
+                        />
+                        <div className="mt-2 text-center">
+                          <span className="text-xs font-mono text-muted-foreground">{colorHex || 'Select a color'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {errors.colorHex && (
                   <p className="text-xs text-red-400">{errors.colorHex.message}</p>
