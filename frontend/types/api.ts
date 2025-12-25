@@ -128,8 +128,9 @@ export interface ColorAnalysis {
   season: string;
   contrastLevel: string;
   undertone: string;
-  palette: string[];
+  palette: Array<{ name: string; hex: string }>;
   faceShape?: string;
+  imageUrl?: string;
   scanDate: string;
   createdAt?: string;
   updatedAt?: string;

@@ -79,9 +79,12 @@ export class UsersService {
   }
 
   // Clerk-based methods
-  async findByClerkId(clerkId: string): Promise<User | null> {
-    const user = await this.userModel.findOne({ clerkId }).exec();
-    return user;
+  async findByClerkId(clerkId: string): Promise<User> {
+    let user = await this.userModel.findOne({ clerkId }).exec();
+    if (!user) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
+    return user as User;
   }
 
   async getSettingsByClerkId(clerkId: string): Promise<User['settings']> {

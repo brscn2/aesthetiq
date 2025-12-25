@@ -1,0 +1,127 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
+name: Build and deploy Python app to Azure Web App - aesthetiq-python-engine
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 🛠️ Local Build Section (Optional)
+      # The following section in your workflow is designed to catch build issues early on the client side, before deployment. This can be helpful for debugging and validation. However, if this step significantly increases deployment time and early detection is not critical for your workflow, you may remove this section to streamline the deployment process.
+      - name: Create and Start virtual environment and Install dependencies
+        working-directory: python_engine
+        run: |
+          python -m venv antenv
+          source antenv/bin/activate
+          pip install -r requirements.txt
+                
+      # By default, when you enable GitHub CI/CD integration through the Azure portal, the platform automatically sets the SCM_DO_BUILD_DURING_DEPLOYMENT application setting to true. This triggers the use of Oryx, a build engine that handles application compilation and dependency installation (e.g., pip install) directly on the platform during deployment. Hence, we exclude the antenv virtual environment directory from the deployment artifact to reduce the payload size. 
+      - name: Upload artifact for deployment jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: |
+            python_engine/
+            !python_engine/antenv/
+            !python_engine/**/__pycache__/
+            !python_engine/**/*.pyc
+
+      # 🚫 Opting Out of Oryx Build
+      # If you prefer to disable the Oryx build process during deployment, follow these steps:
+      # 1. Remove the SCM_DO_BUILD_DURING_DEPLOYMENT app setting from your Azure App Service Environment variables.
+      # 2. Refer to sample workflows for alternative deployment strategies: https://github.com/Azure/actions-workflow-samples/tree/master/AppService
+      
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: python-app
+          path: .
+      
+      - name: Verify deployment structure
+        run: |
+          echo "Verifying deployment structure..."
+          echo "Current directory contents:"
+          ls -la
+          echo ""
+          # Check if files are already at root (which is what we want)
+          if [ -d "app" ] && [ -f "requirements.txt" ]; then
+            echo "✓ Files are already at root level - ready for deployment"
+          elif [ -d "python_engine" ]; then
+            echo "Moving python_engine contents to root..."
+            shopt -s dotglob nullglob
+            for item in python_engine/*; do
+              if [ -e "$item" ]; then
+                mv "$item" .
+              fi
+            done
+            for item in python_engine/.*; do
+              if [ -f "$item" ] && [ "$(basename "$item")" != "." ] && [ "$(basename "$item")" != ".." ]; then
+                mv "$item" .
+              fi
+            done
+            rmdir python_engine 2>/dev/null || true
+            echo "Move completed"
+          else
+            echo "Error: Expected files not found. Listing directory:"
+            ls -la
+            exit 1
+          fi
+      
+      - name: Make startup script executable
+        run: |
+          chmod +x startup.sh || echo "startup.sh not found, will use Azure Portal startup command instead"
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B7DE81F54E8446EC90BC56F33B37F696 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F160EB8B4C6A4C0EB69D50797DAD027D }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CCA7A56E0EB8424188B0AB0C230F6EBA }}
+
+      - name: Start App Service and configure startup command
+        run: |
+          RESOURCE_GROUP="aesthetiq"
+          echo "Using resource group: $RESOURCE_GROUP"
+          # Start the app service (it might be stopped)
+          echo "Starting App Service..."
+          az webapp start --name aesthetiq-python-engine --resource-group "$RESOURCE_GROUP" || echo "Warning: Could not start app service"
+          # Wait a moment for the service to start
+          sleep 5
+          # Set the startup command
+          echo "Setting startup command..."
+          az webapp config set --name aesthetiq-python-engine --resource-group "$RESOURCE_GROUP" --startup-file "uvicorn app.main:app --host 0.0.0.0 --port \$PORT" || echo "Warning: Could not set startup command. Please set it manually in Azure Portal: Configuration > General settings > Startup Command = 'uvicorn app.main:app --host 0.0.0.0 --port \$PORT'"
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
+        with:
+          app-name: 'aesthetiq-python-engine'
+          slot-name: 'Production'
+          package: .

@@ -1,0 +1,5 @@
+# Placeholder for weights directory
+# Model weights should be placed here:
+# - season_resnet18.pth
+# - season_label_encoder.pkl
+# - resnet18.pt (if needed)
