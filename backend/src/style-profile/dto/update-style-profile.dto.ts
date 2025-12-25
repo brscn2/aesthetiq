@@ -4,26 +4,9 @@ import {
   IsOptional,
   IsArray,
   IsObject,
-  ValidateNested,
+  IsNumber,
+  Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-
-class SizesDto {
-  @ApiProperty({ required: false, example: 'M' })
-  @IsString()
-  @IsOptional()
-  top?: string;
-
-  @ApiProperty({ required: false, example: '32' })
-  @IsString()
-  @IsOptional()
-  bottom?: string;
-
-  @ApiProperty({ required: false, example: '9' })
-  @IsString()
-  @IsOptional()
-  shoe?: string;
-}
 
 export class UpdateStyleProfileDto {
   @ApiProperty({ required: false, example: 'Urban Minimalist' })
@@ -67,10 +50,36 @@ export class UpdateStyleProfileDto {
   @IsOptional()
   favoriteBrands?: string[];
 
-  @ApiProperty({ type: SizesDto, required: false })
-  @ValidateNested()
-  @Type(() => SizesDto)
+  @ApiProperty({ required: false, description: 'Size preferences' })
+  @IsObject()
   @IsOptional()
-  sizes?: SizesDto;
-}
+  sizes?: {
+    top?: string;
+    bottom?: string;
+    shoe?: string;
+  };
 
+  @ApiProperty({ required: false, description: 'Fit preferences for different clothing types' })
+  @IsObject()
+  @IsOptional()
+  fitPreferences?: {
+    top?: string;
+    bottom?: string;
+    outerwear?: string;
+  };
+
+  @ApiProperty({ 
+    required: false, 
+    enum: ['budget', 'mid-range', 'premium', 'luxury'],
+    example: 'mid-range' 
+  })
+  @IsString()
+  @IsOptional()
+  budgetRange?: string;
+
+  @ApiProperty({ required: false, example: 200, description: 'Maximum price per item in user currency' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maxPricePerItem?: number;
+}

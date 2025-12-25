@@ -22,6 +22,14 @@ import type {
   WardrobeItem,
 } from "@/types/api"
 
+// Re-export types for admin use
+export type {
+  Category,
+  WardrobeItem,
+  CreateWardrobeItemDto,
+  UpdateWardrobeItemDto,
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
 
 const createHttpClient = () => {
@@ -54,6 +62,11 @@ const createUserApi = (client: AxiosInstance) => ({
   
   // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
+  getStats: (): Promise<{
+    totalUsers: number;
+    usersByRole: { role: string; count: number }[];
+    recentSignups: number;
+  }> => client.get("/users/stats").then((res) => res.data),
   getById: (id: string): Promise<User> => client.get(`/users/${id}`).then((res) => res.data),
   create: (data: CreateUserDto): Promise<User> => client.post("/users", data).then((res) => res.data),
   update: (id: string, data: UpdateUserDto): Promise<User> => client.patch(`/users/${id}`, data).then((res) => res.data),
@@ -61,10 +74,11 @@ const createUserApi = (client: AxiosInstance) => ({
 })
 
 const createWardrobeApi = (client: AxiosInstance) => ({
-  getAll: (userId: string, category?: Category, colorHex?: string): Promise<WardrobeItem[]> => {
+  getAll: (userId: string, category?: Category, colorHex?: string, search?: string): Promise<WardrobeItem[]> => {
     const params = new URLSearchParams({ userId })
     if (category) params.append("category", category)
     if (colorHex) params.append("colorHex", colorHex)
+    if (search) params.append("search", search)
     return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data)
   },
   getById: (id: string): Promise<WardrobeItem> => client.get(`/wardrobe/${id}`).then((res) => res.data),
@@ -124,6 +138,88 @@ export interface UploadResponse {
   url: string
 }
 
+export interface Brand {
+  _id: string
+  name: string
+  description?: string
+  logoUrl?: string
+  website?: string
+  foundedYear?: number
+  country?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateBrandDto {
+  name: string
+  description?: string
+  logoUrl?: string
+  website?: string
+  foundedYear?: number
+  country?: string
+}
+
+export interface UpdateBrandDto {
+  name?: string
+  description?: string
+  logoUrl?: string
+  website?: string
+  foundedYear?: number
+  country?: string
+}
+
+export interface BrandSearchOptions {
+  search?: string
+  country?: string
+  foundedYear?: number
+  limit?: number
+  offset?: number
+}
+
+export interface BrandStats {
+  totalBrands: number
+  brandsByCountry: { country: string; count: number }[]
+  brandsByDecade: { decade: string; count: number }[]
+}
+
+export interface ChangeDetail {
+  field: string
+  oldValue: any
+  newValue: any
+  type: 'added' | 'modified' | 'removed'
+}
+
+export interface AuditLog {
+  _id: string
+  userId: string
+  userEmail: string
+  action: string
+  resource: string
+  resourceId?: string
+  oldData?: Record<string, any>
+  newData?: Record<string, any>
+  changeDetails?: ChangeDetail[]
+  changeSummary?: string
+  ipAddress?: string
+  userAgent?: string
+  timestamp: string
+}
+
+export interface AuditLogFilters {
+  userId?: string
+  resource?: string
+  action?: string
+  startDate?: string
+  endDate?: string
+}
+
+export interface AuditLogResponse {
+  logs: AuditLog[]
+  total: number
+  page: number
+  totalPages: number
+}
+
 const createUploadApi = (client: AxiosInstance) => ({
   uploadImage: async (file: File, retries = 2): Promise<UploadResponse> => {
     const formData = new FormData()
@@ -164,6 +260,157 @@ const createUploadApi = (client: AxiosInstance) => ({
     // All retries failed
     throw lastError
   },
+  
+  // Admin upload endpoints
+  uploadBrandLogo: async (file: File, brandName?: string): Promise<UploadResponse & { brandName?: string; originalName: string; size: number; mimeType: string }> => {
+    const formData = new FormData()
+    formData.append("file", file)
+    if (brandName) {
+      formData.append("brandName", brandName)
+    }
+
+    const response = await client.post(
+      "/admin/upload/brand-logo",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 30000,
+      },
+    )
+
+    return response.data
+  },
+})
+
+// Admin API endpoints
+const createAdminBrandsApi = (client: AxiosInstance) => ({
+  getAll: (options?: BrandSearchOptions): Promise<{ brands: Brand[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (options?.search) params.append("search", options.search)
+    if (options?.country) params.append("country", options.country)
+    if (options?.foundedYear) params.append("foundedYear", options.foundedYear.toString())
+    if (options?.limit) params.append("limit", options.limit.toString())
+    if (options?.offset) params.append("offset", options.offset.toString())
+    
+    const queryString = params.toString()
+    return client.get(`/admin/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
+  getById: (id: string): Promise<Brand> => client.get(`/admin/brands/${id}`).then((res) => res.data),
+  create: (data: CreateBrandDto): Promise<Brand> => client.post("/admin/brands", data).then((res) => res.data),
+  update: (id: string, data: UpdateBrandDto): Promise<Brand> => client.patch(`/admin/brands/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/admin/brands/${id}`).then(() => undefined),
+  getStats: (): Promise<BrandStats> => client.get("/admin/brands/stats").then((res) => res.data),
+})
+
+const createAdminWardrobeApi = (client: AxiosInstance) => ({
+  getAll: (options?: {
+    userId?: string
+    category?: Category
+    colorHex?: string
+    brandId?: string
+    brand?: string
+    search?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ items: WardrobeItem[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (options?.userId) params.append("userId", options.userId)
+    if (options?.category) params.append("category", options.category)
+    if (options?.colorHex) params.append("colorHex", options.colorHex)
+    if (options?.brandId) params.append("brandId", options.brandId)
+    if (options?.brand) params.append("brand", options.brand)
+    if (options?.search) params.append("search", options.search)
+    if (options?.limit) params.append("limit", options.limit.toString())
+    if (options?.offset) params.append("offset", options.offset.toString())
+    
+    const queryString = params.toString()
+    return client.get(`/admin/wardrobe${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
+  getById: (id: string): Promise<WardrobeItem> => client.get(`/admin/wardrobe/${id}`).then((res) => res.data),
+  create: (data: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> => 
+    client.post("/admin/wardrobe", data).then((res) => res.data),
+  update: (id: string, data: UpdateWardrobeItemDto): Promise<WardrobeItem> => 
+    client.patch(`/admin/wardrobe/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/admin/wardrobe/${id}`).then(() => undefined),
+  getByBrand: (brandId: string): Promise<WardrobeItem[]> => 
+    client.get(`/admin/wardrobe/by-brand/${brandId}`).then((res) => res.data),
+  getStats: (): Promise<{
+    totalItems: number
+    itemsByCategory: { category: string; count: number }[]
+    itemsByBrand: { brand: string; count: number }[]
+    itemsByUser: { userId: string; count: number }[]
+  }> => client.get("/admin/wardrobe/stats").then((res) => res.data),
+})
+
+const createAdminAuditApi = (client: AxiosInstance) => ({
+  getAll: (page = 1, limit = 50, filters?: AuditLogFilters): Promise<AuditLogResponse> => {
+    const params = new URLSearchParams()
+    params.append("page", page.toString())
+    params.append("limit", limit.toString())
+    if (filters?.userId) params.append("userId", filters.userId)
+    if (filters?.resource) params.append("resource", filters.resource)
+    if (filters?.action) params.append("action", filters.action)
+    if (filters?.startDate) params.append("startDate", filters.startDate)
+    if (filters?.endDate) params.append("endDate", filters.endDate)
+    
+    return client.get(`/admin/audit?${params.toString()}`).then((res) => res.data)
+  },
+  getStats: (): Promise<{
+    totalLogs: number;
+    logsByAction: { action: string; count: number }[];
+    logsByResource: { resource: string; count: number }[];
+    recentActivity: number;
+  }> => client.get("/admin/audit/stats").then((res) => res.data),
+  getByResource: (resource: string, resourceId: string): Promise<AuditLog[]> => 
+    client.get(`/admin/audit/resource?resource=${resource}&resourceId=${resourceId}`).then((res) => res.data),
+  getByUser: (userId: string): Promise<AuditLog[]> => 
+    client.get(`/admin/audit/user?userId=${userId}`).then((res) => res.data),
+})
+
+export interface SystemSettings {
+  siteName: string
+  siteDescription: string
+  maintenanceMode: boolean
+  allowRegistration: boolean
+  requireEmailVerification: boolean
+  maxUploadSize: number
+  defaultLanguage: string
+  timezone: string
+  sessionTimeout: number
+  enableAuditLogs: boolean
+  enableAnalytics: boolean
+  enableNotifications: boolean
+  smtpHost: string
+  smtpPort: number
+  adminEmail: string
+}
+
+export interface SystemInfo {
+  version: string
+  environment: string
+  apiStatus: string
+  lastDeployment: string
+}
+
+const createAdminSettingsApi = (client: AxiosInstance) => ({
+  get: (): Promise<SystemSettings> => client.get("/admin/settings").then((res) => res.data),
+  update: (data: Partial<SystemSettings>): Promise<SystemSettings> => 
+    client.patch("/admin/settings", data).then((res) => res.data),
+  getSystemInfo: (): Promise<SystemInfo> => 
+    client.get("/admin/settings/system-info").then((res) => res.data),
+})
+
+// Public Brands API (for user-facing brand selection)
+const createBrandsApi = (client: AxiosInstance) => ({
+  getAll: (search?: string, limit?: number): Promise<{ brands: Brand[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (search) params.append("search", search)
+    if (limit) params.append("limit", limit.toString())
+    const queryString = params.toString()
+    return client.get(`/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
 })
 
 const createApiHelpers = (client: AxiosInstance) => ({
@@ -173,6 +420,12 @@ const createApiHelpers = (client: AxiosInstance) => ({
   styleProfileApi: createStyleProfileApi(client),
   chatApi: createChatApi(client),
   uploadApi: createUploadApi(client),
+  brandsApi: createBrandsApi(client),
+  // Admin APIs
+  adminBrandsApi: createAdminBrandsApi(client),
+  adminWardrobeApi: createAdminWardrobeApi(client),
+  adminAuditApi: createAdminAuditApi(client),
+  adminSettingsApi: createAdminSettingsApi(client),
 })
 
 export const useApiClient = () => {

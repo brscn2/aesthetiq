@@ -6,8 +6,8 @@ import {
   IsArray,
   IsObject,
   ValidateNested,
+  IsNumber,
   Min,
-  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -76,5 +76,29 @@ export class CreateStyleProfileDto {
   @Type(() => SizesDto)
   @IsOptional()
   sizes?: SizesDto;
+
+  @ApiProperty({ required: false, description: 'Fit preferences for different clothing types' })
+  @IsObject()
+  @IsOptional()
+  fitPreferences?: {
+    top?: string;
+    bottom?: string;
+    outerwear?: string;
+  };
+
+  @ApiProperty({ 
+    required: false, 
+    enum: ['budget', 'mid-range', 'premium', 'luxury'],
+    example: 'mid-range' 
+  })
+  @IsString()
+  @IsOptional()
+  budgetRange?: string;
+
+  @ApiProperty({ required: false, example: 200, description: 'Maximum price per item in user currency' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maxPricePerItem?: number;
 }
 

@@ -33,7 +33,7 @@ const ChatMessageSchema = new MongooseSchema(
 
 @Schema({ timestamps: true })
 export class ChatSession {
-  @Prop({ type: String, required: true, index: true })
+  @Prop({ type: String, required: true })
   userId: string;
 
   @Prop({ required: true, unique: true })
@@ -53,7 +53,7 @@ export class ChatSession {
 
 export const ChatSessionSchema = SchemaFactory.createForClass(ChatSession);
 
-// Create indexes for efficient queries
+// Create indexes for efficient queries (userId is not unique, so we can add compound index)
 ChatSessionSchema.index({ userId: 1, sessionId: 1 });
-ChatSessionSchema.index({ sessionId: 1 });
+// sessionId already has unique index from @Prop decorator, no need for additional index
 

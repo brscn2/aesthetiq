@@ -1,18 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { WardrobeControlBar } from "@/components/virtual-wardrobe/control-bar"
+import { WardrobeControlBar, WardrobeFilters } from "@/components/virtual-wardrobe/control-bar"
 import { InventoryGrid } from "@/components/virtual-wardrobe/inventory-grid"
 import { WardrobeIntelligence } from "@/components/virtual-wardrobe/wardrobe-intelligence"
 import { AddItemModal } from "@/components/virtual-wardrobe/add-item-modal"
 import { Button } from "@/components/ui/button"
 import { Brain, X } from "lucide-react"
+import { useApi } from "@/lib/api"
 
 export default function VirtualWardrobePage() {
   const [activeTab, setActiveTab] = useState("all-items")
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filters, setFilters] = useState<WardrobeFilters>({ category: null, brand: null, color: null })
+  const [availableBrands, setAvailableBrands] = useState<string[]>([])
+  
+  const { brandsApi } = useApi()
+
+  // Load available brands for filter
+  useEffect(() => {
+    brandsApi.getAll().then(({ brands }) => {
+      setAvailableBrands(brands.map(b => b.name))
+    }).catch(() => {})
+  }, [brandsApi])
 
   return (
     <DashboardLayout>
@@ -22,12 +35,17 @@ export default function VirtualWardrobePage() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           onAddItem={() => setIsAddModalOpen(true)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          filters={filters}
+          onFiltersChange={setFilters}
+          availableBrands={availableBrands}
         />
 
         <div className="flex flex-1 overflow-hidden">
           {/* Main Inventory Grid */}
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-            <InventoryGrid />
+            <InventoryGrid searchQuery={searchQuery} filters={filters} />
           </main>
 
           {/* Intelligence Sidebar - Desktop */}

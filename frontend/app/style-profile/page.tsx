@@ -77,7 +77,7 @@ export default function StyleProfilePage() {
 
           <ArchetypeHero styleProfile={styleProfile} />
           <InspirationBoard styleProfile={styleProfile} onProfileUpdate={loadStyleProfile} />
-          <PreferencesPanel styleProfile={styleProfile} />
+          <PreferencesPanel styleProfile={styleProfile} onProfileUpdate={loadStyleProfile} />
           <BrandSizing styleProfile={styleProfile} onProfileUpdate={loadStyleProfile} />
         </div>
       </div>

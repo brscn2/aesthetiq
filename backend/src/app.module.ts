@@ -10,6 +10,10 @@ import { WardrobeModule } from './wardrobe/wardrobe.module';
 import { ChatModule } from './chat/chat.module';
 import { UploadModule } from './upload/upload.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { AdminModule } from './admin/admin.module';
+import { BrandsModule } from './brands/brands.module';
+import { AuditModule } from './audit/audit.module';
+import { SettingsModule } from './settings/settings.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -32,6 +36,10 @@ import databaseConfig from './config/database.config';
     ChatModule,
     UploadModule,
     WebhooksModule,
+    AdminModule,
+    BrandsModule,
+    AuditModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

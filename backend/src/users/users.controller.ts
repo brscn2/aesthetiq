@@ -75,6 +75,17 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get user statistics' })
+  @ApiResponse({ status: 200, description: 'User statistics retrieved successfully' })
+  async getStats(): Promise<{
+    totalUsers: number;
+    usersByRole: { role: string; count: number }[];
+    recentSignups: number;
+  }> {
+    return this.usersService.getStats();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a user by ID' })
   @ApiParam({ name: 'id', description: 'User ID' })
