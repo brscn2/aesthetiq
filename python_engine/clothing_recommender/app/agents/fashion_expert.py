@@ -1,7 +1,7 @@
 """Fashion Expert agent for clothing-related queries."""
 from typing import Dict, Any, Optional
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.logger import get_logger
 from app.tools.commerce_search import create_commerce_search_tool
@@ -64,54 +64,59 @@ class FashionExpert:
             return "I apologize, but I'm currently unable to process fashion queries. Please try again later."
         
         try:
-            # Create agent prompt that guides tool usage
-            system_message = """You are a fashion expert assistant helping users find clothing products.
-
-You have access to a commerce clothing search tool that searches available products for sale.
-Use this tool when users ask about:
-- Finding specific clothing items ("where can I find a yellow jacket?")
-- Shopping recommendations ("what jeans should I buy?")
-- Product discovery ("show me casual summer tops")
-- Outfit suggestions with actual products
-
-When making recommendations:
-1. ALWAYS use the commerce_clothing_search tool to find actual products
-2. Reference real items from the search results with their details (brand, color, image)
-3. Provide specific, actionable shopping advice
-4. If no products are found, suggest alternative search terms or categories
-5. Be conversational, friendly, and fashion-forward
-
-User context (if available): {context}"""
+            # Step 1: Use commerce search tool to find products
+            commerce_tool = self.tools[0]  # commerce_clothing_search
             
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", system_message),
-                ("human", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ])
+            # Extract search query from user input
+            # For simple queries like "I want yellow jacket", extract "yellow jacket"
+            search_query = query.lower()
+            for prefix in ["i want ", "i need ", "find me ", "show me ", "looking for "]:
+                if search_query.startswith(prefix):
+                    search_query = search_query[len(prefix):]
+                    break
             
-            # Create agent with tools
-            llm = self.llm_service.get_chat_model()
-            agent = create_openai_functions_agent(llm, self.tools, prompt)
-            agent_executor = AgentExecutor(
-                agent=agent,
-                tools=self.tools,
-                verbose=True,
-                max_iterations=3,
-                handle_parsing_errors=True
-            )
+            logger.info(f"Searching products with query: {search_query}")
             
-            # Execute agent
-            result = await agent_executor.ainvoke({
-                "input": query,
-                "context": str(user_context) if user_context else "No additional context"
-            })
+            # Call the tool using ainvoke (LangChain BaseTool method)
+            tool_input = {"query": search_query, "limit": 5}
+            tool_result = await commerce_tool.ainvoke(tool_input)
+            
+            logger.info(f"Tool result: {tool_result[:200]}...")
+            
+            # Step 2: Use LLM to format the response nicely
+            system_prompt = f"""You are a fashion expert assistant. 
+
+The user asked: "{query}"
+
+Our product search found these results:
+{tool_result}
+
+Your job:
+1. Present these products in a friendly, conversational way
+2. Highlight key details (category, brand, color, similarity score)
+3. Mention image URLs if available
+4. If no products found, politely tell the user and suggest alternatives
+5. ONLY mention products from the search results - don't make up products
+
+Be enthusiastic and helpful!"""
+            
+            # Use LLM directly from service
+            llm = self.llm_service.llm
+            if not llm:
+                return "I apologize, but I'm currently unable to process your request. LLM service is not configured."
+            
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=query)
+            ]
+            
+            response = await llm.ainvoke(messages)
             
             logger.info("FashionExpert completed with tool-based recommendation")
-            return result["output"]
+            return response.content
             
         except Exception as e:
             logger.error(f"Error in FashionExpert tool-enabled agent: {e}")
-            # Fallback to dummy response
             return self._get_fallback_recommendation(query)
     
     def _get_fallback_recommendation(self, query: str) -> str:

@@ -11,14 +11,16 @@ import sys
 import asyncio
 from pathlib import Path
 
+# Load .env from python_engine directory FIRST
+env_path = Path(__file__).parent.parent.parent / ".env"
+from dotenv import load_dotenv
+load_dotenv(env_path)
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.tools.commerce_search import CommerceClothingSearchTool
-from dotenv import load_dotenv
 import aiohttp
-
-load_dotenv()
 
 
 async def test_search():

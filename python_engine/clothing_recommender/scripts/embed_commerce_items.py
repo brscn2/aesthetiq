@@ -1,7 +1,7 @@
 """Script to embed commerce clothing items using HuggingFace OpenCLIP API.
 
 This script:
-1. Connects to MongoDB (localhost:27017/aesthetiq/clothes)
+1. Connects to MongoDB 
 2. Fetches all commerce items (products for sale) without embeddings
 3. Uses HuggingFace Inference API to generate embeddings
 4. Stores embeddings back to MongoDB for semantic search
@@ -29,8 +29,8 @@ load_dotenv()
 
 # Configuration
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
-DB_NAME = "aesthetiq"
-COLLECTION_NAME = "clothes"
+DB_NAME = os.getenv("MONGODB_DB_NAME", "aesthetiq")
+COLLECTION_NAME = "wardrobeitems"
 EMBEDDING_SERVICE_URL = os.getenv("EMBEDDING_SERVICE_URL", "http://localhost:8004")
 
 # Batch configuration
@@ -41,7 +41,7 @@ EMBEDDING_FIELD = "embedding"
 class CommerceItemEmbedder:
     """Handles embedding of commerce clothing items (products for sale)."""
     
-    def __init__(self, service_url: str, text_weight: float = 0.3, image_weight: float = 0.7):
+    def __init__(self, service_url: str, text_weight: float = 0.15, image_weight: float = 0.85):
         self.service_url = service_url
         self.text_weight = text_weight
         self.image_weight = image_weight

@@ -56,11 +56,12 @@ class CommerceClothingSearchTool(BaseTool):
     args_schema: type[BaseModel] = CommerceSearchInput
     
     # Tool configuration
-    embedding_service_url: str = Field(default_factory=lambda: os.getenv("EMBEDDING_SERVICE_URL", "http://localhost:8004"))
+    # Use service name in Docker, localhost for local development
+    embedding_service_url: str = Field(default_factory=lambda: os.getenv("EMBEDDING_SERVICE_URL", "http://embedding_service:8004"))
     mongodb_url: str = Field(default_factory=lambda: settings.MONGODB_URL or "mongodb://localhost:27017/")
-    db_name: str = "aesthetiq"
-    collection_name: str = "clothes"
-    vector_index_name: str = "commerce_vector_search"  # MongoDB Atlas vector search index name
+    db_name: str = Field(default_factory=lambda: settings.MONGODB_DB_NAME or "test")
+    collection_name: str = "wardrobeitems"
+    vector_index_name: str = "vector"  # MongoDB Atlas vector search index name
     use_vector_search: bool = Field(default_factory=lambda: os.getenv("USE_VECTOR_SEARCH", "false").lower() == "true")
     
     def __init__(self, **data):
