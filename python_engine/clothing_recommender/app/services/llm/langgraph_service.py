@@ -58,8 +58,10 @@ class LangGraphService:
     def __init__(self, llm_service: LangChainService):
         """Initialize LangGraph service."""
         self.llm_service = llm_service
-        self.fashion_expert = FashionExpert()
+        # Initialize FashionExpert with LLM service and exclusive tools
+        self.fashion_expert = FashionExpert(llm_service=llm_service)
         self.langfuse = LangfuseService()
+        
         # Compile workflow once.
         # Reasoning: compiling the graph on every request is unnecessary overhead.
         # The graph is deterministic given the code, so it is safe to reuse.
@@ -114,31 +116,30 @@ class LangGraphService:
         return state
     
     async def _handle_clothing_query(self, state: ConversationState) -> ConversationState:
-        """Handle clothing recommendation queries using FashionExpert."""
-        logger.info("Handling clothing query with FashionExpert")
+        """Handle clothing recommendation queries using FashionExpert with exclusive tool access."""
+        logger.info("Routing to FashionExpert (with commerce search tool)")
         trace_context = state.get("trace_context")
         
         self.langfuse.log_event(
-            name="clothing_expert_start",
+            name="fashion_expert_start",
             input_data={"query": state["message"]},
             trace_context=trace_context
         )
         
-        clothing_data = await self.fashion_expert.get_clothing_recommendation(
+        # FashionExpert has exclusive access to commerce_clothing_search tool
+        response = await self.fashion_expert.get_clothing_recommendation(
             query=state["message"],
             user_context=state.get("context", {})
         )
         
-        response = await self._format_clothing_response(clothing_data)
-        
         state["response"] = response
-        state["clothing_data"] = clothing_data
-        state["metadata"]["agent_used"] = "ClothingExpert"
+        state["metadata"]["agent_used"] = "FashionExpert"
+        state["metadata"]["tools_available"] = ["commerce_clothing_search"]
         
         self.langfuse.log_event(
-            name="clothing_expert_complete",
+            name="fashion_expert_complete",
             input_data={"query": state["message"]},
-            output_data={"recommendations_count": len(clothing_data.get("recommendations", []))},
+            output_data={"response_length": len(response)},
             trace_context=trace_context
         )
         
@@ -175,31 +176,6 @@ class LangGraphService:
         )
         
         return state
-    
-    async def _format_clothing_response(self, clothing_data: Dict[str, Any]) -> str:
-        """Format clothing recommendation data into natural language."""
-        recommendations = clothing_data.get("recommendations", [])
-        styling_tips = clothing_data.get("styling_tips", [])
-        
-        response_parts = [
-            "Based on your style profile, here are my recommendations:\n"
-        ]
-        
-        for i, rec in enumerate(recommendations, 1):
-            response_parts.append(
-                f"\n{i}. **{rec['item']}** in {rec['color']}\n"
-                f"   - Style: {rec['style']}\n"
-                f"   - Why: {rec['reason']}\n"
-                f"   - Price: {rec['price_range']}\n"
-                f"   - Where: {', '.join(rec['where_to_buy'])}"
-            )
-        
-        if styling_tips:
-            response_parts.append("\n\n**Styling Tips:**")
-            for tip in styling_tips:
-                response_parts.append(f"- {tip}")
-        
-        return "\n".join(response_parts)
     
     def _route_decision(self, state: ConversationState) -> Literal["clothing", "general"]:
         """Determine which path to take based on classification."""

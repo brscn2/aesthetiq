@@ -1,0 +1,26 @@
+# Embedding Service - CLIP-based multimodal embeddings
+
+# FastAPI
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+python-multipart>=0.0.6
+
+# Sentence Transformers (includes CLIP)
+sentence-transformers>=2.2.0
+
+# PyTorch (CUDA support)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Image processing
+pillow>=10.0.0
+
+# Utilities
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0  # For healthcheck
+httpx>=0.25.0
+
+# Monitoring
+prometheus-client>=0.19.0
