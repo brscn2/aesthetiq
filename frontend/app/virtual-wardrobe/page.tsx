@@ -6,9 +6,13 @@ import { WardrobeControlBar, WardrobeFilters } from "@/components/virtual-wardro
 import { InventoryGrid } from "@/components/virtual-wardrobe/inventory-grid"
 import { WardrobeIntelligence } from "@/components/virtual-wardrobe/wardrobe-intelligence"
 import { AddItemModal } from "@/components/virtual-wardrobe/add-item-modal"
+import { OutfitCreator } from "@/components/virtual-wardrobe/outfit-creator"
+import { OutfitGrid } from "@/components/virtual-wardrobe/outfit-grid"
+import { FashionCardGenerator } from "@/components/virtual-wardrobe/fashion-card-generator"
 import { Button } from "@/components/ui/button"
 import { Brain, X } from "lucide-react"
 import { useApi } from "@/lib/api"
+import { Outfit } from "@/types/api"
 
 export default function VirtualWardrobePage() {
   const [activeTab, setActiveTab] = useState("all-items")
@@ -17,6 +21,11 @@ export default function VirtualWardrobePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filters, setFilters] = useState<WardrobeFilters>({ category: null, brand: null, color: null })
   const [availableBrands, setAvailableBrands] = useState<string[]>([])
+  
+  // Outfit state
+  const [editingOutfit, setEditingOutfit] = useState<Outfit | null>(null)
+  const [viewingOutfit, setViewingOutfit] = useState<Outfit | null>(null)
+  const [isCreatingOutfit, setIsCreatingOutfit] = useState(false)
   
   const { brandsApi } = useApi()
 
@@ -27,13 +36,61 @@ export default function VirtualWardrobePage() {
     }).catch(() => {})
   }, [brandsApi])
 
+  // Handle tab changes
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    if (tab === "outfits") {
+      setIsCreatingOutfit(true)
+      setEditingOutfit(null)
+    } else {
+      setIsCreatingOutfit(false)
+      setEditingOutfit(null)
+    }
+  }
+
+  // Render main content based on active tab
+  const renderContent = () => {
+    if (activeTab === "outfits" && (isCreatingOutfit || editingOutfit)) {
+      return (
+        <OutfitCreator
+          editOutfit={editingOutfit}
+          onSaved={() => {
+            setIsCreatingOutfit(false)
+            setEditingOutfit(null)
+            setActiveTab("my-outfits")
+          }}
+          onCancel={() => {
+            setIsCreatingOutfit(false)
+            setEditingOutfit(null)
+            setActiveTab("all-items")
+          }}
+        />
+      )
+    }
+
+    if (activeTab === "my-outfits") {
+      return (
+        <OutfitGrid
+          onEdit={(outfit) => {
+            setEditingOutfit(outfit)
+            setIsCreatingOutfit(true)
+            setActiveTab("outfits")
+          }}
+          onView={(outfit) => setViewingOutfit(outfit)}
+        />
+      )
+    }
+
+    return <InventoryGrid searchQuery={searchQuery} filters={filters} />
+  }
+
   return (
     <DashboardLayout>
       <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background text-foreground md:h-screen">
         {/* Control Bar */}
         <WardrobeControlBar
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           onAddItem={() => setIsAddModalOpen(true)}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -43,27 +100,31 @@ export default function VirtualWardrobePage() {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Main Inventory Grid */}
+          {/* Main Content */}
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-            <InventoryGrid searchQuery={searchQuery} filters={filters} />
+            {renderContent()}
           </main>
 
-          {/* Intelligence Sidebar - Desktop */}
-          <aside className="hidden w-[350px] overflow-y-auto border-l border-border bg-background p-6 lg:block">
-            <WardrobeIntelligence />
-          </aside>
+          {/* Intelligence Sidebar - Desktop (hide when creating outfit) */}
+          {activeTab !== "outfits" && (
+            <aside className="hidden w-[350px] overflow-y-auto border-l border-border bg-background p-6 lg:block">
+              <WardrobeIntelligence />
+            </aside>
+          )}
         </div>
 
         {/* Intelligence Toggle Button - Mobile */}
-        <div className="fixed bottom-6 right-6 z-40 lg:hidden">
-          <Button
-            size="lg"
-            className="h-14 w-14 rounded-full bg-primary shadow-lg"
-            onClick={() => setShowIntelligence(true)}
-          >
-            <Brain className="h-6 w-6" />
-          </Button>
-        </div>
+        {activeTab !== "outfits" && (
+          <div className="fixed bottom-6 right-6 z-40 lg:hidden">
+            <Button
+              size="lg"
+              className="h-14 w-14 rounded-full bg-primary shadow-lg"
+              onClick={() => setShowIntelligence(true)}
+            >
+              <Brain className="h-6 w-6" />
+            </Button>
+          </div>
+        )}
 
         {/* Intelligence Modal - Mobile */}
         {showIntelligence && (
@@ -90,8 +151,16 @@ export default function VirtualWardrobePage() {
           </>
         )}
 
-        {/* Add Item Modal - Visual Representation */}
+        {/* Add Item Modal */}
         <AddItemModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+
+        {/* Fashion Card Generator Modal */}
+        {viewingOutfit && (
+          <FashionCardGenerator
+            outfit={viewingOutfit}
+            onClose={() => setViewingOutfit(null)}
+          />
+        )}
       </div>
     </DashboardLayout>
   )

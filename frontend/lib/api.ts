@@ -10,11 +10,14 @@ import type {
   ColorAnalysis,
   CreateChatSessionDto,
   CreateColorAnalysisDto,
+  CreateOutfitDto,
   CreateStyleProfileDto,
   CreateUserDto,
   CreateWardrobeItemDto,
+  Outfit,
   StyleProfile,
   UpdateChatSessionDto,
+  UpdateOutfitDto,
   UpdateStyleProfileDto,
   UpdateUserDto,
   UpdateWardrobeItemDto,
@@ -132,6 +135,15 @@ const createChatApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateChatSessionDto): Promise<ChatSession> => client.patch(`/chat/${id}`, data).then((res) => res.data),
   addMessage: (sessionId: string, data: AddMessageDto): Promise<ChatSession> => client.post(`/chat/${sessionId}/message`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/chat/${id}`).then(() => undefined),
+})
+
+const createOutfitApi = (client: AxiosInstance) => ({
+  getAll: (): Promise<Outfit[]> => client.get("/outfits").then((res) => res.data),
+  getById: (id: string): Promise<Outfit> => client.get(`/outfits/${id}`).then((res) => res.data),
+  create: (data: CreateOutfitDto): Promise<Outfit> => client.post("/outfits", data).then((res) => res.data),
+  update: (id: string, data: UpdateOutfitDto): Promise<Outfit> => client.patch(`/outfits/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/outfits/${id}`).then(() => undefined),
+  toggleFavorite: (id: string): Promise<Outfit> => client.patch(`/outfits/${id}/favorite`).then((res) => res.data),
 })
 
 export interface UploadResponse {
@@ -419,6 +431,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   analysisApi: createAnalysisApi(client),
   styleProfileApi: createStyleProfileApi(client),
   chatApi: createChatApi(client),
+  outfitApi: createOutfitApi(client),
   uploadApi: createUploadApi(client),
   brandsApi: createBrandsApi(client),
   // Admin APIs

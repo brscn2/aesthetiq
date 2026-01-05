@@ -14,6 +14,7 @@ import { AdminModule } from './admin/admin.module';
 import { BrandsModule } from './brands/brands.module';
 import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
+import { OutfitModule } from './outfit/outfit.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -40,6 +41,7 @@ import databaseConfig from './config/database.config';
     BrandsModule,
     AuditModule,
     SettingsModule,
+    OutfitModule,
   ],
   controllers: [AppController],
   providers: [AppService],
