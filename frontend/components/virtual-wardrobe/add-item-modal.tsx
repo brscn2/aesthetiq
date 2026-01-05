@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useApi } from "@/lib/api"
-import { Category, CreateWardrobeItemDto } from "@/types/api"
+import { Category, CreateWardrobeItemDto, ClothingAnalysisResult } from "@/types/api"
 import { toast } from "sonner"
 import { backgroundRemovalService } from "@/lib/background-removal"
 import "@/styles/color-picker.css"
@@ -33,7 +33,7 @@ interface FormData {
   category: Category
   brand?: string
   subCategory?: string
-  colorHex: string
+  colors: string[]
   notes?: string
   removeBackground: boolean
 }
@@ -66,8 +66,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   // Color picker state
   const [showColorPicker, setShowColorPicker] = useState(false)
   
+  // AI Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisComplete, setAnalysisComplete] = useState(false)
+  
   const queryClient = useQueryClient()
-  const { wardrobeApi, uploadApi, brandsApi } = useApi()
+  const { wardrobeApi, uploadApi, brandsApi, aiApi } = useApi()
   
   // Brands state for autocomplete
   const [availableBrands, setAvailableBrands] = useState<string[]>([])
@@ -281,6 +285,59 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     }
   }
 
+  // AI Analysis function
+  const handleAiAnalysis = async () => {
+    if (!imagePreview && !uploadedFile) {
+      toast.error('Please upload an image first')
+      return
+    }
+
+    setIsAnalyzing(true)
+    try {
+      let response
+      
+      if (uploadedFile) {
+        // Convert file to base64 for API
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(uploadedFile)
+        })
+        response = await aiApi.analyzeClothing(undefined, base64)
+      } else if (imagePreview) {
+        response = await aiApi.analyzeClothing(imagePreview)
+      }
+
+      if (response?.success && response.data) {
+        const { category, subCategory, brand, colors } = response.data
+        
+        // Update form with AI results
+        setValue("category", category, { shouldValidate: true })
+        if (subCategory) {
+          setValue("subCategory", subCategory)
+          setSubCategorySearch(subCategory)
+        }
+        if (brand) {
+          setValue("brand", brand)
+          setBrandSearch(brand)
+        }
+        if (colors && colors.length > 0) {
+          setValue("colors", colors, { shouldValidate: true })
+        }
+        
+        setAnalysisComplete(true)
+        toast.success('AI analysis complete!', { duration: 2000 })
+      } else {
+        toast.error(response?.error || 'Analysis failed. Please fill in manually.')
+      }
+    } catch (error: any) {
+      console.error('AI analysis error:', error)
+      toast.error('AI analysis failed. Please fill in manually.')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
 
   const {
@@ -296,14 +353,14 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       category: Category.TOP,
       brand: "",
       subCategory: "",
-      colorHex: "",
+      colors: [],
       notes: "",
       removeBackground: false,
     },
   })
 
   const category = watch("category")
-  const colorHex = watch("colorHex")
+  const colors = watch("colors")
   const formValues = watch()
 
   // Get filtered subcategories based on current category and search
@@ -317,7 +374,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       formValues.imageUrl !== "" ||
       formValues.brand !== "" ||
       formValues.subCategory !== "" ||
-      formValues.colorHex !== "" ||
+      (formValues.colors && formValues.colors.length > 0) ||
       formValues.notes !== "" ||
       imagePreview !== null
     )
@@ -376,6 +433,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setOriginalImageUrl(null)
       setBrandSearch("") // Reset brand search input
       setSubCategorySearch("") // Reset subcategory search input
+      setIsAnalyzing(false)
+      setAnalysisComplete(false)
       
       onClose()
     },
@@ -409,8 +468,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     }
 
     // Validate required fields
-    if (!data.colorHex) {
-      toast.error("Please select a color for your item")
+    if (!data.colors || data.colors.length === 0) {
+      toast.error("Please select at least one color for your item")
       return
     }
 
@@ -454,7 +513,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           category: data.category,
           brand: data.brand || undefined,
           subCategory: data.subCategory || undefined,
-          colorHex: data.colorHex,
+          colors: data.colors,
           isFavorite: false,
         }
 
@@ -472,7 +531,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         category: data.category,
         brand: data.brand || undefined,
         subCategory: data.subCategory || undefined,
-        colorHex: data.colorHex,
+        colors: data.colors,
         isFavorite: false,
       }
 
@@ -532,11 +591,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     
     if (url) {
       setImagePreview(url)
+      setAnalysisComplete(false)
       
       // Try to extract color - first try direct canvas approach
       try {
         const centerColor = await extractColorFromUrl(url)
-        setValue("colorHex", centerColor, { shouldValidate: true })
+        setValue("colors", [centerColor], { shouldValidate: true })
         toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
       } catch (corsError) {
         // CORS blocked - try fetching as blob through our proxy/directly
@@ -544,7 +604,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         try {
           const file = await fetchImageAsBlob(url)
           const centerColor = await extractCenterColor(file)
-          setValue("colorHex", centerColor, { shouldValidate: true })
+          setValue("colors", [centerColor], { shouldValidate: true })
           toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
         } catch (fetchError) {
           console.warn('Could not auto-detect color from URL:', fetchError)
@@ -698,10 +758,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
       toast.success(`Image ready! (${(fileToUpload.size / 1024).toFixed(0)}KB)`, { duration: 2000 })
 
-      // Extract color from center of image
+      // Extract color from center of image as fallback
       try {
         const centerColor = await extractCenterColor(fileToUpload)
-        setValue("colorHex", centerColor, { shouldValidate: true })
+        setValue("colors", [centerColor], { shouldValidate: true })
         toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
       } catch (error) {
         console.error('Failed to extract color:', error)
@@ -711,6 +771,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Store the file locally - will upload on submit
       setUploadedFile(fileToUpload)
       setOriginalImageUrl(localPreview)
+      setAnalysisComplete(false)
       
       // Clear any previously cached processed image since we have a new upload
       setProcessedImageBlob(null)
@@ -812,6 +873,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setOriginalImageUrl(null)
       setBrandSearch("") // Reset brand search input
       setSubCategorySearch("") // Reset subcategory search input
+      setIsAnalyzing(false)
+      setAnalysisComplete(false)
     }
 
     onClose()
@@ -1023,10 +1086,33 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
             {/* Right Column: Form Fields */}
             <div className="space-y-4 sm:space-y-5">
-              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 dark:bg-purple-500/20 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-purple-600 dark:text-purple-300">
-                <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span>AI Analysis Complete</span>
-              </div>
+              {/* AI Analysis Button */}
+              <Button
+                type="button"
+                variant={analysisComplete ? "outline" : "default"}
+                className={`w-full ${analysisComplete 
+                  ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30' 
+                  : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                onClick={handleAiAnalysis}
+                disabled={isAnalyzing || (!imagePreview && !uploadedFile)}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : analysisComplete ? (
+                  <>
+                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    AI Analysis Complete
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    Analyze with AI
+                  </>
+                )}
+              </Button>
 
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -1141,75 +1227,77 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="colorHex" className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Color (Auto-detected) <span className="text-red-400">*</span>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Colors <span className="text-red-400">*</span>
                 </Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="colorHex"
-                    type="text"
-                    placeholder="#000000"
-                    value={colorHex || ""}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value && /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
-                        setValue("colorHex", value, { shouldValidate: true })
-                      } else if (value === "" || value === "#") {
-                        setValue("colorHex", value)
-                      }
-                    }}
-                    className="border-border bg-card text-foreground"
-                    pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
-                  />
-                  <div className="relative color-picker-container">
-                    {colorHex ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowColorPicker(!showColorPicker)}
-                        className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-border hover:border-purple-400 transition-colors cursor-pointer"
-                        style={{ backgroundColor: colorHex }}
-                        aria-label="Open color picker"
-                        title="Click to change color"
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Color Chips */}
+                  {colors && colors.map((color, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full border border-border bg-card"
+                    >
+                      <div
+                        className="h-4 w-4 rounded-full border border-border"
+                        style={{ backgroundColor: color }}
                       />
-                    ) : (
+                      <span className="text-xs font-mono text-muted-foreground">{color}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newColors = colors.filter((_, i) => i !== index)
+                          setValue("colors", newColors, { shouldValidate: true })
+                        }}
+                        className="ml-1 text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add Color Button */}
+                  {(!colors || colors.length < 5) && (
+                    <div className="relative color-picker-container">
                       <button
                         type="button"
                         onClick={() => setShowColorPicker(!showColorPicker)}
-                        className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors flex items-center justify-center"
-                        aria-label="Open color picker"
-                        title="Pick a color"
+                        className="h-8 px-3 flex items-center gap-1 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors text-xs text-muted-foreground"
                       >
-                        <Palette className="h-5 w-5 text-muted-foreground" />
+                        <Palette className="h-3 w-3" />
+                        Add Color
                       </button>
-                    )}
-                    {showColorPicker && (
-                      <div className="absolute top-12 right-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-muted-foreground">Pick a color</span>
-                          <button
-                            type="button"
-                            onClick={() => setShowColorPicker(false)}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            ✕
-                          </button>
+                      {showColorPicker && (
+                        <div className="absolute top-10 left-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-muted-foreground">Pick a color</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowColorPicker(false)}
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <HexColorPicker
+                            color="#808080"
+                            onChange={(color) => {
+                              const upperColor = color.toUpperCase()
+                              const currentColors = colors || []
+                              if (!currentColors.includes(upperColor) && currentColors.length < 5) {
+                                setValue("colors", [...currentColors, upperColor], { shouldValidate: true })
+                              }
+                            }}
+                          />
+                          <p className="mt-2 text-xs text-muted-foreground text-center">
+                            Click on the picker to add colors
+                          </p>
                         </div>
-                        <HexColorPicker
-                          color={colorHex || '#808080'}
-                          onChange={(color) => setValue("colorHex", color, { shouldValidate: true })}
-                        />
-                        <div className="mt-2 text-center">
-                          <span className="text-xs font-mono text-muted-foreground">{colorHex || 'Select a color'}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {errors.colorHex && (
-                  <p className="text-xs text-red-400">{errors.colorHex.message}</p>
-                )}
-                {!colorHex && (
-                  <p className="text-xs text-muted-foreground">Color will be auto-detected from image center</p>
+                {(!colors || colors.length === 0) && (
+                  <p className="text-xs text-muted-foreground">At least one color is required</p>
                 )}
               </div>
 

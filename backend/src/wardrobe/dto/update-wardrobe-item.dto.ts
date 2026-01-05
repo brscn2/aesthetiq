@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsDateString,
   IsMongoId,
+  IsArray,
 } from 'class-validator';
 import { Category } from '../schemas/wardrobe-item.schema';
 
@@ -43,10 +44,11 @@ export class UpdateWardrobeItemDto {
   @IsOptional()
   brandId?: string;
 
-  @ApiProperty({ required: false, example: '#000000' })
-  @IsString()
+  @ApiProperty({ required: false, example: ['#000000', '#FFFFFF'] })
+  @IsArray()
+  @IsString({ each: true })
   @IsOptional()
-  colorHex?: string;
+  colors?: string[];
 
   @ApiProperty({ required: false })
   @IsBoolean()

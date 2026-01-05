@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs"
 import axios, { AxiosError, AxiosInstance } from "axios"
 import type {
   AddMessageDto,
+  AnalyzeClothingResponse,
   Category,
   ChatSession,
   ColorAnalysis,
@@ -425,6 +426,13 @@ const createBrandsApi = (client: AxiosInstance) => ({
   },
 })
 
+// AI API (for clothing analysis)
+const createAiApi = (client: AxiosInstance) => ({
+  analyzeClothing: (imageUrl?: string, imageBase64?: string): Promise<AnalyzeClothingResponse> => {
+    return client.post("/ai/analyze-clothing", { imageUrl, imageBase64 }).then((res) => res.data)
+  },
+})
+
 const createApiHelpers = (client: AxiosInstance) => ({
   userApi: createUserApi(client),
   wardrobeApi: createWardrobeApi(client),
@@ -434,6 +442,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   outfitApi: createOutfitApi(client),
   uploadApi: createUploadApi(client),
   brandsApi: createBrandsApi(client),
+  aiApi: createAiApi(client),
   // Admin APIs
   adminBrandsApi: createAdminBrandsApi(client),
   adminWardrobeApi: createAdminWardrobeApi(client),

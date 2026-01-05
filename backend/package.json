@@ -45,6 +45,7 @@
     "form-data": "^4.0.5",
     "mongoose": "^8.0.0",
     "multer": "^2.0.2",
+    "openai": "^6.15.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "svix": "^1.81.0",

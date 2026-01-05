@@ -33,8 +33,8 @@ export class WardrobeItem {
   @Prop({ type: Types.ObjectId, ref: 'Brand' })
   brandId?: Types.ObjectId;
 
-  @Prop()
-  colorHex?: string;
+  @Prop({ type: [String], default: [] })
+  colors: string[];
 
   @Prop({ default: false })
   isFavorite: boolean;
@@ -47,6 +47,6 @@ export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 
 // Create indexes for efficient queries
 WardrobeItemSchema.index({ userId: 1, category: 1 });
-WardrobeItemSchema.index({ userId: 1, colorHex: 1 });
+WardrobeItemSchema.index({ userId: 1, colors: 1 });
 WardrobeItemSchema.index({ brandId: 1 });
 
