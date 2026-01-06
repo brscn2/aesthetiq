@@ -26,7 +26,12 @@ interface FashionCardGeneratorProps {
 
 function getItemImageUrl(item: string | WardrobeItem | undefined): string | null {
   if (!item || typeof item === "string") return null
-  return item.processedImageUrl || item.imageUrl || null
+  const imageUrl = item.processedImageUrl || item.imageUrl || null
+  // Proxy Azure Blob Storage URLs to avoid CORS issues with canvas
+  if (imageUrl && imageUrl.includes('blob.core.windows.net')) {
+    return `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/upload/proxy?url=${encodeURIComponent(imageUrl)}`
+  }
+  return imageUrl
 }
 
 export function FashionCardGenerator({ outfit, onClose }: FashionCardGeneratorProps) {
@@ -136,7 +141,7 @@ export function FashionCardGenerator({ outfit, onClose }: FashionCardGeneratorPr
     ctx.fillStyle = config.accentColor
     ctx.font = `12px ${config.fontFamily}`
     ctx.textAlign = "center"
-    ctx.fillText("Created with StyleAI", CARD_WIDTH / 2, CARD_HEIGHT - padding / 2)
+    ctx.fillText("Created with AesthetIQ", CARD_WIDTH / 2, CARD_HEIGHT - padding / 2)
 
     setIsRendering(false)
   }
