@@ -51,6 +51,7 @@ import {
 import { useAdminApi, WardrobeItem, Category } from "@/lib/admin-api"
 import { useAdminLoading } from "@/hooks/use-admin-loading"
 import { AdminErrorHandler } from "@/lib/admin-error-handler"
+import { getClosestColorName } from "@/lib/colors"
 
 interface ClothingListProps {
   onEdit: (item: WardrobeItem) => void
@@ -233,14 +234,14 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
     }
 
     // Create CSV content
-    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Color", "Created"]
+    const headers = ["ID", "Category", "Subcategory", "Brand", "User", "Colors", "Created"]
     const rows = items.map((item) => [
       item._id,
       item.category,
       item.subCategory || "",
       item.brand || "",
       getUserDisplayName(item.userId),
-      item.colorHex || "",
+      (item.colors || []).join("; "),
       item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "",
     ])
 
@@ -419,13 +420,20 @@ export function ClothingList({ onEdit, onAdd }: ClothingListProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {item.colorHex ? (
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-4 h-4 rounded border"
-                            style={{ backgroundColor: item.colorHex }}
-                          />
-                          <span className="text-sm font-mono">{item.colorHex}</span>
+                      {item.colors && item.colors.length > 0 ? (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {item.colors.map((color, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-card text-xs"
+                            >
+                              <div
+                                className="w-3 h-3 rounded border"
+                                style={{ backgroundColor: color }}
+                              />
+                              <span>{getClosestColorName(color)}</span>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>

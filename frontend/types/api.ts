@@ -92,7 +92,8 @@ export interface WardrobeItem {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
   createdAt?: string;
@@ -105,7 +106,8 @@ export interface CreateWardrobeItemDto {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -116,7 +118,8 @@ export interface UpdateWardrobeItemDto {
   category?: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -290,3 +293,20 @@ export interface UpdateOutfitDto {
   cardTemplate?: CardTemplate;
 }
 
+
+
+// AI Analysis Types
+export interface ClothingAnalysisResult {
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  colors: string[];
+  styleNotes?: string;
+  confidence: number;
+}
+
+export interface AnalyzeClothingResponse {
+  success: boolean;
+  data?: ClothingAnalysisResult;
+  error?: string;
+}

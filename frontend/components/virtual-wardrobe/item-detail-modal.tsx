@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Trash2, Calendar, Palette, Shirt, Loader2 } from "lucide-react"
 import { WardrobeItem, Category } from "@/types/api"
 import { useApi } from "@/lib/api"
+import { getClosestColorName } from "@/lib/colors"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
@@ -105,16 +106,23 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
               )}
             </div>
 
-            {item.colorHex && (
+            {item.colors && item.colors.length > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <Palette className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Color:</span>
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="h-5 w-5 rounded-full border border-border"
-                    style={{ backgroundColor: item.colorHex }}
-                  />
-                  <span className="font-mono text-xs">{item.colorHex}</span>
+                <span className="text-muted-foreground">Colors:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {item.colors.map((color, index) => (
+                    <div 
+                      key={index}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-card"
+                    >
+                      <div
+                        className="h-3 w-3 rounded-full border border-border"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="text-xs">{getClosestColorName(color)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
