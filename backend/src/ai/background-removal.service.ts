@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { removeBackground } from '@imgly/background-removal-node';
+import { Buffer } from 'node:buffer';
 
 @Injectable()
 export class BackgroundRemovalService {
