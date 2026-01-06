@@ -93,6 +93,7 @@ export interface WardrobeItem {
   subCategory?: string;
   brand?: string;
   colors?: string[];
+  notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
   createdAt?: string;
@@ -106,6 +107,7 @@ export interface CreateWardrobeItemDto {
   subCategory?: string;
   brand?: string;
   colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -117,6 +119,7 @@ export interface UpdateWardrobeItemDto {
   subCategory?: string;
   brand?: string;
   colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -298,6 +301,7 @@ export interface ClothingAnalysisResult {
   subCategory?: string;
   brand?: string;
   colors: string[];
+  styleNotes?: string;
   confidence: number;
 }
 

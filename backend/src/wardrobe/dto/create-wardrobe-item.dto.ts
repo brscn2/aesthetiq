@@ -51,6 +51,11 @@ export class CreateWardrobeItemDto {
   @IsOptional()
   colors?: string[];
 
+  @ApiProperty({ required: false, example: 'Perfect for casual outings.' })
+  @IsString()
+  @IsOptional()
+  notes?: string;
+
   @ApiProperty({ default: false, required: false })
   @IsBoolean()
   @IsOptional()

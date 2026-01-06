@@ -36,6 +36,9 @@ export class WardrobeItem {
   @Prop({ type: [String], default: [] })
   colors: string[];
 
+  @Prop()
+  notes?: string;
+
   @Prop({ default: false })
   isFavorite: boolean;
 

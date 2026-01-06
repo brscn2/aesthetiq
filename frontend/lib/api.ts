@@ -431,6 +431,9 @@ const createAiApi = (client: AxiosInstance) => ({
   analyzeClothing: (imageUrl?: string, imageBase64?: string): Promise<AnalyzeClothingResponse> => {
     return client.post("/ai/analyze-clothing", { imageUrl, imageBase64 }).then((res) => res.data)
   },
+  removeBackground: (imageBase64: string): Promise<{ success: boolean; data?: string; error?: string }> => {
+    return client.post("/ai/remove-background", { imageBase64 }).then((res) => res.data)
+  },
 })
 
 const createApiHelpers = (client: AxiosInstance) => ({

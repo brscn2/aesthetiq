@@ -28,6 +28,7 @@
   "dependencies": {
     "@azure/storage-blob": "^12.29.1",
     "@clerk/backend": "^2.24.0",
+    "@imgly/background-removal-node": "^1.4.5",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",

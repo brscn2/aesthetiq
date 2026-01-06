@@ -30,6 +30,7 @@ export interface ClothingAnalysisResult {
   subCategory?: string;
   brand?: string;
   colors: string[];
+  styleNotes?: string;
   confidence: number;
 }
 
