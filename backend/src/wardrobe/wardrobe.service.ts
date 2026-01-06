@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import {
   WardrobeItem,
   WardrobeItemDocument,
@@ -21,7 +21,13 @@ export class WardrobeService {
   ) {}
 
   async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
-    const createdItem = new this.wardrobeItemModel(createWardrobeItemDto);
+    // Convert brandId string to ObjectId if provided
+    const itemData = {
+      ...createWardrobeItemDto,
+      brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
+    };
+    
+    const createdItem = new this.wardrobeItemModel(itemData);
     return createdItem.save();
   }
 
@@ -29,6 +35,8 @@ export class WardrobeService {
     userId: string,
     category?: Category,
     colorHex?: string,
+    brandId?: string,
+    search?: string,
   ): Promise<WardrobeItem[]> {
     const filter: any = { userId };
     if (category) {
@@ -37,33 +45,86 @@ export class WardrobeService {
     if (colorHex) {
       filter.colorHex = colorHex;
     }
-    return this.wardrobeItemModel.find(filter).exec();
+    if (brandId) {
+      filter.brandId = new Types.ObjectId(brandId);
+    }
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      filter.$or = [
+        { brand: searchRegex },
+        { subCategory: searchRegex },
+        { notes: searchRegex },
+      ];
+    }
+    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
+  }
+
+  async findAllWithBrands(
+    userId: string,
+    category?: Category,
+    colorHex?: string,
+    brandId?: string,
+  ): Promise<WardrobeItem[]> {
+    const filter: any = {};
+    // Only filter by userId if provided and not empty
+    if (userId && userId.trim() !== '') {
+      filter.userId = userId;
+    }
+    if (category) {
+      filter.category = category;
+    }
+    if (colorHex) {
+      filter.colorHex = colorHex;
+    }
+    if (brandId) {
+      filter.brandId = new Types.ObjectId(brandId);
+    }
+    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
   }
 
   async findOne(id: string): Promise<WardrobeItem> {
-    const item = await this.wardrobeItemModel.findById(id).exec();
+    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
     return item;
   }
 
+  async findByBrandId(brandId: string): Promise<WardrobeItem[]> {
+    return this.wardrobeItemModel.find({ brandId: new Types.ObjectId(brandId) }).populate('brandId').exec();
+  }
+
   async update(
     id: string,
     updateWardrobeItemDto: UpdateWardrobeItemDto,
-  ): Promise<WardrobeItem> {
+  ): Promise<{ updated: WardrobeItem; oldData: WardrobeItem }> {
+    // Get the old data first for audit logging
+    const oldItem = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    if (!oldItem) {
+      throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
+    }
+
+    // Convert brandId string to ObjectId if provided
+    const updateData = {
+      ...updateWardrobeItemDto,
+      brandId: updateWardrobeItemDto.brandId ? new Types.ObjectId(updateWardrobeItemDto.brandId) : undefined,
+    };
+    
     const updatedItem = await this.wardrobeItemModel
-      .findByIdAndUpdate(id, updateWardrobeItemDto, { new: true })
+      .findByIdAndUpdate(id, updateData, { new: true })
+      .populate('brandId')
       .exec();
+    
     if (!updatedItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
-    return updatedItem;
+    
+    return { updated: updatedItem, oldData: oldItem };
   }
 
-  async remove(id: string): Promise<void> {
-    // Find the item first to get the image URL
-    const item = await this.wardrobeItemModel.findById(id).exec();
+  async remove(id: string): Promise<WardrobeItem> {
+    // Find the item first to get the image URL and return it for audit logging
+    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -93,6 +154,8 @@ export class WardrobeService {
     await this.wardrobeItemModel.findByIdAndDelete(id).exec();
     
     this.logger.log(`Wardrobe item ${id} deleted successfully`);
+    
+    return item;
   }
 }
 

@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsBoolean,
   IsDateString,
+  IsMongoId,
 } from 'class-validator';
 import { Category } from '../schemas/wardrobe-item.schema';
 
@@ -37,6 +38,11 @@ export class CreateWardrobeItemDto {
   @IsString()
   @IsOptional()
   brand?: string;
+
+  @ApiProperty({ required: false, example: '507f1f77bcf86cd799439011' })
+  @IsMongoId()
+  @IsOptional()
+  brandId?: string;
 
   @ApiProperty({ required: false, example: '#000000' })
   @IsString()

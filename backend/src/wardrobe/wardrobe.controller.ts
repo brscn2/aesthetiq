@@ -60,13 +60,19 @@ export class WardrobeController {
     required: false,
     description: 'Filter by color hex code',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search in brand, subCategory, and notes',
+  })
   @ApiResponse({ status: 200, description: 'List of wardrobe items' })
   async findAll(
     @CurrentUser() user: { clerkId: string },
     @Query('category') category?: Category,
     @Query('colorHex') colorHex?: string,
+    @Query('search') search?: string,
   ) {
-    return this.wardrobeService.findAll(user.clerkId, category, colorHex);
+    return this.wardrobeService.findAll(user.clerkId, category, colorHex, undefined, search);
   }
 
   @Get(':id')
