@@ -90,7 +90,7 @@ export class AdminUploadController {
     if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       this.logger.warn(`Invalid file type uploaded for brand logo: ${file.mimetype}`);
       throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and HEIC images are allowed.`
+        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and GIF images are allowed.`
       );
     }
 

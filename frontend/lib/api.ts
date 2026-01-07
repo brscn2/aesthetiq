@@ -63,6 +63,8 @@ const createUserApi = (client: AxiosInstance) => ({
   getCurrentUserSettings: (): Promise<User['settings']> => client.get("/users/me/settings").then((res) => res.data),
   updateCurrentUserSettings: (data: Partial<User['settings']>): Promise<User['settings']> => 
     client.patch("/users/me/settings", data).then((res) => res.data),
+  updateCurrentUser: (data: { name?: string; avatarUrl?: string }): Promise<User> =>
+    client.patch("/users/me", data).then((res) => res.data),
   
   // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),

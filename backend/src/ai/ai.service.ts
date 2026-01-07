@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import OpenAI from 'openai';
+import * as crypto from 'crypto';
 import {
   AnalyzeClothingDto,
   ClothingAnalysisResult,
@@ -47,12 +48,23 @@ const COLOR_MAP: Record<string, string> = {
   "yellow": "#ffff00", "yellowgreen": "#9acd32"
 };
 
-const VALID_COLOR_NAMES = Object.keys(COLOR_MAP);
+// Cache entry with TTL
+interface CacheEntry {
+  result: AnalyzeClothingResponse;
+  timestamp: number;
+}
+
+// Cache TTL: 1 hour (in milliseconds)
+const CACHE_TTL = 60 * 60 * 1000;
+// Max cache size to prevent memory issues
+const MAX_CACHE_SIZE = 500;
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private openai: OpenAI;
+  // In-memory cache for analysis results
+  private analysisCache: Map<string, CacheEntry> = new Map();
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -60,6 +72,50 @@ export class AiService {
       this.logger.warn('OPENAI_API_KEY not configured - AI analysis will not work');
     }
     this.openai = new OpenAI({ apiKey: apiKey || 'dummy-key' });
+  }
+
+  /**
+   * Generate a cache key from the image data
+   */
+  private generateCacheKey(dto: AnalyzeClothingDto): string {
+    const data = dto.imageUrl || dto.imageBase64 || '';
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  /**
+   * Get cached result if available and not expired
+   */
+  private getCachedResult(key: string): AnalyzeClothingResponse | null {
+    const entry = this.analysisCache.get(key);
+    if (!entry) return null;
+
+    // Check if expired
+    if (Date.now() - entry.timestamp > CACHE_TTL) {
+      this.analysisCache.delete(key);
+      return null;
+    }
+
+    this.logger.log(`Cache hit for analysis (key: ${key.substring(0, 8)}...)`);
+    return entry.result;
+  }
+
+  /**
+   * Store result in cache
+   */
+  private setCachedResult(key: string, result: AnalyzeClothingResponse): void {
+    // Evict oldest entries if cache is full
+    if (this.analysisCache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = this.analysisCache.keys().next().value;
+      if (oldestKey) {
+        this.analysisCache.delete(oldestKey);
+      }
+    }
+
+    this.analysisCache.set(key, {
+      result,
+      timestamp: Date.now(),
+    });
+    this.logger.log(`Cached analysis result (key: ${key.substring(0, 8)}...)`);
   }
 
   async analyzeClothing(dto: AnalyzeClothingDto): Promise<AnalyzeClothingResponse> {
@@ -72,6 +128,13 @@ export class AiService {
 
     if (!dto.imageUrl && !dto.imageBase64) {
       throw new BadRequestException('Either imageUrl or imageBase64 must be provided');
+    }
+
+    // Check cache first
+    const cacheKey = this.generateCacheKey(dto);
+    const cachedResult = this.getCachedResult(cacheKey);
+    if (cachedResult) {
+      return cachedResult;
     }
 
     try {
@@ -118,10 +181,15 @@ Return ONLY valid JSON. Example:
       // Parse JSON response
       const parsed = this.parseAnalysisResponse(content);
 
-      return {
+      const result: AnalyzeClothingResponse = {
         success: true,
         data: parsed,
       };
+
+      // Cache the successful result
+      this.setCachedResult(cacheKey, result);
+
+      return result;
     } catch (error: any) {
       this.logger.error(`OpenAI analysis failed: ${error.message}`, error.stack);
 

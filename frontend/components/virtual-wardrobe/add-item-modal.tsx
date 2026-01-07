@@ -747,9 +747,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   const processFile = async (file: File) => {
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Invalid file type. Please upload a JPEG, PNG, WebP, or HEIC image.')
+      toast.error('Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.')
       return
     }
 
@@ -775,7 +775,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     const compressionThreshold = 2 * 1024 * 1024
     let fileToUpload = file
     
-    if (file.size > compressionThreshold && file.type !== 'image/heic' && file.type !== 'image/heif') {
+    if (file.size > compressionThreshold && file.type !== 'image/gif') {
       try {
         toast.info('Compressing image...', { duration: 2000 })
         fileToUpload = await compressImage(file)
@@ -1070,7 +1070,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <input
                     id="file-upload"
                     type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
                     className="hidden"
                     onChange={handleFileSelect}
                   />
