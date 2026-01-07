@@ -5,16 +5,20 @@ import { useAuth } from "@clerk/nextjs"
 import axios, { AxiosError, AxiosInstance } from "axios"
 import type {
   AddMessageDto,
+  AnalyzeClothingResponse,
   Category,
   ChatSession,
   ColorAnalysis,
   CreateChatSessionDto,
   CreateColorAnalysisDto,
+  CreateOutfitDto,
   CreateStyleProfileDto,
   CreateUserDto,
   CreateWardrobeItemDto,
+  Outfit,
   StyleProfile,
   UpdateChatSessionDto,
+  UpdateOutfitDto,
   UpdateStyleProfileDto,
   UpdateUserDto,
   UpdateWardrobeItemDto,
@@ -59,6 +63,8 @@ const createUserApi = (client: AxiosInstance) => ({
   getCurrentUserSettings: (): Promise<User['settings']> => client.get("/users/me/settings").then((res) => res.data),
   updateCurrentUserSettings: (data: Partial<User['settings']>): Promise<User['settings']> => 
     client.patch("/users/me/settings", data).then((res) => res.data),
+  updateCurrentUser: (data: { name?: string; avatarUrl?: string }): Promise<User> =>
+    client.patch("/users/me", data).then((res) => res.data),
   
   // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
@@ -132,6 +138,15 @@ const createChatApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateChatSessionDto): Promise<ChatSession> => client.patch(`/chat/${id}`, data).then((res) => res.data),
   addMessage: (sessionId: string, data: AddMessageDto): Promise<ChatSession> => client.post(`/chat/${sessionId}/message`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/chat/${id}`).then(() => undefined),
+})
+
+const createOutfitApi = (client: AxiosInstance) => ({
+  getAll: (): Promise<Outfit[]> => client.get("/outfits").then((res) => res.data),
+  getById: (id: string): Promise<Outfit> => client.get(`/outfits/${id}`).then((res) => res.data),
+  create: (data: CreateOutfitDto): Promise<Outfit> => client.post("/outfits", data).then((res) => res.data),
+  update: (id: string, data: UpdateOutfitDto): Promise<Outfit> => client.patch(`/outfits/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/outfits/${id}`).then(() => undefined),
+  toggleFavorite: (id: string): Promise<Outfit> => client.patch(`/outfits/${id}/favorite`).then((res) => res.data),
 })
 
 export interface UploadResponse {
@@ -413,14 +428,26 @@ const createBrandsApi = (client: AxiosInstance) => ({
   },
 })
 
+// AI API (for clothing analysis)
+const createAiApi = (client: AxiosInstance) => ({
+  analyzeClothing: (imageUrl?: string, imageBase64?: string): Promise<AnalyzeClothingResponse> => {
+    return client.post("/ai/analyze-clothing", { imageUrl, imageBase64 }).then((res) => res.data)
+  },
+  removeBackground: (imageBase64: string): Promise<{ success: boolean; data?: string; error?: string }> => {
+    return client.post("/ai/remove-background", { imageBase64 }).then((res) => res.data)
+  },
+})
+
 const createApiHelpers = (client: AxiosInstance) => ({
   userApi: createUserApi(client),
   wardrobeApi: createWardrobeApi(client),
   analysisApi: createAnalysisApi(client),
   styleProfileApi: createStyleProfileApi(client),
   chatApi: createChatApi(client),
+  outfitApi: createOutfitApi(client),
   uploadApi: createUploadApi(client),
   brandsApi: createBrandsApi(client),
+  aiApi: createAiApi(client),
   // Admin APIs
   adminBrandsApi: createAdminBrandsApi(client),
   adminWardrobeApi: createAdminWardrobeApi(client),

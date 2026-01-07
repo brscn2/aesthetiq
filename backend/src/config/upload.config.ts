@@ -1,13 +1,13 @@
 import { memoryStorage } from 'multer';
 
 // Allowed image MIME types for wardrobe item uploads
+// Note: HEIC/HEIF removed as browsers don't support displaying them
 export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
   'image/webp',
-  'image/heic',
-  'image/heif',
+  'image/gif',
 ];
 
 // Maximum file size: 10MB
@@ -21,7 +21,7 @@ export const uploadConfig = {
     } else {
       cb(
         new Error(
-          `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and HEIC images are allowed.`
+          `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and GIF images are allowed.`
         ),
         false
       );

@@ -10,30 +10,12 @@ import {
   Check, 
   Zap, 
   Palette, 
-  Camera, 
   ShoppingBag, 
   TrendingUp,
   Loader2
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
-
-const freeFeatures = [
-  "Basic wardrobe management",
-  "Color analysis (limited)",
-  "5 outfit recommendations per month",
-  "Standard support"
-]
-
-const proFeatures = [
-  "Unlimited wardrobe items",
-  "Advanced AI color analysis",
-  "Unlimited outfit recommendations",
-  "Seasonal trend forecasting",
-  "Priority customer support",
-  "Early access to new features",
-  "Personal style consultant sessions",
-  "Shopping integration with 50+ brands"
-]
+import { FREE_FEATURES, PRO_FEATURES, PRO_PRICE } from "@/lib/membership-features"
 
 export function MembershipPanel() {
   const { user, isLoading } = useUser()
@@ -123,10 +105,13 @@ export function MembershipPanel() {
                 </div>
                 
                 <ul className="space-y-3">
-                  {freeFeatures.map((feature, index) => (
+                  {FREE_FEATURES.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2">
                       <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-muted-foreground">{feature}</span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                        <p className="text-xs text-muted-foreground">{feature.description}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -157,14 +142,17 @@ export function MembershipPanel() {
                     <Crown className="h-5 w-5 text-yellow-500" />
                     <h3 className="font-playfair text-xl font-medium">Pro Plan</h3>
                   </div>
-                  <p className="text-2xl font-bold">$9.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
+                  <p className="text-2xl font-bold">{PRO_PRICE}<span className="text-sm font-normal text-muted-foreground">/month</span></p>
                 </div>
                 
                 <ul className="space-y-3">
-                  {proFeatures.map((feature, index) => (
+                  {PRO_FEATURES.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2">
                       <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{feature}</span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                        <p className="text-xs text-muted-foreground">{feature.description}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>

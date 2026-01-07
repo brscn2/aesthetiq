@@ -44,6 +44,20 @@ export class UsersController {
   }
 
   @UseGuards(ClerkAuthGuard)
+  @Patch('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiResponse({ status: 200, description: 'User profile updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async updateCurrentUser(
+    @Request() req: any,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.usersService.updateByClerkId(req.user.clerkId, updateUserDto);
+  }
+
+  @UseGuards(ClerkAuthGuard)
   @Get('me/settings')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user settings' })

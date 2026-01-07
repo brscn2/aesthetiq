@@ -92,7 +92,8 @@ export interface WardrobeItem {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
   createdAt?: string;
@@ -105,7 +106,8 @@ export interface CreateWardrobeItemDto {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -116,7 +118,8 @@ export interface UpdateWardrobeItemDto {
   category?: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -256,3 +259,54 @@ export interface AddMessageDto {
   metadata?: Record<string, any>;
 }
 
+// Outfit Types
+export type CardTemplate = 'minimal' | 'elegant' | 'bold';
+
+export interface OutfitItems {
+  top?: string | WardrobeItem;
+  bottom?: string | WardrobeItem;
+  shoe?: string | WardrobeItem;
+  accessories: (string | WardrobeItem)[];
+}
+
+export interface Outfit {
+  _id: string;
+  userId: string;
+  name: string;
+  items: OutfitItems;
+  isFavorite: boolean;
+  cardTemplate: CardTemplate;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateOutfitDto {
+  name: string;
+  items: { top?: string; bottom?: string; shoe?: string; accessories?: string[] };
+  cardTemplate?: CardTemplate;
+}
+
+export interface UpdateOutfitDto {
+  name?: string;
+  items?: { top?: string | null; bottom?: string | null; shoe?: string | null; accessories?: string[] };
+  isFavorite?: boolean;
+  cardTemplate?: CardTemplate;
+}
+
+
+
+// AI Analysis Types
+export interface ClothingAnalysisResult {
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  colors: string[];
+  styleNotes?: string;
+  confidence: number;
+}
+
+export interface AnalyzeClothingResponse {
+  success: boolean;
+  data?: ClothingAnalysisResult;
+  error?: string;
+}

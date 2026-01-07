@@ -234,7 +234,7 @@ function SmartUploader({
   onFileSelect: (file: File) => void
   onDrop: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
-  fileInputRef: React.RefObject<HTMLInputElement>
+  fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   error: string | null
 }) {
