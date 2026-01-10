@@ -1,7 +1,36 @@
 """Response schemas for Clothing Recommender API endpoints."""
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
+
+
+class ClothingData(BaseModel):
+    """Clothing recommendation data included in conversation responses."""
+    
+    item_ids: List[str] = Field(
+        default_factory=list,
+        description="List of recommended wardrobe item IDs"
+    )
+    
+    count: int = Field(
+        0,
+        description="Number of items found"
+    )
+    
+    iterations: int = Field(
+        1,
+        description="Number of search iterations performed"
+    )
+    
+    fallback: Optional[bool] = Field(
+        None,
+        description="True if no results were found and fallback message used"
+    )
+    
+    error: Optional[str] = Field(
+        None,
+        description="Error message if recommendation failed"
+    )
 
 
 class ConversationResponse(BaseModel):
@@ -17,6 +46,11 @@ class ConversationResponse(BaseModel):
         ...,
         description="Session identifier for conversation continuity",
         examples=["session_abc123"]
+    )
+    
+    clothing_data: Optional[ClothingData] = Field(
+        None,
+        description="Clothing recommendation data (only present for clothing queries)"
     )
     
     metadata: Optional[Dict[str, Any]] = Field(
@@ -77,3 +111,43 @@ class ErrorResponse(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc).isoformat(),
         description="Error timestamp"
     )
+
+
+class RecommendResponse(BaseModel):
+    """Response schema for clothing recommendations."""
+    
+    item_ids: list[str] = Field(
+        ...,
+        description="List of recommended wardrobe item IDs",
+        examples=[["6938855c485e1f7c84ad1145", "6938855d485e1f7c84ad1146"]]
+    )
+    
+    message: Optional[str] = Field(
+        None,
+        description="Optional message (e.g., fallback message when no items found)",
+        examples=["No matching items found. Try a different search."]
+    )
+    
+    session_id: str = Field(
+        ...,
+        description="Session identifier for tracking",
+        examples=["rec_20260110120000"]
+    )
+    
+    iterations: int = Field(
+        1,
+        description="Number of search iterations performed",
+        ge=1,
+        le=3
+    )
+    
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Additional metadata about the recommendation",
+        examples=[{
+            "success": True,
+            "total_items": 5,
+            "filters_used": {"category": "TOP"}
+        }]
+    )
+

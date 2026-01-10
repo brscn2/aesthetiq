@@ -8,7 +8,8 @@ from langgraph.graph import StateGraph, END
 from app.core.logger import get_logger
 from app.services.llm.langchain_service import LangChainService
 from app.services.llm.langfuse_service import LangfuseService
-from app.agents.fashion_expert import FashionExpert
+from app.agents.recommender import RecommenderGraph, RecommenderStage
+from app.agents.recommender.graph import StreamEventType as RecommenderEventType
 from app.prompts import get_prompt_manager
 
 logger = get_logger(__name__)
@@ -20,6 +21,8 @@ class StreamEventType(str, Enum):
     STATUS = "status"
     CHUNK = "chunk"
     CLOTHING_ITEM = "clothing_item"
+    CLOTHING_RESULT = "clothing_result"  # Final clothing recommendations
+    RECOMMENDER_STAGE = "recommender_stage"  # Recommender progress updates
     METADATA = "metadata"
     DONE = "done"
     ERROR = "error"
@@ -75,18 +78,24 @@ class LangGraphService:
     
     WORKFLOW_VERSION = "1.0"
     
-    def __init__(self, llm_service: LangChainService):
-        """Initialize LangGraph service."""
+    def __init__(self, llm_service: LangChainService, recommender_graph: Optional[RecommenderGraph] = None):
+        """Initialize LangGraph service.
+        
+        Args:
+            llm_service: LangChain service for LLM calls
+            recommender_graph: Optional pre-initialized RecommenderGraph.
+                              If not provided, one will be created.
+        """
         self.llm_service = llm_service
-        # Initialize FashionExpert with LLM service and exclusive tools
-        self.fashion_expert = FashionExpert(llm_service=llm_service)
+        # Initialize RecommenderGraph for clothing queries
+        self.recommender_graph = recommender_graph or RecommenderGraph(llm_service=llm_service)
         self.langfuse = LangfuseService()
         
         # Compile workflow once.
         # Reasoning: compiling the graph on every request is unnecessary overhead.
         # The graph is deterministic given the code, so it is safe to reuse.
         self.workflow = self.create_conversation_workflow()
-        logger.info("LangGraphService initialized")
+        logger.info("LangGraphService initialized with RecommenderGraph")
     
     def _create_initial_state(
         self,
@@ -166,34 +175,96 @@ class LangGraphService:
         return state
     
     async def _handle_clothing_query(self, state: ConversationState) -> ConversationState:
-        """Handle clothing recommendation queries using FashionExpert with exclusive tool access."""
-        logger.info("Routing to FashionExpert (with commerce search tool)")
+        """Handle clothing recommendation queries using RecommenderGraph.
+        
+        This triggers the full recommender pipeline:
+        1. Query analysis (extract filters + semantic query)
+        2. Optional profile fetch
+        3. Vector search
+        4. Result verification (with retry loop)
+        5. Final response
+        """
+        logger.info("Routing to RecommenderGraph for clothing recommendations")
         trace_context = state.get("trace_context")
         
         self.langfuse.log_event(
-            name="fashion_expert_start",
+            name="recommender_start",
             input_data={"query": state["message"]},
             trace_context=trace_context
         )
         
-        # FashionExpert has exclusive access to commerce_clothing_search tool
-        response = await self.fashion_expert.get_clothing_recommendation(
-            query=state["message"],
-            user_context=state.get("context", {})
-        )
-        
-        state["response"] = response
-        state["metadata"]["agent_used"] = "FashionExpert"
-        state["metadata"]["tools_available"] = ["commerce_clothing_search"]
-        
-        self.langfuse.log_event(
-            name="fashion_expert_complete",
-            input_data={"query": state["message"]},
-            output_data={"response_length": len(response)},
-            trace_context=trace_context
-        )
+        try:
+            # Run the recommender graph
+            result = await self.recommender_graph.recommend(
+                user_query=state["message"],
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+            )
+            
+            item_ids = result.get("item_ids", [])
+            iterations = result.get("iterations", 1)
+            fallback_message = result.get("message")
+            
+            # Format response based on results
+            if item_ids:
+                # Build response with item IDs
+                response = self._format_clothing_response(item_ids, state["message"])
+                state["clothing_data"] = {
+                    "item_ids": item_ids,
+                    "count": len(item_ids),
+                    "iterations": iterations,
+                }
+            else:
+                # No results - use fallback message
+                response = fallback_message or "I couldn't find any matching items. Try a different search."
+                state["clothing_data"] = {
+                    "item_ids": [],
+                    "count": 0,
+                    "iterations": iterations,
+                    "fallback": True,
+                }
+            
+            state["response"] = response
+            state["metadata"]["agent_used"] = "RecommenderGraph"
+            state["metadata"]["recommender_iterations"] = iterations
+            state["metadata"]["items_found"] = len(item_ids)
+            
+            self.langfuse.log_event(
+                name="recommender_complete",
+                input_data={"query": state["message"]},
+                output_data={
+                    "items_found": len(item_ids),
+                    "iterations": iterations,
+                },
+                trace_context=trace_context
+            )
+            
+        except Exception as e:
+            logger.error(f"RecommenderGraph error: {e}", exc_info=True)
+            state["response"] = "I had trouble searching for clothing. Please try again."
+            state["clothing_data"] = {"error": str(e)}
+            state["metadata"]["agent_used"] = "RecommenderGraph"
+            state["metadata"]["error"] = str(e)
         
         return state
+    
+    def _format_clothing_response(self, item_ids: List[str], query: str) -> str:
+        """Format a natural language response with clothing recommendations.
+        
+        Args:
+            item_ids: List of recommended item IDs
+            query: Original user query
+            
+        Returns:
+            Formatted response string
+        """
+        count = len(item_ids)
+        if count == 1:
+            return f"I found 1 item that matches your request. Check it out!"
+        elif count <= 5:
+            return f"I found {count} items that match what you're looking for!"
+        else:
+            return f"Great news! I found {count} items that could work for you. Take a look!"
     
     async def _handle_general_conversation(self, state: ConversationState) -> ConversationState:
         """Handle general conversation using LLM."""
@@ -342,25 +413,68 @@ class LangGraphService:
                 node=NodeName.CLASSIFY.value
             )
             
-            # Step 2: Stream tokens based on route
+            # Step 2: Stream based on route
             if final_route == Route.CLOTHING.value:
-                # FashionExpert doesn't support token streaming yet (tool calls involved)
-                # For now, emit full response as single chunk
+                # Use RecommenderGraph with streaming stages
                 yield StreamEvent(
                     type=StreamEventType.STATUS,
-                    content="Searching for clothing recommendations...",
+                    content="Starting clothing recommendation search...",
                     node=NodeName.CLOTHING.value
                 )
                 
-                response = await self.fashion_expert.get_clothing_recommendation(
-                    query=message,
-                    user_context=context or {}
-                )
-                full_response = response
+                # Stream recommender stages
+                item_ids = []
+                iterations = 0
+                fallback_message = None
+                
+                async for rec_event in self.recommender_graph.recommend_stream(
+                    user_query=message,
+                    user_id=user_id,
+                    session_id=session_id,
+                ):
+                    # Map recommender events to langgraph_service StreamEvents
+                    if rec_event.type == RecommenderEventType.STAGE:
+                        # Emit stage progress
+                        yield StreamEvent(
+                            type=StreamEventType.RECOMMENDER_STAGE,
+                            content={
+                                "stage": rec_event.data.get("stage"),
+                                "node": rec_event.data.get("node"),
+                                "iteration": rec_event.data.get("iteration"),
+                            },
+                            node=NodeName.CLOTHING.value
+                        )
+                    
+                    elif rec_event.type == RecommenderEventType.RESULT:
+                        # Capture final results
+                        item_ids = rec_event.data.get("item_ids", [])
+                        fallback_message = rec_event.data.get("message")
+                    
+                    elif rec_event.type == RecommenderEventType.DONE:
+                        iterations = rec_event.data.get("total_iterations", 1)
+                    
+                    elif rec_event.type == RecommenderEventType.ERROR:
+                        logger.error(f"Recommender error: {rec_event.data.get('error')}")
+                        fallback_message = "I had trouble searching. Please try again."
+                
+                # Format and emit final response
+                if item_ids:
+                    full_response = self._format_clothing_response(item_ids, message)
+                    yield StreamEvent(
+                        type=StreamEventType.CLOTHING_RESULT,
+                        content={
+                            "item_ids": item_ids,
+                            "count": len(item_ids),
+                            "iterations": iterations,
+                        },
+                        node=NodeName.CLOTHING.value
+                    )
+                else:
+                    full_response = fallback_message or "I couldn't find matching items."
                 
                 yield StreamEvent(
                     type=StreamEventType.CHUNK,
-                    content=response,
+                    content=full_response,
                     node=NodeName.CLOTHING.value
                 )
                 

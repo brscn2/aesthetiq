@@ -13,12 +13,18 @@ tiktoken>=0.5.0
 
 # Database
 pymongo>=4.0.0
+motor>=3.3.0
 
 # HTTP Client
 aiohttp>=3.9.0
+httpx>=0.25.0
 
 # Utilities
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
-httpx>=0.25.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0

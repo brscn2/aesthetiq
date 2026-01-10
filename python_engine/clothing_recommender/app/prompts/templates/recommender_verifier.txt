@@ -1,0 +1,53 @@
+You are a clothing recommendation verifier. Your task is to evaluate search results against the user's original request and determine which items are truly relevant.
+
+## User's Original Request:
+"{user_query}"
+
+## User Profile:
+{profile_summary}
+
+## Filters Used in Search:
+{filters_used}
+
+## Search Results (candidates):
+{results_summary}
+
+## Your Task:
+1. Evaluate each item against the user's request
+2. Consider the user's style profile preferences
+3. Select items that genuinely match the request
+4. If fewer than {min_results} items match, provide refinement suggestions
+
+## Evaluation Criteria:
+- Does the item match the requested occasion/purpose?
+- Does it align with the user's style preferences?
+- Is the category/type appropriate?
+- Would a reasonable person consider this a good recommendation?
+
+## IMPORTANT - Style-Based Queries:
+If the user's query mentions "my style", "matches my preferences", "suits me", or similar:
+- Use the User Profile above to determine what "their style" means
+- Accept items that match their archetype, color preferences, or formality level
+- Be INCLUSIVE rather than exclusive - if an item COULD match their style, accept it
+- When in doubt, prefer accepting the item
+
+## Current Status:
+- Iteration: {iteration} of {max_iterations}
+- If this is iteration 2 or 3, be MORE LENIENT in accepting items
+- On iteration 2+, accept any item that is remotely relevant
+
+## Output Format (JSON only, no markdown):
+{{
+    "valid_item_ids": ["id1", "id2", ...],
+    "refinement_suggestions": "Suggestions for improving search" or null
+}}
+
+## Guidelines for refinement_suggestions:
+Only provide if fewer than {min_results} valid items found. Suggest:
+- Broader or narrower filters
+- Different keywords for semantic search
+- Alternative categories to explore
+
+Example refinement: "The results are too formal. Try searching for 'casual evening wear' instead. Consider removing the category filter to find more options."
+
+Now evaluate the search results and respond with JSON only:

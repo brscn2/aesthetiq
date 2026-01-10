@@ -19,7 +19,7 @@ from app.core.logger import get_logger
 from app.core.config import get_settings
 from app.utils.helpers import generate_session_id, validate_session_id
 from app.schemas.requests import ConversationRequest, ConversationStreamRequest
-from app.schemas.responses import ConversationResponse, ConversationStreamResponse
+from app.schemas.responses import ConversationResponse, ConversationStreamResponse, ClothingData
 from app.agents.conversational_agent import ConversationalAgent
 
 router = APIRouter()
@@ -114,9 +114,22 @@ async def chat(
                 response=response,
             )
         
+        # Build clothing_data if present
+        clothing_data = None
+        raw_clothing = response.get("clothing_data")
+        if raw_clothing and isinstance(raw_clothing, dict):
+            clothing_data = ClothingData(
+                item_ids=raw_clothing.get("item_ids", []),
+                count=raw_clothing.get("count", 0),
+                iterations=raw_clothing.get("iterations", 1),
+                fallback=raw_clothing.get("fallback"),
+                error=raw_clothing.get("error"),
+            )
+        
         return ConversationResponse(
             message=response["message"],
             session_id=response["session_id"],
+            clothing_data=clothing_data,
             metadata=response.get("metadata", {})
         )
         

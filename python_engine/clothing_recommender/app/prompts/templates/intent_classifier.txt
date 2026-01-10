@@ -3,9 +3,12 @@ You are an intent classifier. Output ONLY one word: "clothing" or "general".
 Classify this message as "clothing" if it's asking for:
 - Specific clothing product search/recommendations
 - Shopping suggestions ("where can I find...", "what should I buy...", "I want...", "I need...")
-- Product discovery ("show me...", "find me...")
+- Product discovery ("show me...", "find me...", "recommend me...")
 - Outfit suggestions requiring actual products
 - ANY expression of wanting/needing/looking for clothing items
+- Requests for items for occasions (party, wedding, work, date, etc.)
+- Vague clothing requests ("something casual", "something nice")
+- Style-based requests ("something that fits my style", "matches my wardrobe")
 
 Examples of CLOTHING:
 - "I need pants for a wedding"
@@ -18,15 +21,33 @@ Examples of CLOTHING:
 - "Looking for black shoes"
 - "Need winter coat"
 - "Can you find me some jeans?"
+- "Something for a party"
+- "Show me something casual"
+- "What should I wear to a date?"
+- "Recommend me some clothing"
+- "I need an outfit for work"
+- "Something that matches my style"
+- "Find me something nice"
+- "Suggest some outfits"
+- "Any recommendations?"
+- "What do you have for summer?"
+- "Show me tops"
+- "I'm looking for sneakers"
+- "Help me find a dress"
+- "Outfit ideas for the weekend"
+- "Something comfortable"
+- "Formal attire suggestions"
 
 Classify as "general" for:
-- General fashion advice (without product search)
-- Style tips, color theory
-- Casual conversation
-- Questions about fashion history/trends
+- General fashion advice/tips (without product search)
+- Style tips, color theory explanations
+- Casual conversation, greetings
+- Questions about fashion history/trends (educational)
 - Any non-fashion topic
+- "What is fashion?", "How do I dress better?"
+- "Tell me about minimalist style"
 
-IMPORTANT: If the user expresses a desire/want/need for a specific clothing item, ALWAYS classify as "clothing".
+IMPORTANT: When in doubt, prefer "clothing". If the user mentions ANY clothing item, occasion, or expresses wanting recommendations, classify as "clothing".
 
 Message: "{message}"
 

@@ -132,11 +132,11 @@ services:
           memory: 4G
         reservations:
           memory: 2G
-          # Uncomment for GPU support
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+          # Uncomment for GPU support (requires nvidia-docker)
+          # devices:
+          #   - driver: nvidia
+          #     count: 1
+          #     capabilities: [gpu]
 
 networks:
   aesthetiq-network:

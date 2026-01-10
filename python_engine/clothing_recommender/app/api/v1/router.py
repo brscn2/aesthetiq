@@ -1,7 +1,7 @@
 """API v1 router configuration for Clothing Recommender."""
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, conversational_agent
+from app.api.v1.endpoints import health, conversational_agent, recommender
 
 api_router = APIRouter()
 
@@ -14,4 +14,10 @@ api_router.include_router(
     conversational_agent.router,
     prefix="/agent",
     tags=["conversational-agent"]
+)
+
+api_router.include_router(
+    recommender.router,
+    prefix="/recommend",
+    tags=["recommender"]
 )
