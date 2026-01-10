@@ -139,9 +139,9 @@ def _format_results_for_verification(results: list[WardrobeItem]) -> str:
             parts.append(f"Brand: {brand}")
         if color := item.get("colorHex"):
             parts.append(f"Color: {color}")
-        if desc := item.get("description"):
-            # Truncate long descriptions
-            parts.append(f"Description: {desc[:100]}{'...' if len(desc) > 100 else ''}")
+        if notes := item.get("notes"):
+            # Truncate long notes
+            parts.append(f"Notes: {notes[:100]}{'...' if len(notes) > 100 else ''}")
         if score := item.get("score"):
             parts.append(f"Score: {score:.3f}")
         

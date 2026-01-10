@@ -63,6 +63,7 @@ class WardrobeItem(TypedDict, total=False):
     subCategory: Optional[str]
     brand: Optional[str]
     colorHex: Optional[str]
+    notes: Optional[str]            # User notes/description for the item
     isFavorite: bool
     score: Optional[float]          # Vector search score
 
