@@ -15,6 +15,7 @@ services:
       # Override service URLs to point to internal Docker network
       - FACE_ANALYSIS_URL=http://face_analysis:8001
       - CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
+      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
     networks:
       - aesthetiq-network
     depends_on:
@@ -101,6 +102,41 @@ services:
           memory: 2G
         reservations:
           memory: 1G
+
+  # =============================================================================
+  # EMBEDDING SERVICE - Multimodal CLIP Embeddings (Port 8004)
+  # =============================================================================
+  embedding_service:
+    build:
+      context: ./embedding_service
+      dockerfile: Dockerfile
+    container_name: aesthetiq-embedding
+    # Expose port for local scripts (embed_commerce_items.py)
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - LOG_LEVEL=INFO
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8004/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s  # Model loading takes time
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+          # Uncomment for GPU support
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 networks:
   aesthetiq-network:

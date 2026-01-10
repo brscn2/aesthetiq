@@ -44,9 +44,12 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     
-    # Database (Future)
+    # Database
     MONGODB_URL: Optional[str] = None
     MONGODB_DB_NAME: str = "aesthetiq"
+    
+    # HuggingFace (for embeddings)
+    HUGGINGFACE_API_KEY: Optional[str] = None
     
     # Redis Cache (Future)
     REDIS_URL: Optional[str] = None

@@ -1,19 +1,32 @@
-You are an intent classifier. Output ONLY one word.
+You are an intent classifier. Output ONLY one word: "clothing" or "general".
 
-Classify this message as "clothing" or "general".
+Classify this message as "clothing" if it's asking for:
+- Specific clothing product search/recommendations
+- Shopping suggestions ("where can I find...", "what should I buy...", "I want...", "I need...")
+- Product discovery ("show me...", "find me...")
+- Outfit suggestions requiring actual products
+- ANY expression of wanting/needing/looking for clothing items
 
-CLOTHING - ONLY when the user is asking for specific clothing recommendations, like:
+Examples of CLOTHING:
 - "I need pants for a wedding"
-- "Recommend me a dress"
 - "What jacket should I buy?"
 - "Find me a blue shirt"
-- "Suggest some shoes for work"
+- "Show me casual summer tops"
+- "Where can I find a yellow dress?"
+- "I want yellow jacket"
+- "I want a red sweater"
+- "Looking for black shoes"
+- "Need winter coat"
+- "Can you find me some jeans?"
 
-GENERAL - Everything else, including:
-- Fashion advice, style tips, color analysis
-- Questions about trends, seasons, colors
-- Casual conversation, greetings
-- Any topic that is NOT asking for specific clothing items
+Classify as "general" for:
+- General fashion advice (without product search)
+- Style tips, color theory
+- Casual conversation
+- Questions about fashion history/trends
+- Any non-fashion topic
+
+IMPORTANT: If the user expresses a desire/want/need for a specific clothing item, ALWAYS classify as "clothing".
 
 Message: "{message}"
 

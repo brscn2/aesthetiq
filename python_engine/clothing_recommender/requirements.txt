@@ -11,6 +11,12 @@ langfuse>=2.0.0
 openai>=1.0.0
 tiktoken>=0.5.0
 
+# Database
+pymongo>=4.0.0
+
+# HTTP Client
+aiohttp>=3.9.0
+
 # Utilities
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
