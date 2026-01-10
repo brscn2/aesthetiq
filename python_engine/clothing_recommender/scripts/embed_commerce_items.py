@@ -132,6 +132,10 @@ class CommerceItemEmbedder:
             # For now, just use the hex. You could add color name mapping
             parts.append(f"color {item['colorHex']}")
         
+        # User notes/description (if available)
+        if "notes" in item and item["notes"]:
+            parts.append(item["notes"])
+        
         # Additional tags
         if "tags" in item and item["tags"]:
             parts.extend(item["tags"])
