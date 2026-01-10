@@ -1,5 +1,5 @@
 """LangGraph service for workflow orchestration."""
-from typing import Optional, Dict, Any, List, TypedDict, Literal, AsyncIterator
+from typing import Optional, Dict, Any, List, TypedDict, AsyncIterator
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
@@ -22,6 +22,23 @@ class StreamEventType(str, Enum):
     CLOTHING_ITEM = "clothing_item"
     METADATA = "metadata"
     DONE = "done"
+    ERROR = "error"
+
+
+# Route constants to avoid magic strings
+class Route(str, Enum):
+    """Workflow route identifiers."""
+    CLOTHING = "clothing"
+    GENERAL = "general"
+
+
+# Node name constants
+class NodeName(str, Enum):
+    """Workflow node identifiers."""
+    CLASSIFY = "classify"
+    CLOTHING = "clothing"
+    GENERAL = "general"
+    END = "end"
 
 
 @dataclass
@@ -41,7 +58,8 @@ class StreamEvent:
 
 class ConversationState(TypedDict):
     """State for conversation workflow."""
-    message: str
+    messages: List[Dict[str, Any]]  # Chat history for DB persistence
+    message: str  # Current user message (helper field)
     user_id: str
     session_id: str
     context: Dict[str, Any]
@@ -55,6 +73,8 @@ class ConversationState(TypedDict):
 class LangGraphService:
     """Service for managing LangGraph workflows and agent orchestration."""
     
+    WORKFLOW_VERSION = "1.0"
+    
     def __init__(self, llm_service: LangChainService):
         """Initialize LangGraph service."""
         self.llm_service = llm_service
@@ -67,6 +87,36 @@ class LangGraphService:
         # The graph is deterministic given the code, so it is safe to reuse.
         self.workflow = self.create_conversation_workflow()
         logger.info("LangGraphService initialized")
+    
+    def _create_initial_state(
+        self,
+        message: str,
+        user_id: str,
+        session_id: str,
+        context: Optional[Dict[str, Any]] = None,
+        trace_context: Optional[Dict[str, Any]] = None
+    ) -> ConversationState:
+        """
+        Create initial state for workflow execution.
+        
+        NOTE: messages history is NOT passed in request body.
+        It will be loaded from database (e.g., Postgres) via a Checkpointer.
+        """
+        return {
+            "messages": [],  # Loaded from DB, not request
+            "message": message,
+            "user_id": user_id,
+            "session_id": session_id,
+            "context": context or {},
+            "route": "",
+            "response": "",
+            "clothing_data": None,
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "workflow_version": self.WORKFLOW_VERSION
+            },
+            "trace_context": trace_context
+        }
     
     async def _classify_intent(self, state: ConversationState) -> ConversationState:
         """Classify user intent: fashion-related or general conversation."""
@@ -88,12 +138,12 @@ class LangGraphService:
             
             route = classification_result.strip().lower()
             
-            if route not in ["clothing", "general"]:
+            if route not in [Route.CLOTHING.value, Route.GENERAL.value]:
                 logger.warning(f"Invalid classification result: {route}, defaulting to general")
-                if "clothing" in route:
-                    route = "clothing"
+                if Route.CLOTHING.value in route:
+                    route = Route.CLOTHING.value
                 else:
-                    route = "general"
+                    route = Route.GENERAL.value
             
             logger.info(f"Intent classified as: {route}")
             state["route"] = route
@@ -109,8 +159,8 @@ class LangGraphService:
             
         except Exception as e:
             logger.error(f"Error in intent classification: {e}, defaulting to general")
-            state["route"] = "general"
-            state["metadata"]["intent_classification"] = "general"
+            state["route"] = Route.GENERAL.value
+            state["metadata"]["intent_classification"] = Route.GENERAL.value
             state["metadata"]["classification_error"] = str(e)
         
         return state
@@ -177,9 +227,13 @@ class LangGraphService:
         
         return state
     
-    def _route_decision(self, state: ConversationState) -> Literal["clothing", "general"]:
+    def _route_decision(self, state: ConversationState) -> str:
         """Determine which path to take based on classification."""
-        route = state.get("route", "general")
+        route = state.get("route", Route.GENERAL.value)
+        # Validate route is a known value
+        if route not in [Route.CLOTHING.value, Route.GENERAL.value]:
+            logger.warning(f"Unknown route '{route}', defaulting to general")
+            route = Route.GENERAL.value
         logger.info(f"Routing to: {route}")
         return route
     
@@ -189,23 +243,23 @@ class LangGraphService:
         
         workflow = StateGraph(ConversationState)
         
-        workflow.add_node("classify", self._classify_intent)
-        workflow.add_node("clothing", self._handle_clothing_query)
-        workflow.add_node("general", self._handle_general_conversation)
+        workflow.add_node(NodeName.CLASSIFY.value, self._classify_intent)
+        workflow.add_node(NodeName.CLOTHING.value, self._handle_clothing_query)
+        workflow.add_node(NodeName.GENERAL.value, self._handle_general_conversation)
         
-        workflow.set_entry_point("classify")
+        workflow.set_entry_point(NodeName.CLASSIFY.value)
         
         workflow.add_conditional_edges(
-            "classify",
+            NodeName.CLASSIFY.value,
             self._route_decision,
             {
-                "clothing": "clothing",
-                "general": "general"
+                Route.CLOTHING.value: NodeName.CLOTHING.value,
+                Route.GENERAL.value: NodeName.GENERAL.value
             }
         )
         
-        workflow.add_edge("clothing", END)
-        workflow.add_edge("general", END)
+        workflow.add_edge(NodeName.CLOTHING.value, END)
+        workflow.add_edge(NodeName.GENERAL.value, END)
         
         compiled = workflow.compile()
         logger.info("Conversation workflow compiled successfully")
@@ -221,25 +275,16 @@ class LangGraphService:
         trace_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a message through the workflow."""
-        workflow = self.workflow
-        
-        initial_state: ConversationState = {
-            "message": message,
-            "user_id": user_id,
-            "session_id": session_id,
-            "context": context or {},
-            "route": "",
-            "response": "",
-            "clothing_data": None,
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "workflow_version": "1.0"
-            },
-            "trace_context": trace_context
-        }
+        initial_state = self._create_initial_state(
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            context=context,
+            trace_context=trace_context
+        )
         
         logger.info(f"Executing workflow for message: {message[:50]}...")
-        result = await workflow.ainvoke(initial_state)
+        result = await self.workflow.ainvoke(initial_state)
         
         logger.info(f"Workflow completed. Route: {result['route']}")
         
@@ -258,187 +303,115 @@ class LangGraphService:
         context: Optional[Dict[str, Any]] = None,
         trace_context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[StreamEvent]:
-        """Stream a message through the workflow with progress updates."""
+        """Stream a message through the workflow with token-by-token streaming.
+        
+        NOTE: LangGraph's astream() streams node completions, not tokens.
+        For true token streaming, we:
+        1. Run classification through the graph
+        2. Stream tokens directly from the LLM based on the route
+        """
         logger.info(f"Streaming workflow for message: {message[:50]}...")
         
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Analyzing your request...",
-            node="classify"
-        )
-        
-        state: ConversationState = {
-            "message": message,
-            "user_id": user_id,
-            "session_id": session_id,
-            "context": context or {},
-            "route": "",
-            "response": "",
-            "clothing_data": None,
-            "metadata": {},
-            "trace_context": trace_context
-        }
-        
-        state = await self._classify_intent(state)
-        route = state["route"]
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"route": route, "session_id": session_id},
-            node="classify"
-        )
-        
-        if route == "clothing":
-            full_message = ""
-            async for event, msg_part in self._stream_clothing_query(message, context, trace_context):
-                if msg_part:
-                    full_message += msg_part
-                yield event
-        else:
-            full_message = ""
-            async for event, msg_part in self._stream_general_conversation(message, context, trace_context):
-                if msg_part:
-                    full_message += msg_part
-                yield event
-        
-        yield StreamEvent(
-            type=StreamEventType.DONE,
-            content={
-                "route": route,
-                "session_id": session_id,
-                "message": full_message
-            },
-            node="end"
-        )
-    
-    async def _stream_clothing_query(
-        self,
-        message: str,
-        context: Optional[Dict[str, Any]],
-        trace_context: Optional[Dict[str, Any]]
-    ) -> AsyncIterator[tuple[StreamEvent, Optional[str]]]:
-        """Stream clothing recommendations with progress updates."""
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Searching clothing database...",
-            node="clothing"
-        ), None
-        
-        self.langfuse.log_event(
-            name="clothing_expert_start",
-            input_data={"query": message},
-            trace_context=trace_context
-        )
-        
-        clothing_data = await self.fashion_expert.get_clothing_recommendation(
-            query=message,
-            user_context=context or {}
-        )
-        
-        recommendations = clothing_data.get("recommendations", [])
-        styling_tips = clothing_data.get("styling_tips", [])
-        
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content=f"Found {len(recommendations)} recommendations",
-            node="clothing"
-        ), None
-        
-        yield StreamEvent(
-            type=StreamEventType.CLOTHING_ITEM,
-            content={
-                "recommendations": [
-                    {
-                        "index": i,
-                        "item": rec["item"],
-                        "color": rec["color"],
-                        "style": rec["style"],
-                        "reason": rec["reason"],
-                        "price_range": rec["price_range"],
-                        "where_to_buy": rec["where_to_buy"],
-                        "hex_color": rec.get("hex_color")
-                    }
-                    for i, rec in enumerate(recommendations, 1)
-                ],
-                "styling_tips": styling_tips
-            },
-            node="clothing"
-        ), None
-        
-        full_message = await self._format_clothing_response(clothing_data)
-        
-        self.langfuse.log_event(
-            name="clothing_expert_complete",
-            input_data={"query": message},
-            output_data={
-                "recommendations_count": len(recommendations),
-                "recommendations": [
-                    {
-                        "item": rec["item"],
-                        "color": rec["color"],
-                        "style": rec["style"],
-                        "reason": rec["reason"],
-                        "price_range": rec["price_range"],
-                        "where_to_buy": rec["where_to_buy"],
-                        "hex_color": rec.get("hex_color")
-                    }
-                    for rec in recommendations
-                ],
-                "styling_tips": styling_tips
-            },
-            trace_context=trace_context
-        )
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"message_complete": True},
-            node="clothing"
-        ), full_message
-    
-    async def _stream_general_conversation(
-        self,
-        message: str,
-        context: Optional[Dict[str, Any]],
-        trace_context: Optional[Dict[str, Any]]
-    ) -> AsyncIterator[tuple[StreamEvent, Optional[str]]]:
-        """Stream general conversation response from LLM."""
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Generating response...",
-            node="general"
-        ), None
-        
-        self.langfuse.log_event(
-            name="general_conversation_start",
-            input_data={"message": message},
-            trace_context=trace_context
-        )
-        
-        system_prompt = prompt_manager.get_template("general_conversation")
-        
-        full_response = ""
-        async for chunk in self.llm_service.stream_response(
+        initial_state = self._create_initial_state(
             message=message,
+            user_id=user_id,
+            session_id=session_id,
             context=context,
-            system_prompt=system_prompt
-        ):
-            if chunk:
-                full_response += chunk
+            trace_context=trace_context
+        )
+
+        # Track full response for final DONE event (fallback if frontend streaming fails)
+        full_response = ""
+        final_route = ""
+
+        try:
+            # Step 1: Run classification only
+            yield StreamEvent(
+                type=StreamEventType.STATUS,
+                content="Understanding your request...",
+                node=NodeName.CLASSIFY.value
+            )
+            
+            # Classify intent
+            state = await self._classify_intent(initial_state)
+            final_route = state["route"]
+            
+            yield StreamEvent(
+                type=StreamEventType.METADATA,
+                content={"route": final_route, "session_id": session_id},
+                node=NodeName.CLASSIFY.value
+            )
+            
+            # Step 2: Stream tokens based on route
+            if final_route == Route.CLOTHING.value:
+                # FashionExpert doesn't support token streaming yet (tool calls involved)
+                # For now, emit full response as single chunk
+                yield StreamEvent(
+                    type=StreamEventType.STATUS,
+                    content="Searching for clothing recommendations...",
+                    node=NodeName.CLOTHING.value
+                )
+                
+                response = await self.fashion_expert.get_clothing_recommendation(
+                    query=message,
+                    user_context=context or {}
+                )
+                full_response = response
+                
                 yield StreamEvent(
                     type=StreamEventType.CHUNK,
-                    content=chunk,
-                    node="general"
-                ), chunk
+                    content=response,
+                    node=NodeName.CLOTHING.value
+                )
+                
+            else:  # General conversation - stream token by token
+                yield StreamEvent(
+                    type=StreamEventType.STATUS,
+                    content="Generating response...",
+                    node=NodeName.GENERAL.value
+                )
+                
+                system_prompt = prompt_manager.get_template("general_conversation")
+                
+                async for chunk in self.llm_service.stream_response(
+                    message=message,
+                    context=context,
+                    system_prompt=system_prompt
+                ):
+                    full_response += chunk
+                    yield StreamEvent(
+                        type=StreamEventType.CHUNK,
+                        content=chunk,
+                        node=NodeName.GENERAL.value
+                    )
+            
+            # Log completion
+            self.langfuse.log_event(
+                name=f"{final_route}_stream_complete",
+                input_data={"message": message},
+                output_data={"response_length": len(full_response)},
+                trace_context=trace_context
+            )
+            
+            # DONE event contains full response as fallback for frontend streaming errors
+            yield StreamEvent(
+                type=StreamEventType.DONE,
+                content={
+                    "session_id": session_id,
+                    "route": final_route,
+                    "full_response": full_response
+                },
+                node=NodeName.END.value
+            )
         
-        self.langfuse.log_event(
-            name="general_conversation_complete",
-            input_data={"message": message},
-            output_data={"response_length": len(full_response)},
-            trace_context=trace_context
-        )
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"message_complete": True},
-            node="general"
-        ), None
+        except Exception as e:
+            logger.error(f"Error during streaming workflow: {e}", exc_info=True)
+            yield StreamEvent(
+                type=StreamEventType.ERROR,
+                content={
+                    "error": str(e),
+                    "session_id": session_id,
+                    "partial_response": full_response
+                },
+                node=NodeName.END.value
+            )

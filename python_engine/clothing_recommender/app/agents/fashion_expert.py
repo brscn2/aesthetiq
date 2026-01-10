@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.logger import get_logger
 from app.tools.commerce_search import create_commerce_search_tool
+from app.prompts.prompt_manager import PromptManager
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,7 @@ class FashionExpert:
             llm_service: LangChainService instance for LLM access
         """
         self.llm_service = llm_service
+        self.prompt_manager = PromptManager()
         
         # Initialize tools (exclusive to FashionExpert)
         self.tools = [
@@ -84,21 +86,11 @@ class FashionExpert:
             logger.info(f"Tool result: {tool_result[:200]}...")
             
             # Step 2: Use LLM to format the response nicely
-            system_prompt = f"""You are a fashion expert assistant. 
-
-The user asked: "{query}"
-
-Our product search found these results:
-{tool_result}
-
-Your job:
-1. Present these products in a friendly, conversational way
-2. Highlight key details (category, brand, color, similarity score)
-3. Mention image URLs if available
-4. If no products found, politely tell the user and suggest alternatives
-5. ONLY mention products from the search results - don't make up products
-
-Be enthusiastic and helpful!"""
+            system_prompt = self.prompt_manager.get_template(
+                "fashion_expert_search",
+                query=query,
+                tool_result=tool_result
+            )
             
             # Use LLM directly from service
             llm = self.llm_service.llm
@@ -122,14 +114,5 @@ Be enthusiastic and helpful!"""
     def _get_fallback_recommendation(self, query: str) -> str:
         """Fallback recommendation when tools fail."""
         logger.warning("Using fallback recommendation (no tools)")
-        return f"""I'd love to help you with '{query}'! 
-
-However, I'm currently experiencing technical difficulties accessing our product catalog. 
-Please try again in a moment, or rephrase your question to be more specific about what you're looking for.
-
-For example:
-- "Show me blue jeans"
-- "Find casual summer tops"
-- "What yellow jackets are available?"
-"""
+        return self.prompt_manager.get_template("fashion_expert_fallback", query=query)
 

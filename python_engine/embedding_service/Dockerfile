@@ -1,5 +1,5 @@
 # Multi-stage build for embedding service with CUDA support
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 as base
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
