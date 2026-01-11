@@ -62,6 +62,8 @@ export class WardrobeService {
     colorHex?: string,
     brandId?: string,
     search?: string,
+    seasonalPalette?: string,
+    minPaletteScore?: number,
   ): Promise<WardrobeItem[]> {
     const filter: any = { userId };
     if (category) {
@@ -81,6 +83,14 @@ export class WardrobeService {
         { notes: searchRegex },
       ];
     }
+    
+    // Filter by seasonal palette score
+    if (seasonalPalette) {
+      const threshold = minPaletteScore ?? 0.6;
+      const paletteKey = `seasonalPaletteScores.${seasonalPalette}`;
+      filter[paletteKey] = { $gte: threshold };
+    }
+    
     return this.wardrobeItemModel.find(filter).populate('brandId').exec();
   }
 

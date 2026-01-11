@@ -76,4 +76,17 @@ export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 WardrobeItemSchema.index({ userId: 1, category: 1 });
 WardrobeItemSchema.index({ userId: 1, colors: 1 });
 WardrobeItemSchema.index({ brandId: 1 });
+// Index for seasonal palette queries
+WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_AUTUMN': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_SPRING': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.COOL_WINTER': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.COOL_SUMMER': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.DARK_AUTUMN': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.DARK_WINTER': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.LIGHT_SPRING': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.LIGHT_SUMMER': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.MUTED_AUTUMN': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.MUTED_SUMMER': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.BRIGHT_SPRING': 1 });
+WardrobeItemSchema.index({ 'seasonalPaletteScores.BRIGHT_WINTER': 1 });
 
