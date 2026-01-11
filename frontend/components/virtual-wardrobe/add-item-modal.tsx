@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { Upload, Check, Loader2, Palette, ChevronDown } from "lucide-react"
+import { Upload, Check, Loader2, Palette, ChevronDown, Sparkles } from "lucide-react"
 import { HexColorPicker } from "react-colorful"
 import { useForm } from "react-hook-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -19,6 +19,7 @@ import { Category, CreateWardrobeItemDto } from "@/types/api"
 import { toast } from "sonner"
 import { backgroundRemovalService } from "@/lib/background-removal"
 import { getClosestColorName } from "@/lib/colors"
+import { calculateSeasonalPaletteScores, getBestMatchingPalettes, getPaletteDisplayName, formatScore, getScoreBgColor, getScoreColor } from "@/lib/seasonal-colors"
 import "@/styles/color-picker.css"
 
 interface AddItemModalProps {
@@ -1123,12 +1124,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   </>
                 ) : analysisComplete ? (
                   <>
-                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    <Sparkles className="mr-2 h-4 w-4" />
                     AI Analysis Complete
                   </>
                 ) : (
                   <>
-                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    <Sparkles className="mr-2 h-4 w-4" />
                     Analyze with AI
                   </>
                 )}
@@ -1337,6 +1338,38 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 )}
               </div>
 
+              {/* Seasonal Palette Preview */}
+              {colors && colors.length > 0 && (
+                <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                    <span className="text-muted-foreground uppercase tracking-wider">Best Palettes</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(() => {
+                      const scores = calculateSeasonalPaletteScores(colors)
+                      const bestPalettes = getBestMatchingPalettes(scores, 0.6).slice(0, 4)
+                      
+                      if (bestPalettes.length === 0) {
+                        return <span className="text-xs text-muted-foreground">No strong matches</span>
+                      }
+                      
+                      return bestPalettes.map(({ palette, score }) => (
+                        <div
+                          key={palette}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs ${getScoreBgColor(score)}`}
+                        >
+                          <span>{getPaletteDisplayName(palette)}</span>
+                          <span className={`font-medium ${getScoreColor(score)}`}>
+                            {formatScore(score)}
+                          </span>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="notes" className="text-xs uppercase tracking-wider text-muted-foreground">
                   Notes (Optional)
@@ -1390,21 +1423,4 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   )
 }
 
-function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-    </svg>
-  )
-}
+
