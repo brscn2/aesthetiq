@@ -58,6 +58,16 @@ export class WardrobeItem {
     default: null,
   })
   seasonalPaletteScores?: SeasonalPaletteScores;
+
+  /**
+   * CLIP image embedding (512-dimensional vector)
+   * Used for similarity search and recommendations
+   */
+  @Prop({
+    type: [Number],
+    default: null,
+  })
+  embedding?: number[];
 }
 
 export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);

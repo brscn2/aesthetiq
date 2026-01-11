@@ -10,6 +10,7 @@ import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
 import { calculateSeasonalPaletteScores } from '../common/seasonal-colors';
+import { EmbeddingService } from '../ai/embedding.service';
 
 @Injectable()
 export class WardrobeService {
@@ -19,6 +20,7 @@ export class WardrobeService {
     @InjectModel(WardrobeItem.name)
     private wardrobeItemModel: Model<WardrobeItemDocument>,
     private azureStorageService: AzureStorageService,
+    private embeddingService: EmbeddingService,
   ) {}
 
   async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
@@ -27,14 +29,29 @@ export class WardrobeService {
       ? calculateSeasonalPaletteScores(createWardrobeItemDto.colors)
       : null;
 
+    // Get image embedding from Python service (non-blocking, fails gracefully)
+    const imageUrl = createWardrobeItemDto.processedImageUrl || createWardrobeItemDto.imageUrl;
+    let embedding: number[] | null = null;
+    
+    try {
+      this.logger.log(`Fetching CLIP embedding for image: ${imageUrl}`);
+      embedding = await this.embeddingService.getImageEmbedding(imageUrl);
+      if (embedding) {
+        this.logger.log(`Embedding generated (${embedding.length} dimensions)`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to get embedding, continuing without: ${error.message}`);
+    }
+
     // Convert brandId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
       brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
       seasonalPaletteScores,
+      embedding,
     };
     
-    this.logger.log(`Creating wardrobe item with seasonal palette scores`);
+    this.logger.log(`Creating wardrobe item with seasonal palette scores${embedding ? ' and embedding' : ''}`);
     const createdItem = new this.wardrobeItemModel(itemData);
     return createdItem.save();
   }
