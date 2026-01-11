@@ -1,4 +1,4 @@
-# Multi-stage build for embedding service with CUDA support
+# CUDA-enabled build for embedding service (GPU support)
 FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS base
 
 # Set environment variables
@@ -10,22 +10,21 @@ ENV PYTHONUNBUFFERED=1 \
 # Install Python 3.11
 RUN apt-get update && apt-get install -y \
     python3.11 \
-    python3.11-dev \
+    python3.11-venv \
     python3-pip \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlinks (force overwrite if exists)
-RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
-    ln -sf /usr/bin/python3.11 /usr/bin/python3
+# Set Python 3.11 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
 # Upgrade pip
-RUN python -m pip install --upgrade pip
+RUN pip install --upgrade pip
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
