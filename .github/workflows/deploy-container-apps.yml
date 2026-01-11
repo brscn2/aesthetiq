@@ -97,7 +97,4 @@ jobs:
             --image $REGISTRY/gateway:latest \
             --target-port 8000 \
             --ingress external \
-            --env-vars \
-              FACE_ANALYSIS_URL=http://aesthetiq-face-analysis:8001 \
-              CLOTHING_RECOMMENDER_URL=http://aesthetiq-clothing-recommender:8002 \
-              EMBEDDING_SERVICE_URL=http://aesthetiq-embedding-service:8004
+            --env-vars FACE_ANALYSIS_URL=http://aesthetiq-face-analysis:8001 CLOTHING_RECOMMENDER_URL=http://aesthetiq-clothing-recommender:8002 EMBEDDING_SERVICE_URL=http://aesthetiq-embedding-service:8004
