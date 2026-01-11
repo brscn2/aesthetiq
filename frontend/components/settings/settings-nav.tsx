@@ -1,7 +1,6 @@
 "use client"
 
 import { User, Fingerprint, Sliders, Bell, CreditCard, Shield, Loader2 } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useUser } from "@/contexts/user-context"
@@ -63,10 +62,19 @@ export function SettingsNav({ activeSection, onSectionChange, onClose }: Setting
         ) : (
           <>
             <div className="relative">
-              <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-primary/20">
-                <AvatarImage src={user?.avatarUrl || "/professional-portrait-photo-fashion.jpg"} alt="User" />
-                <AvatarFallback>{user?.name ? getInitials(user.name) : 'U'}</AvatarFallback>
-              </Avatar>
+              <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full border-2 border-primary/20 overflow-hidden bg-muted flex items-center justify-center">
+                {user?.avatarUrl ? (
+                  <img 
+                    src={user.avatarUrl} 
+                    alt="User" 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-lg sm:text-xl font-medium text-foreground">
+                    {user?.name ? getInitials(user.name) : 'U'}
+                  </span>
+                )}
+              </div>
               {user?.subscriptionStatus === 'PRO' && (
                 <div className="absolute -bottom-1 -right-1 flex h-5 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-1.5 text-[9px] font-bold text-white shadow-lg">
                   PRO

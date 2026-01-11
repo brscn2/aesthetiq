@@ -87,6 +87,16 @@ export class UsersService {
     return user as User;
   }
 
+  async updateByClerkId(clerkId: string, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.userModel
+      .findOneAndUpdate({ clerkId }, updateUserDto, { new: true })
+      .exec();
+    if (!user) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
+    return user;
+  }
+
   async getSettingsByClerkId(clerkId: string): Promise<User['settings']> {
     // Use findByClerkId which will auto-create user if needed
     const user = await this.findByClerkId(clerkId);

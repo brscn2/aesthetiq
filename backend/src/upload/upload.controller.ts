@@ -1,7 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Query,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
@@ -9,9 +11,12 @@ import {
   HttpStatus,
   Logger,
   PayloadTooLargeException,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
+import type { Response as ExpressResponse } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { uploadConfig, ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE } from '../config/upload.config';
 import { AzureStorageService } from './azure-storage.service';
 
@@ -71,7 +76,7 @@ export class UploadController {
     if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       this.logger.warn(`Invalid file type uploaded: ${file.mimetype}`);
       throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and HEIC images are allowed.`
+        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and GIF images are allowed.`
       );
     }
 
@@ -160,7 +165,7 @@ export class UploadController {
     if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
       this.logger.warn(`Invalid file type uploaded for brand logo: ${file.mimetype}`);
       throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and HEIC images are allowed.`
+        `Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, and GIF images are allowed.`
       );
     }
 
@@ -191,6 +196,44 @@ export class UploadController {
       throw new BadRequestException(
         error.message || 'Failed to upload brand logo to Azure Blob Storage'
       );
+    }
+  }
+
+  @Get('proxy')
+  @ApiOperation({ summary: 'Proxy an image from Azure Blob Storage with CORS headers' })
+  @ApiQuery({ name: 'url', required: true, description: 'The Azure Blob Storage URL to proxy' })
+  @ApiResponse({ status: 200, description: 'Image returned with CORS headers' })
+  @ApiResponse({ status: 400, description: 'Invalid or missing URL' })
+  async proxyImage(@Query('url') url: string, @Res() res: ExpressResponse) {
+    if (!url) {
+      throw new BadRequestException('URL parameter is required');
+    }
+
+    // Validate that the URL is from our Azure Blob Storage
+    if (!url.includes('blob.core.windows.net')) {
+      throw new BadRequestException('Only Azure Blob Storage URLs are allowed');
+    }
+
+    try {
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new BadRequestException(`Failed to fetch image: ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      res.set({
+        'Content-Type': contentType,
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=31536000',
+      });
+
+      res.send(buffer);
+    } catch (error) {
+      this.logger.error(`Failed to proxy image: ${error.message}`);
+      throw new BadRequestException('Failed to proxy image');
     }
   }
 }

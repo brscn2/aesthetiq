@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { SeasonalPalette } from '../../common/seasonal-colors';
 
 export type WardrobeItemDocument = WardrobeItem & Document;
 
@@ -9,6 +10,9 @@ export enum Category {
   SHOE = 'SHOE',
   ACCESSORY = 'ACCESSORY',
 }
+
+// Type for seasonal palette scores
+export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
 
 @Schema({ timestamps: true })
 export class WardrobeItem {
@@ -33,20 +37,33 @@ export class WardrobeItem {
   @Prop({ type: Types.ObjectId, ref: 'Brand' })
   brandId?: Types.ObjectId;
 
+  @Prop({ type: [String], default: [] })
+  colors: string[];
+
   @Prop()
-  colorHex?: string;
+  notes?: string;
 
   @Prop({ default: false })
   isFavorite: boolean;
 
   @Prop()
   lastWorn?: Date;
+
+  /**
+   * Seasonal color palette compatibility scores (0-1)
+   * Calculated based on the item's colors
+   */
+  @Prop({
+    type: Object,
+    default: null,
+  })
+  seasonalPaletteScores?: SeasonalPaletteScores;
 }
 
 export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 
 // Create indexes for efficient queries
 WardrobeItemSchema.index({ userId: 1, category: 1 });
-WardrobeItemSchema.index({ userId: 1, colorHex: 1 });
+WardrobeItemSchema.index({ userId: 1, colors: 1 });
 WardrobeItemSchema.index({ brandId: 1 });
 

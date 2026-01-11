@@ -6,6 +6,7 @@ import { Upload, Check, Loader2, Palette, ChevronDown } from "lucide-react"
 import { HexColorPicker } from "react-colorful"
 import { useForm } from "react-hook-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useAuth } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -17,10 +18,8 @@ import { useApi } from "@/lib/api"
 import { Category, CreateWardrobeItemDto } from "@/types/api"
 import { toast } from "sonner"
 import { backgroundRemovalService } from "@/lib/background-removal"
+import { getClosestColorName } from "@/lib/colors"
 import "@/styles/color-picker.css"
-
-// Temporary userId - in production, get from auth context
-const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
 
 interface AddItemModalProps {
   isOpen: boolean
@@ -33,7 +32,7 @@ interface FormData {
   category: Category
   brand?: string
   subCategory?: string
-  colorHex: string
+  colors: string[]
   notes?: string
   removeBackground: boolean
 }
@@ -49,11 +48,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const [processingProgress, setProcessingProgress] = useState(0)
   const [smoothProgress, setSmoothProgress] = useState(0)
   const [processedImageBlob, setProcessedImageBlob] = useState<Blob | null>(null)
-  const [bgRemovalError, setBgRemovalError] = useState<string | null>(null)
-  
-  // Library loading state
-  const [isLibraryLoading, setIsLibraryLoading] = useState(false)
-  const [libraryLoadError, setLibraryLoadError] = useState<string | null>(null)
   
   // Track uploaded file for on-demand processing
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -65,9 +59,15 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   
   // Color picker state
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [pendingColor, setPendingColor] = useState("#808080")
+  
+  // AI Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisComplete, setAnalysisComplete] = useState(false)
   
   const queryClient = useQueryClient()
-  const { wardrobeApi, uploadApi, brandsApi } = useApi()
+  const { getToken, userId } = useAuth()
+  const { wardrobeApi, uploadApi, brandsApi, aiApi } = useApi()
   
   // Brands state for autocomplete
   const [availableBrands, setAvailableBrands] = useState<string[]>([])
@@ -203,19 +203,19 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     try {
       setIsProcessing(true)
       setProcessingProgress(0)
-      setBgRemovalError(null)
 
-      // Process the image with progress callback
+      // Process the image with progress callback (server-side)
       const processedBlob = await backgroundRemovalService.removeBackground(
         file,
         (progress) => {
           setProcessingProgress(progress)
-          // When library reports completion, immediately show 100%
+          // When server reports completion, immediately show 100%
           if (progress >= 100) {
             setSmoothProgress(100)
           }
         },
-        45000 // 45 second timeout
+        60000, // 60 second timeout for server-side processing
+        getToken // Pass the auth token getter
       )
       
       // Ensure progress shows 100% on completion
@@ -238,7 +238,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     } catch (error: any) {
       // Fallback to original image on error
       const errorMessage = error.message || 'Unknown error'
-      setBgRemovalError(errorMessage)
       
       // Provide specific error messages for different failure types
       if (errorMessage.includes('timed out')) {
@@ -281,6 +280,105 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     }
   }
 
+  // AI Analysis function
+  // Compress image for AI analysis (max 1024px, optimized for OpenAI Vision)
+  const compressImageForAI = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = (e) => {
+        const img = new Image()
+        img.src = e.target?.result as string
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'))
+            return
+          }
+
+          // Resize to max 1024px for AI analysis (reduces payload significantly)
+          const maxDimension = 1024
+          let width = img.width
+          let height = img.height
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height / width) * maxDimension
+              width = maxDimension
+            } else {
+              width = (width / height) * maxDimension
+              height = maxDimension
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // Convert to base64 with 80% quality JPEG
+          const base64 = canvas.toDataURL('image/jpeg', 0.8)
+          resolve(base64)
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+    })
+  }
+
+  const handleAiAnalysis = async () => {
+    if (!imagePreview && !uploadedFile) {
+      toast.error('Please upload an image first')
+      return
+    }
+
+    setIsAnalyzing(true)
+    try {
+      let response
+      
+      if (uploadedFile) {
+        // Compress and convert file to base64 for API (reduces ~5MB to ~200KB)
+        toast.info('Preparing image for AI analysis...', { duration: 1500 })
+        const base64 = await compressImageForAI(uploadedFile)
+        response = await aiApi.analyzeClothing(undefined, base64)
+      } else if (imagePreview) {
+        response = await aiApi.analyzeClothing(imagePreview)
+      }
+
+      if (response?.success && response.data) {
+        const { category, subCategory, brand, colors, styleNotes } = response.data
+        
+        // Update form with AI results
+        setValue("category", category, { shouldValidate: true })
+        if (subCategory) {
+          setValue("subCategory", subCategory)
+          setSubCategorySearch(subCategory)
+        }
+        if (brand) {
+          setValue("brand", brand)
+          setBrandSearch(brand)
+        }
+        if (colors && colors.length > 0) {
+          setValue("colors", colors, { shouldValidate: true })
+        }
+        // Set AI style notes directly into the notes field
+        if (styleNotes) {
+          setValue("notes", styleNotes)
+        }
+        
+        setAnalysisComplete(true)
+        toast.success('AI analysis complete!', { duration: 2000 })
+      } else {
+        toast.error(response?.error || 'Analysis failed. Please fill in manually.')
+      }
+    } catch (error: any) {
+      console.error('AI analysis error:', error)
+      toast.error('AI analysis failed. Please fill in manually.')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
 
   const {
@@ -296,14 +394,14 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       category: Category.TOP,
       brand: "",
       subCategory: "",
-      colorHex: "",
+      colors: [],
       notes: "",
       removeBackground: false,
     },
   })
 
   const category = watch("category")
-  const colorHex = watch("colorHex")
+  const colors = watch("colors")
   const formValues = watch()
 
   // Get filtered subcategories based on current category and search
@@ -317,7 +415,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       formValues.imageUrl !== "" ||
       formValues.brand !== "" ||
       formValues.subCategory !== "" ||
-      formValues.colorHex !== "" ||
+      (formValues.colors && formValues.colors.length > 0) ||
       formValues.notes !== "" ||
       imagePreview !== null
     )
@@ -328,32 +426,19 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Ensure complete workflow: upload → database → user association
       return wardrobeApi.create(data)
     },
-    onMutate: async (newItem) => {
+    onMutate: async () => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["wardrobe", TEMP_USER_ID] })
+      await queryClient.cancelQueries({ queryKey: ["wardrobe", userId] })
 
       // Snapshot the previous value
-      const previousItems = queryClient.getQueryData(["wardrobe", TEMP_USER_ID])
-
-      // Optimistically update to show the new item immediately
-      queryClient.setQueryData(["wardrobe", TEMP_USER_ID], (old: any) => {
-        const optimisticItem = {
-          _id: `temp-${Date.now()}`,
-          ...newItem,
-          userId: TEMP_USER_ID,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isFavorite: false,
-        }
-        return old ? [...old, optimisticItem] : [optimisticItem]
-      })
+      const previousItems = queryClient.getQueryData(["wardrobe", userId])
 
       // Return context with the previous items for rollback
       return { previousItems }
     },
     onSuccess: () => {
       // Invalidate and refetch to get the real data from server
-      queryClient.invalidateQueries({ queryKey: ["wardrobe", TEMP_USER_ID] })
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", userId] })
       
       toast.success("Item added to wardrobe successfully!", { duration: 2000 })
       
@@ -371,18 +456,19 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setSmoothProgress(0)
       setProcessedImageBlob(null)
       setProcessedPreviewUrl(null)
-      setBgRemovalError(null)
       setUploadedFile(null)
       setOriginalImageUrl(null)
       setBrandSearch("") // Reset brand search input
       setSubCategorySearch("") // Reset subcategory search input
+      setIsAnalyzing(false)
+      setAnalysisComplete(false)
       
       onClose()
     },
-    onError: (error: any, newItem, context) => {
+    onError: (error: any, _newItem, context) => {
       // Rollback to previous state on error
       if (context?.previousItems) {
-        queryClient.setQueryData(["wardrobe", TEMP_USER_ID], context.previousItems)
+        queryClient.setQueryData(["wardrobe", userId], context.previousItems)
       }
 
       // Extract detailed error message
@@ -397,7 +483,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     },
     onSettled: () => {
       // Always refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["wardrobe", TEMP_USER_ID] })
+      queryClient.invalidateQueries({ queryKey: ["wardrobe", userId] })
     },
   })
 
@@ -409,8 +495,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     }
 
     // Validate required fields
-    if (!data.colorHex) {
-      toast.error("Please select a color for your item")
+    if (!data.colors || data.colors.length === 0) {
+      toast.error("Please select at least one color for your item")
       return
     }
 
@@ -454,7 +540,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           category: data.category,
           brand: data.brand || undefined,
           subCategory: data.subCategory || undefined,
-          colorHex: data.colorHex,
+          colors: data.colors,
+          notes: data.notes || undefined,
           isFavorite: false,
         }
 
@@ -472,7 +559,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         category: data.category,
         brand: data.brand || undefined,
         subCategory: data.subCategory || undefined,
-        colorHex: data.colorHex,
+        colors: data.colors,
+        notes: data.notes || undefined,
         isFavorite: false,
       }
 
@@ -532,11 +620,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     
     if (url) {
       setImagePreview(url)
+      setAnalysisComplete(false)
       
       // Try to extract color - first try direct canvas approach
       try {
         const centerColor = await extractColorFromUrl(url)
-        setValue("colorHex", centerColor, { shouldValidate: true })
+        setValue("colors", [centerColor], { shouldValidate: true })
         toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
       } catch (corsError) {
         // CORS blocked - try fetching as blob through our proxy/directly
@@ -544,7 +633,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         try {
           const file = await fetchImageAsBlob(url)
           const centerColor = await extractCenterColor(file)
-          setValue("colorHex", centerColor, { shouldValidate: true })
+          setValue("colors", [centerColor], { shouldValidate: true })
           toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
         } catch (fetchError) {
           console.warn('Could not auto-detect color from URL:', fetchError)
@@ -658,9 +747,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   const processFile = async (file: File) => {
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Invalid file type. Please upload a JPEG, PNG, WebP, or HEIC image.')
+      toast.error('Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.')
       return
     }
 
@@ -672,11 +761,21 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       return
     }
 
+    // Reset form fields when uploading a new image
+    setValue("category", Category.TOP)
+    setValue("subCategory", "")
+    setValue("brand", "")
+    setValue("colors", [])
+    setValue("notes", "")
+    setBrandSearch("")
+    setSubCategorySearch("")
+    setAnalysisComplete(false)
+
     // Compress if file is larger than 2MB
     const compressionThreshold = 2 * 1024 * 1024
     let fileToUpload = file
     
-    if (file.size > compressionThreshold && file.type !== 'image/heic' && file.type !== 'image/heif') {
+    if (file.size > compressionThreshold && file.type !== 'image/gif') {
       try {
         toast.info('Compressing image...', { duration: 2000 })
         fileToUpload = await compressImage(file)
@@ -698,16 +797,6 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
       toast.success(`Image ready! (${(fileToUpload.size / 1024).toFixed(0)}KB)`, { duration: 2000 })
 
-      // Extract color from center of image
-      try {
-        const centerColor = await extractCenterColor(fileToUpload)
-        setValue("colorHex", centerColor, { shouldValidate: true })
-        toast.success(`Color detected: ${centerColor}`, { duration: 2000 })
-      } catch (error) {
-        console.error('Failed to extract color:', error)
-        toast.warning('Could not detect color automatically', { duration: 2000 })
-      }
-
       // Store the file locally - will upload on submit
       setUploadedFile(fileToUpload)
       setOriginalImageUrl(localPreview)
@@ -720,15 +809,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Mark that we have a local file (not uploaded yet)
       setValue("imageUrl", "", { shouldValidate: false })
       
-      // AUTO-START background removal in the background
-      // User can continue filling out the form while AI processes
-      if (removeBackground) {
-        toast.info('AI removing background in the background...', {
-          description: 'You can continue! Takes about 10-30 seconds.',
-          duration: 4000,
-        })
-        
-        // Start processing without blocking
+      // Trigger background removal if enabled
+      if (removeBackground && !isProcessing) {
         handleBackgroundRemoval(fileToUpload)
       }
       
@@ -807,11 +889,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setSmoothProgress(0)
       setProcessedImageBlob(null)
       setProcessedPreviewUrl(null)
-      setBgRemovalError(null)
       setUploadedFile(null)
       setOriginalImageUrl(null)
       setBrandSearch("") // Reset brand search input
       setSubCategorySearch("") // Reset subcategory search input
+      setIsAnalyzing(false)
+      setAnalysisComplete(false)
     }
 
     onClose()
@@ -944,12 +1027,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                           }
                         }
                       }}
-                      disabled={!!libraryLoadError}
+                      disabled={false}
                     />
                   )}
                   <Label 
                     htmlFor="bg-remove" 
-                    className={`text-xs cursor-pointer ${libraryLoadError ? 'text-muted-foreground line-through' : 'text-foreground'}`}
+                    className="text-xs cursor-pointer text-foreground"
                   >
                     {isProcessing ? 'Processing...' : 'Remove BG'}
                   </Label>
@@ -987,7 +1070,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <input
                     id="file-upload"
                     type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
                     className="hidden"
                     onChange={handleFileSelect}
                   />
@@ -1023,10 +1106,33 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
             {/* Right Column: Form Fields */}
             <div className="space-y-4 sm:space-y-5">
-              <div className="mb-2 flex items-center gap-2 rounded-md bg-purple-500/10 dark:bg-purple-500/20 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-purple-600 dark:text-purple-300">
-                <SparklesIcon className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span>AI Analysis Complete</span>
-              </div>
+              {/* AI Analysis Button */}
+              <Button
+                type="button"
+                variant={analysisComplete ? "outline" : "default"}
+                className={`w-full ${analysisComplete 
+                  ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30' 
+                  : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                onClick={handleAiAnalysis}
+                disabled={isAnalyzing || (!imagePreview && !uploadedFile)}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : analysisComplete ? (
+                  <>
+                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    AI Analysis Complete
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="mr-2 h-4 w-4" />
+                    Analyze with AI
+                  </>
+                )}
+              </Button>
 
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -1141,75 +1247,93 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="colorHex" className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Color (Auto-detected) <span className="text-red-400">*</span>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Colors <span className="text-red-400">*</span>
                 </Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="colorHex"
-                    type="text"
-                    placeholder="#000000"
-                    value={colorHex || ""}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      if (value && /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(value)) {
-                        setValue("colorHex", value, { shouldValidate: true })
-                      } else if (value === "" || value === "#") {
-                        setValue("colorHex", value)
-                      }
-                    }}
-                    className="border-border bg-card text-foreground"
-                    pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
-                  />
-                  <div className="relative color-picker-container">
-                    {colorHex ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowColorPicker(!showColorPicker)}
-                        className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-border hover:border-purple-400 transition-colors cursor-pointer"
-                        style={{ backgroundColor: colorHex }}
-                        aria-label="Open color picker"
-                        title="Click to change color"
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Color Chips */}
+                  {colors && colors.map((color, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full border border-border bg-card"
+                    >
+                      <div
+                        className="h-4 w-4 rounded-full border border-border"
+                        style={{ backgroundColor: color }}
                       />
-                    ) : (
+                      <span className="text-xs text-muted-foreground">{getClosestColorName(color)}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newColors = colors.filter((_, i) => i !== index)
+                          setValue("colors", newColors, { shouldValidate: true })
+                        }}
+                        className="ml-1 text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add Color Button */}
+                  {(!colors || colors.length < 5) && (
+                    <div className="relative color-picker-container">
                       <button
                         type="button"
                         onClick={() => setShowColorPicker(!showColorPicker)}
-                        className="h-10 w-10 flex-shrink-0 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors flex items-center justify-center"
-                        aria-label="Open color picker"
-                        title="Pick a color"
+                        className="h-8 px-3 flex items-center gap-1 rounded-full border-2 border-dashed border-border hover:border-purple-400 transition-colors text-xs text-muted-foreground"
                       >
-                        <Palette className="h-5 w-5 text-muted-foreground" />
+                        <Palette className="h-3 w-3" />
+                        Add Color
                       </button>
-                    )}
-                    {showColorPicker && (
-                      <div className="absolute top-12 right-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-muted-foreground">Pick a color</span>
-                          <button
-                            type="button"
-                            onClick={() => setShowColorPicker(false)}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            ✕
-                          </button>
+                      {showColorPicker && (
+                        <div className="absolute top-10 left-0 z-50 p-3 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-muted-foreground">Pick a color</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowColorPicker(false)}
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <HexColorPicker
+                            color={pendingColor}
+                            onChange={setPendingColor}
+                          />
+                          <div className="mt-3 flex items-center gap-2">
+                            <div 
+                              className="h-8 w-8 rounded border border-border"
+                              style={{ backgroundColor: pendingColor }}
+                            />
+                            <span className="text-xs text-muted-foreground flex-1">
+                              {getClosestColorName(pendingColor)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const upperColor = pendingColor.toUpperCase()
+                                const currentColors = colors || []
+                                if (!currentColors.includes(upperColor) && currentColors.length < 5) {
+                                  setValue("colors", [...currentColors, upperColor], { shouldValidate: true })
+                                  toast.success(`Added ${getClosestColorName(pendingColor)}`)
+                                }
+                                setShowColorPicker(false)
+                                setPendingColor("#808080")
+                              }}
+                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-md transition-colors"
+                            >
+                              Add
+                            </button>
+                          </div>
                         </div>
-                        <HexColorPicker
-                          color={colorHex || '#808080'}
-                          onChange={(color) => setValue("colorHex", color, { shouldValidate: true })}
-                        />
-                        <div className="mt-2 text-center">
-                          <span className="text-xs font-mono text-muted-foreground">{colorHex || 'Select a color'}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {errors.colorHex && (
-                  <p className="text-xs text-red-400">{errors.colorHex.message}</p>
-                )}
-                {!colorHex && (
-                  <p className="text-xs text-muted-foreground">Color will be auto-detected from image center</p>
+                {(!colors || colors.length === 0) && (
+                  <p className="text-xs text-muted-foreground">At least one color is required</p>
                 )}
               </div>
 

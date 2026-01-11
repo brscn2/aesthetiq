@@ -17,6 +17,7 @@ import {
   Users,
   User
 } from "lucide-react"
+import { FREE_FEATURES, PRO_FEATURES, PRO_PRICE } from "@/lib/membership-features"
 
 export default function HomePage() {
   const { isSignedIn, isLoaded } = useUser()
@@ -382,27 +383,15 @@ export default function HomePage() {
                   </div>
                   
                   <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Basic Color Analysis</p>
-                        <p className="text-xs text-muted-foreground">Discover your seasonal palette</p>
+                    {FREE_FEATURES.map((feature, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                          <p className="text-xs text-muted-foreground">{feature.description}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Virtual Wardrobe</p>
-                        <p className="text-xs text-muted-foreground">Up to 50 items</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">AI Recommendations</p>
-                        <p className="text-xs text-muted-foreground">5 per month</p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                   
                   <SignUpButton mode="modal">
@@ -424,46 +413,20 @@ export default function HomePage() {
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-serif text-xl font-bold text-foreground">Pro</h3>
                     </div>
-                    <div className="text-3xl font-bold text-gradient-ai mb-1">$9.99</div>
+                    <div className="text-3xl font-bold text-gradient-ai mb-1">{PRO_PRICE}</div>
                     <p className="text-sm text-muted-foreground">per month • Complete style transformation</p>
                   </div>
                   
                   <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Advanced AI Analysis</p>
-                        <p className="text-xs text-muted-foreground">Complete style DNA profiling</p>
+                    {PRO_FEATURES.map((feature, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                          <p className="text-xs text-muted-foreground">{feature.description}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Unlimited Wardrobe</p>
-                        <p className="text-xs text-muted-foreground">No limits on items or categories</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Unlimited AI Stylist</p>
-                        <p className="text-xs text-muted-foreground">24/7 personalized recommendations</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Trend Forecasting</p>
-                        <p className="text-xs text-muted-foreground">Stay ahead of fashion trends</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Priority Support</p>
-                        <p className="text-xs text-muted-foreground">Direct access to style experts</p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                   
                   <SignUpButton mode="modal">

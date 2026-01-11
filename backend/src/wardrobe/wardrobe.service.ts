@@ -9,6 +9,7 @@ import {
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
+import { calculateSeasonalPaletteScores } from '../common/seasonal-colors';
 
 @Injectable()
 export class WardrobeService {
@@ -21,12 +22,19 @@ export class WardrobeService {
   ) {}
 
   async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
+    // Calculate seasonal palette scores based on item colors
+    const seasonalPaletteScores = createWardrobeItemDto.colors?.length
+      ? calculateSeasonalPaletteScores(createWardrobeItemDto.colors)
+      : null;
+
     // Convert brandId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
       brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
+      seasonalPaletteScores,
     };
     
+    this.logger.log(`Creating wardrobe item with seasonal palette scores`);
     const createdItem = new this.wardrobeItemModel(itemData);
     return createdItem.save();
   }
@@ -104,11 +112,22 @@ export class WardrobeService {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
 
+    // Recalculate seasonal palette scores if colors are being updated
+    const seasonalPaletteScores = updateWardrobeItemDto.colors?.length
+      ? calculateSeasonalPaletteScores(updateWardrobeItemDto.colors)
+      : null;
+
     // Convert brandId string to ObjectId if provided
-    const updateData = {
+    const updateData: any = {
       ...updateWardrobeItemDto,
       brandId: updateWardrobeItemDto.brandId ? new Types.ObjectId(updateWardrobeItemDto.brandId) : undefined,
     };
+
+    // Only update palette scores if colors were provided
+    if (seasonalPaletteScores) {
+      updateData.seasonalPaletteScores = seasonalPaletteScores;
+      this.logger.log(`Recalculating seasonal palette scores for item ${id}`);
+    }
     
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })

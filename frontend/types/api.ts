@@ -76,6 +76,24 @@ export interface UpdateUserDto {
   settings?: UserSettings;
 }
 
+// Seasonal Color Palette Types
+export enum SeasonalPalette {
+  DARK_AUTUMN = 'DARK_AUTUMN',
+  DARK_WINTER = 'DARK_WINTER',
+  LIGHT_SPRING = 'LIGHT_SPRING',
+  LIGHT_SUMMER = 'LIGHT_SUMMER',
+  MUTED_AUTUMN = 'MUTED_AUTUMN',
+  MUTED_SUMMER = 'MUTED_SUMMER',
+  BRIGHT_SPRING = 'BRIGHT_SPRING',
+  BRIGHT_WINTER = 'BRIGHT_WINTER',
+  WARM_AUTUMN = 'WARM_AUTUMN',
+  WARM_SPRING = 'WARM_SPRING',
+  COOL_WINTER = 'COOL_WINTER',
+  COOL_SUMMER = 'COOL_SUMMER',
+}
+
+export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
+
 // Wardrobe Types
 export enum Category {
   TOP = 'TOP',
@@ -92,9 +110,11 @@ export interface WardrobeItem {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
+  seasonalPaletteScores?: SeasonalPaletteScores;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -105,7 +125,8 @@ export interface CreateWardrobeItemDto {
   category: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -116,7 +137,8 @@ export interface UpdateWardrobeItemDto {
   category?: Category;
   subCategory?: string;
   brand?: string;
-  colorHex?: string;
+  colors?: string[];
+  notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -256,3 +278,54 @@ export interface AddMessageDto {
   metadata?: Record<string, any>;
 }
 
+// Outfit Types
+export type CardTemplate = 'minimal' | 'elegant' | 'bold';
+
+export interface OutfitItems {
+  top?: string | WardrobeItem;
+  bottom?: string | WardrobeItem;
+  shoe?: string | WardrobeItem;
+  accessories: (string | WardrobeItem)[];
+}
+
+export interface Outfit {
+  _id: string;
+  userId: string;
+  name: string;
+  items: OutfitItems;
+  isFavorite: boolean;
+  cardTemplate: CardTemplate;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateOutfitDto {
+  name: string;
+  items: { top?: string; bottom?: string; shoe?: string; accessories?: string[] };
+  cardTemplate?: CardTemplate;
+}
+
+export interface UpdateOutfitDto {
+  name?: string;
+  items?: { top?: string | null; bottom?: string | null; shoe?: string | null; accessories?: string[] };
+  isFavorite?: boolean;
+  cardTemplate?: CardTemplate;
+}
+
+
+
+// AI Analysis Types
+export interface ClothingAnalysisResult {
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  colors: string[];
+  styleNotes?: string;
+  confidence: number;
+}
+
+export interface AnalyzeClothingResponse {
+  success: boolean;
+  data?: ClothingAnalysisResult;
+  error?: string;
+}
