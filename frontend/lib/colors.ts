@@ -21,9 +21,12 @@ export const COLOR_MAP: Record<string, string> = {
   "burlywood": "#deb887",
   "cadetblue": "#5f9ea0",
   "camel": "#c19a6b",
+  "caramel": "#ffddaf",
   "charcoal": "#36454f",
   "chartreuse": "#7fff00",
   "chocolate": "#d2691e",
+  "cognac": "#9f381d",
+  "copper": "#b87333",
   "coral": "#ff7f50",
   "cornflowerblue": "#6495ed",
   "cornsilk": "#fff8dc",
@@ -103,8 +106,10 @@ export const COLOR_MAP: Record<string, string> = {
   "mintcream": "#f5fffa",
   "mistyrose": "#ffe4e1",
   "moccasin": "#ffe4b5",
+  "mustard": "#ffdb58",
   "navajowhite": "#ffdead",
   "navy": "#000080",
+  "nude": "#e3bc9a",
   "offwhite": "#faf9f6",
   "oldlace": "#fdf5e6",
   "olive": "#808000",
@@ -117,6 +122,7 @@ export const COLOR_MAP: Record<string, string> = {
   "paleturquoise": "#afeeee",
   "palevioletred": "#d87093",
   "papayawhip": "#ffefd5",
+  "peach": "#ffcba4",
   "peachpuff": "#ffdab9",
   "peru": "#cd853f",
   "pink": "#ffc0cb",
@@ -127,8 +133,10 @@ export const COLOR_MAP: Record<string, string> = {
   "red": "#ff0000",
   "rosybrown": "#bc8f8f",
   "royalblue": "#4169e1",
+  "rust": "#b7410e",
   "saddlebrown": "#8b4513",
   "salmon": "#fa8072",
+  "sand": "#c2b280",
   "sandybrown": "#f4a460",
   "seagreen": "#2e8b57",
   "seashell": "#fff5ee",
@@ -141,7 +149,9 @@ export const COLOR_MAP: Record<string, string> = {
   "springgreen": "#00ff7f",
   "steelblue": "#4682b4",
   "tan": "#d2b48c",
+  "taupe": "#483c32",
   "teal": "#008080",
+  "terracotta": "#e2725b",
   "thistle": "#d8bfd8",
   "tomato": "#ff6347",
   "turquoise": "#40e0d0",
@@ -149,6 +159,7 @@ export const COLOR_MAP: Record<string, string> = {
   "wheat": "#f5deb3",
   "white": "#ffffff",
   "whitesmoke": "#f5f5f5",
+  "wine": "#722f37",
   "yellow": "#ffff00",
   "yellowgreen": "#9acd32"
 }
@@ -207,16 +218,23 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null
 }
 
-// Calculate color distance (Euclidean distance in RGB space)
+// Calculate color distance using weighted Euclidean distance
+// Weights account for human perception of color differences
 function colorDistance(hex1: string, hex2: string): number {
   const rgb1 = hexToRgb(hex1)
   const rgb2 = hexToRgb(hex2)
   if (!rgb1 || !rgb2) return Infinity
   
+  // Weighted distance (human eye is more sensitive to green, less to blue)
+  const rMean = (rgb1.r + rgb2.r) / 2
+  const dR = rgb1.r - rgb2.r
+  const dG = rgb1.g - rgb2.g
+  const dB = rgb1.b - rgb2.b
+  
   return Math.sqrt(
-    Math.pow(rgb1.r - rgb2.r, 2) +
-    Math.pow(rgb1.g - rgb2.g, 2) +
-    Math.pow(rgb1.b - rgb2.b, 2)
+    (2 + rMean / 256) * dR * dR +
+    4 * dG * dG +
+    (2 + (255 - rMean) / 256) * dB * dB
   )
 }
 
