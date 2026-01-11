@@ -11,10 +11,11 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Palette, Shirt, Loader2 } from "lucide-react"
+import { Trash2, Calendar, Palette, Shirt, Loader2, Sparkles, MessageSquare } from "lucide-react"
 import { WardrobeItem, Category } from "@/types/api"
 import { useApi } from "@/lib/api"
 import { getClosestColorName } from "@/lib/colors"
+import { getBestMatchingPalettes, getPaletteDisplayName, formatScore, getScoreBgColor, getScoreColor } from "@/lib/seasonal-colors"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
@@ -132,6 +133,45 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
               <span className="text-muted-foreground">Added:</span>
               <span>{createdDate}</span>
             </div>
+
+            {/* Style Notes */}
+            {item.notes && (
+              <div className="flex items-start gap-2 text-sm">
+                <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div>
+                  <span className="text-muted-foreground">Style Notes:</span>
+                  <p className="text-foreground mt-1">{item.notes}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Seasonal Palette Compatibility */}
+            {item.seasonalPaletteScores && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Best Palettes:</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {getBestMatchingPalettes(item.seasonalPaletteScores, 0.6)
+                    .slice(0, 4)
+                    .map(({ palette, score }) => (
+                      <div
+                        key={palette}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs ${getScoreBgColor(score)}`}
+                      >
+                        <span>{getPaletteDisplayName(palette)}</span>
+                        <span className={`font-medium ${getScoreColor(score)}`}>
+                          {formatScore(score)}
+                        </span>
+                      </div>
+                    ))}
+                  {getBestMatchingPalettes(item.seasonalPaletteScores, 0.6).length === 0 && (
+                    <span className="text-xs text-muted-foreground">No strong matches</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Delete Button */}

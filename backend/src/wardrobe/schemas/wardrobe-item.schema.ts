@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { SeasonalPalette } from '../../common/seasonal-colors';
 
 export type WardrobeItemDocument = WardrobeItem & Document;
 
@@ -9,6 +10,9 @@ export enum Category {
   SHOE = 'SHOE',
   ACCESSORY = 'ACCESSORY',
 }
+
+// Type for seasonal palette scores
+export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
 
 @Schema({ timestamps: true })
 export class WardrobeItem {
@@ -44,6 +48,16 @@ export class WardrobeItem {
 
   @Prop()
   lastWorn?: Date;
+
+  /**
+   * Seasonal color palette compatibility scores (0-1)
+   * Calculated based on the item's colors
+   */
+  @Prop({
+    type: Object,
+    default: null,
+  })
+  seasonalPaletteScores?: SeasonalPaletteScores;
 }
 
 export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);

@@ -76,6 +76,24 @@ export interface UpdateUserDto {
   settings?: UserSettings;
 }
 
+// Seasonal Color Palette Types
+export enum SeasonalPalette {
+  DARK_AUTUMN = 'DARK_AUTUMN',
+  DARK_WINTER = 'DARK_WINTER',
+  LIGHT_SPRING = 'LIGHT_SPRING',
+  LIGHT_SUMMER = 'LIGHT_SUMMER',
+  MUTED_AUTUMN = 'MUTED_AUTUMN',
+  MUTED_SUMMER = 'MUTED_SUMMER',
+  BRIGHT_SPRING = 'BRIGHT_SPRING',
+  BRIGHT_WINTER = 'BRIGHT_WINTER',
+  WARM_AUTUMN = 'WARM_AUTUMN',
+  WARM_SPRING = 'WARM_SPRING',
+  COOL_WINTER = 'COOL_WINTER',
+  COOL_SUMMER = 'COOL_SUMMER',
+}
+
+export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
+
 // Wardrobe Types
 export enum Category {
   TOP = 'TOP',
@@ -96,6 +114,7 @@ export interface WardrobeItem {
   notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
+  seasonalPaletteScores?: SeasonalPaletteScores;
   createdAt?: string;
   updatedAt?: string;
 }
