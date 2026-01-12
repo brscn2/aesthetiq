@@ -130,6 +130,8 @@ const createStyleProfileApi = (client: AxiosInstance) => ({
   delete: (id: string): Promise<void> => client.delete(`/style-profile/${id}`).then(() => undefined),
 })
 
+const PYTHON_API_URL = process.env.NEXT_PUBLIC_PYTHON_API_URL || "http://localhost:8000/api/v1"
+
 const createChatApi = (client: AxiosInstance) => ({
   getAllByUserId: (userId: string): Promise<ChatSession[]> => client.get(`/chat/user/${userId}`).then((res) => res.data),
   getBySessionId: (sessionId: string): Promise<ChatSession> => client.get(`/chat/session/${sessionId}`).then((res) => res.data),
@@ -138,6 +140,41 @@ const createChatApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateChatSessionDto): Promise<ChatSession> => client.patch(`/chat/${id}`, data).then((res) => res.data),
   addMessage: (sessionId: string, data: AddMessageDto): Promise<ChatSession> => client.post(`/chat/${sessionId}/message`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/chat/${id}`).then(() => undefined),
+  sendMessageStream: async (message: string, userId: string, sessionId: string | undefined, onChunk: (chunk: any) => void): Promise<void> => {
+    const response = await fetch(`${PYTHON_API_URL}/agent/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, user_id: userId, session_id: sessionId || null, context: null }),
+    })
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('Response body is not readable')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            onChunk(JSON.parse(line.substring(6)))
+          } catch (e) {
+            console.error('Error parsing SSE chunk:', e)
+          }
+        }
+      }
+    }
+    if (buffer.startsWith('data: ')) {
+      try {
+        onChunk(JSON.parse(buffer.substring(6)))
+      } catch (e) {
+        console.error('Error parsing SSE chunk:', e)
+      }
+    }
+  },
 })
 
 const createOutfitApi = (client: AxiosInstance) => ({

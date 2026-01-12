@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
+import { useApi } from "@/lib/api"
+import { useAuth } from "@clerk/nextjs"
 
 // Speech Recognition types
 interface SpeechRecognition extends EventTarget {
@@ -93,11 +95,14 @@ const initialMessages: Message[] = [
 ]
 
 export function ChatStylist() {
+  const { userId } = useAuth()
+  const api = useApi()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -152,22 +157,57 @@ export function ChatStylist() {
       images: attachedImages.length > 0 ? [...attachedImages] : undefined,
     }
 
+    const messageText = input.trim()
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setAttachedImages([])
     setIsLoading(true)
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "Thank you for your message! I'm analyzing your request and will provide personalized styling recommendations based on your preferences.",
-      }
-      setMessages((prev) => [...prev, aiMessage])
+    const tempAiMessageId = (Date.now() + 1).toString()
+    const tempAiMessage: Message = {
+      id: tempAiMessageId,
+      role: "assistant",
+      content: "",
+    }
+    setMessages((prev) => [...prev, tempAiMessage])
+
+    let fullResponse = ""
+    let sessionId = currentSessionId
+
+    try {
+      await api.chatApi.sendMessageStream(
+        messageText,
+        userId || 'anonymous',
+        currentSessionId,
+        (chunk: any) => {
+          if (chunk.type === "metadata" && chunk.session_id) {
+            sessionId = chunk.session_id
+            if (!currentSessionId) setCurrentSessionId(sessionId)
+          }
+          if (chunk.type === "chunk" && chunk.content) {
+            fullResponse += chunk.content
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempAiMessageId ? { ...msg, content: fullResponse } : msg
+              )
+            )
+          }
+          if (chunk.type === "done" && chunk.content?.message) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === tempAiMessageId ? { ...msg, content: chunk.content.message } : msg
+              )
+            )
+          }
+        }
+      )
+    } catch (error: any) {
+      console.error("Error sending message:", error)
+      toast.error(`Failed to get AI response: ${error.message}`)
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempAiMessageId))
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
