@@ -45,7 +45,7 @@ class LangChainService:
             return ChatOpenAI(
                 model=self.model,
                 api_key=settings.OPENAI_API_KEY,
-                temperature=0.7,
+                temperature=0.3,  # Lower temperature for faster, more deterministic responses
             )
 
         elif self.provider == "azure":
@@ -64,7 +64,8 @@ class LangChainService:
         context: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None,
         template_name: Optional[str] = None,
-        template_vars: Optional[Dict[str, Any]] = None
+        template_vars: Optional[Dict[str, Any]] = None,
+        max_tokens: Optional[int] = None
     ) -> str:
         """
         Generate a response to a user message.
@@ -99,8 +100,12 @@ class LangChainService:
             else:
                 messages.append(SystemMessage(content=prompt_manager.get_template("system_default")))
             
+            # Optimize: Limit history to last 5 messages for faster processing
             if context and "history" in context:
-                formatted_history = format_conversation_history(context["history"])
+                history = context["history"]
+                # Keep only last 5 messages (2.5 turns) for context
+                limited_history = history[-5:] if len(history) > 5 else history
+                formatted_history = format_conversation_history(limited_history)
                 for hist_msg in formatted_history:
                     if hist_msg["role"] == "user":
                         messages.append(HumanMessage(content=hist_msg["content"]))
@@ -109,7 +114,21 @@ class LangChainService:
             
             messages.append(HumanMessage(content=message))
             
-            response = await self.llm.ainvoke(messages)
+            # Use max_tokens if provided (for faster classification)
+            # Create a temporary LLM instance with max_tokens for this call
+            if max_tokens and isinstance(self.llm, ChatOpenAI):
+                from langchain_openai import ChatOpenAI
+                from app.core.config import get_settings
+                settings = get_settings()
+                temp_llm = ChatOpenAI(
+                    model=self.llm.model_name if hasattr(self.llm, 'model_name') else settings.LLM_MODEL,
+                    api_key=settings.OPENAI_API_KEY,
+                    temperature=self.llm.temperature if hasattr(self.llm, 'temperature') else 0.7,
+                    max_tokens=max_tokens
+                )
+                response = await temp_llm.ainvoke(messages)
+            else:
+                response = await self.llm.ainvoke(messages)
             
             return response.content
             
@@ -149,8 +168,12 @@ class LangChainService:
                     content=prompt_manager.get_template("system_default")
                 ))
             
+            # Optimize: Limit history to last 5 messages for faster processing
             if context and "history" in context:
-                formatted_history = format_conversation_history(context["history"])
+                history = context["history"]
+                # Keep only last 5 messages (2.5 turns) for context
+                limited_history = history[-5:] if len(history) > 5 else history
+                formatted_history = format_conversation_history(limited_history)
                 for hist_msg in formatted_history:
                     if hist_msg["role"] == "user":
                         messages.append(HumanMessage(content=hist_msg["content"]))

@@ -135,14 +135,35 @@ class LangGraphService:
         logger.info(f"Classifying intent for message: {message[:50]}...")
         
         try:
+            # Fast pattern matching for common clothing keywords (bypass LLM for obvious cases)
+            message_lower = message.lower()
+            clothing_keywords = [
+                "need", "want", "buy", "find", "show", "recommend", "suggest",
+                "pants", "shirt", "dress", "jacket", "shoes", "sneakers", "boots",
+                "top", "bottom", "outfit", "clothing", "clothes", "wardrobe",
+                "wedding", "party", "date", "work", "casual", "formal", "summer", "winter"
+            ]
+            
+            # Quick check: if message contains clothing keywords, skip LLM call
+            if any(keyword in message_lower for keyword in clothing_keywords):
+                logger.info(f"Fast classification: clothing (pattern match)")
+                state["route"] = Route.CLOTHING.value
+                state["metadata"]["intent_classification"] = Route.CLOTHING.value
+                state["metadata"]["classification_confidence"] = "pattern_match"
+                return state
+            
+            # For ambiguous cases, use LLM (but with max_tokens limit for speed)
             classification_prompt = prompt_manager.get_template(
                 "intent_classifier",
                 message=message
             )
             
+            # Optimize: Use faster model for classification (gpt-4o-mini is already fast, but we can add max_tokens limit)
+            # Classification only needs "clothing" or "general" - very short response
             classification_result = await self.llm_service.generate_response(
                 message="",
-                system_prompt=classification_prompt
+                system_prompt=classification_prompt,
+                max_tokens=5  # Limit to speed up - only need "clothing" or "general"
             )
             
             route = classification_result.strip().lower()
@@ -251,6 +272,8 @@ class LangGraphService:
     def _format_clothing_response(self, item_ids: List[str], query: str) -> str:
         """Format a natural language response with clothing recommendations.
         
+        Optimized for speed: Simple, direct responses without LLM calls.
+        
         Args:
             item_ids: List of recommended item IDs
             query: Original user query
@@ -259,12 +282,13 @@ class LangGraphService:
             Formatted response string
         """
         count = len(item_ids)
+        # Optimize: Use shorter, faster responses
         if count == 1:
-            return f"I found 1 item that matches your request. Check it out!"
+            return f"Found 1 item for you!"
         elif count <= 5:
-            return f"I found {count} items that match what you're looking for!"
+            return f"Found {count} items!"
         else:
-            return f"Great news! I found {count} items that could work for you. Take a look!"
+            return f"Found {count} items!"
     
     async def _handle_general_conversation(self, state: ConversationState) -> ConversationState:
         """Handle general conversation using LLM."""
@@ -397,13 +421,15 @@ class LangGraphService:
 
         try:
             # Step 1: Run classification only
+            # Send status immediately for better UX
             yield StreamEvent(
                 type=StreamEventType.STATUS,
                 content="Understanding your request...",
                 node=NodeName.CLASSIFY.value
             )
             
-            # Classify intent
+            # Classify intent (this is the bottleneck - LLM call)
+            # Optimize: Use faster classification or cache common patterns
             state = await self._classify_intent(initial_state)
             final_route = state["route"]
             
@@ -457,9 +483,10 @@ class LangGraphService:
                         logger.error(f"Recommender error: {rec_event.data.get('error')}")
                         fallback_message = "I had trouble searching. Please try again."
                 
-                # Format and emit final response
+                # Optimize: Format and emit response immediately (no delay)
                 if item_ids:
                     full_response = self._format_clothing_response(item_ids, message)
+                    # Emit result and chunk together for faster response
                     yield StreamEvent(
                         type=StreamEventType.CLOTHING_RESULT,
                         content={
@@ -469,24 +496,32 @@ class LangGraphService:
                         },
                         node=NodeName.CLOTHING.value
                     )
+                    # Send text response immediately
+                    yield StreamEvent(
+                        type=StreamEventType.CHUNK,
+                        content=full_response,
+                        node=NodeName.CLOTHING.value
+                    )
                 else:
                     full_response = fallback_message or "I couldn't find matching items."
-                
-                yield StreamEvent(
-                    type=StreamEventType.CHUNK,
-                    content=full_response,
-                    node=NodeName.CLOTHING.value
-                )
+                    yield StreamEvent(
+                        type=StreamEventType.CHUNK,
+                        content=full_response,
+                        node=NodeName.CLOTHING.value
+                    )
                 
             else:  # General conversation - stream token by token
+                # Optimize: Start streaming immediately, don't wait for status
+                system_prompt = prompt_manager.get_template("general_conversation")
+                
+                # Send status and start streaming in parallel
                 yield StreamEvent(
                     type=StreamEventType.STATUS,
                     content="Generating response...",
                     node=NodeName.GENERAL.value
                 )
                 
-                system_prompt = prompt_manager.get_template("general_conversation")
-                
+                # Stream response chunks immediately
                 async for chunk in self.llm_service.stream_response(
                     message=message,
                     context=context,
