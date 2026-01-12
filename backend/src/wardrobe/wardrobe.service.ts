@@ -9,6 +9,8 @@ import {
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
+import { calculateSeasonalPaletteScores } from '../common/seasonal-colors';
+import { EmbeddingService } from '../ai/embedding.service';
 
 @Injectable()
 export class WardrobeService {
@@ -18,15 +20,38 @@ export class WardrobeService {
     @InjectModel(WardrobeItem.name)
     private wardrobeItemModel: Model<WardrobeItemDocument>,
     private azureStorageService: AzureStorageService,
+    private embeddingService: EmbeddingService,
   ) {}
 
   async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
+    // Calculate seasonal palette scores based on item colors
+    const seasonalPaletteScores = createWardrobeItemDto.colors?.length
+      ? calculateSeasonalPaletteScores(createWardrobeItemDto.colors)
+      : null;
+
+    // Get image embedding from Python service (non-blocking, fails gracefully)
+    const imageUrl = createWardrobeItemDto.processedImageUrl || createWardrobeItemDto.imageUrl;
+    let embedding: number[] | null = null;
+    
+    try {
+      this.logger.log(`Fetching CLIP embedding for image: ${imageUrl}`);
+      embedding = await this.embeddingService.getImageEmbedding(imageUrl);
+      if (embedding) {
+        this.logger.log(`Embedding generated (${embedding.length} dimensions)`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to get embedding, continuing without: ${error.message}`);
+    }
+
     // Convert brandId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
       brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
+      seasonalPaletteScores,
+      embedding,
     };
     
+    this.logger.log(`Creating wardrobe item with seasonal palette scores${embedding ? ' and embedding' : ''}`);
     const createdItem = new this.wardrobeItemModel(itemData);
     return createdItem.save();
   }
@@ -37,6 +62,8 @@ export class WardrobeService {
     colorHex?: string,
     brandId?: string,
     search?: string,
+    seasonalPalette?: string,
+    minPaletteScore?: number,
   ): Promise<WardrobeItem[]> {
     const filter: any = { userId };
     if (category) {
@@ -56,6 +83,14 @@ export class WardrobeService {
         { notes: searchRegex },
       ];
     }
+    
+    // Filter by seasonal palette score
+    if (seasonalPalette) {
+      const threshold = minPaletteScore ?? 0.6;
+      const paletteKey = `seasonalPaletteScores.${seasonalPalette}`;
+      filter[paletteKey] = { $gte: threshold };
+    }
+    
     return this.wardrobeItemModel.find(filter).populate('brandId').exec();
   }
 
@@ -104,11 +139,22 @@ export class WardrobeService {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
 
+    // Recalculate seasonal palette scores if colors are being updated
+    const seasonalPaletteScores = updateWardrobeItemDto.colors?.length
+      ? calculateSeasonalPaletteScores(updateWardrobeItemDto.colors)
+      : null;
+
     // Convert brandId string to ObjectId if provided
-    const updateData = {
+    const updateData: any = {
       ...updateWardrobeItemDto,
       brandId: updateWardrobeItemDto.brandId ? new Types.ObjectId(updateWardrobeItemDto.brandId) : undefined,
     };
+
+    // Only update palette scores if colors were provided
+    if (seasonalPaletteScores) {
+      updateData.seasonalPaletteScores = seasonalPaletteScores;
+      this.logger.log(`Recalculating seasonal palette scores for item ${id}`);
+    }
     
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })

@@ -15,6 +15,9 @@ from app.api.v1.router import api_router
 from app.services.llm.langchain_service import LangChainService
 from app.services.llm.langgraph_service import LangGraphService
 from app.agents.conversational_agent import ConversationalAgent
+from app.agents.recommender import RecommenderGraph
+from app.services.embedding_client import get_embedding_client, close_embedding_client
+from app.services.mongodb.connection import close_connection as close_mongodb
 
 logger = get_logger(__name__)
 
@@ -22,12 +25,13 @@ logger = get_logger(__name__)
 llm_service: LangChainService = None
 langgraph_service: LangGraphService = None
 conversational_agent: ConversationalAgent = None
+recommender_graph: RecommenderGraph = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown events."""
-    global llm_service, langgraph_service, conversational_agent
+    global llm_service, langgraph_service, conversational_agent, recommender_graph
     
     logger.info("Starting Clothing Recommender Service...")
     
@@ -36,8 +40,12 @@ async def lifespan(app: FastAPI):
     llm_service = LangChainService(provider=settings.LLM_PROVIDER, model=settings.LLM_MODEL)
     logger.info("LangChain service initialized")
     
-    # Initialize LangGraph service
-    langgraph_service = LangGraphService(llm_service)
+    # Initialize recommender graph first (will be shared with LangGraphService)
+    recommender_graph = RecommenderGraph(llm_service=llm_service)
+    logger.info("Recommender graph initialized")
+    
+    # Initialize LangGraph service with shared recommender graph
+    langgraph_service = LangGraphService(llm_service, recommender_graph=recommender_graph)
     logger.info("LangGraph service initialized")
     
     # Initialize conversational agent using the pre-built services.
@@ -51,6 +59,7 @@ async def lifespan(app: FastAPI):
     app.state.llm_service = llm_service
     app.state.langgraph_service = langgraph_service
     app.state.conversational_agent = conversational_agent
+    app.state.recommender_graph = recommender_graph
     
     logger.info("Clothing Recommender Service startup complete")
     
@@ -58,6 +67,9 @@ async def lifespan(app: FastAPI):
     
     # Cleanup on shutdown
     logger.info("Shutting down Clothing Recommender Service...")
+    await close_embedding_client()
+    await close_mongodb()
+    logger.info("Cleanup complete")
 
 
 def create_app() -> FastAPI:

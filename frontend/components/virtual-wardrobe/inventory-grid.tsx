@@ -148,9 +148,13 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
     if (filters?.brand) {
       if (!item.brand || item.brand !== filters.brand) return false
     }
-    // Color filter (with tolerance matching)
+    // Color filter (with tolerance matching) - check against colors array
     if (filters?.color) {
-      if (!item.colorHex || !colorMatchesFilter(item.colorHex, filters.color)) return false
+      const itemColors = item.colors || []
+      if (itemColors.length === 0) return false
+      // Check if any of the item's colors match the filter
+      const hasMatchingColor = itemColors.some(color => colorMatchesFilter(color, filters.color!))
+      if (!hasMatchingColor) return false
     }
     return true
   })

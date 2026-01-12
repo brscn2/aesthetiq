@@ -184,6 +184,12 @@ export function WardrobeControlBar({
               All Items
             </TabsTrigger>
             <TabsTrigger
+              value="my-outfits"
+              className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
+            >
+              My Outfits
+            </TabsTrigger>
+            <TabsTrigger
               value="outfits"
               className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
             >

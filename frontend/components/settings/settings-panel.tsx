@@ -1,20 +1,107 @@
 "use client"
 
+import { useState, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle, Loader2, Camera } from "lucide-react"
 import { useSettings } from "@/contexts/settings-context"
 import { useUser } from "@/contexts/user-context"
+import { useApi } from "@/lib/api"
 import { Currency, ShoppingRegion, Units } from "@/types/api"
+import { useToast } from "@/hooks/use-toast"
+import { AvatarCropper } from "./avatar-cropper"
 
 export function SettingsPanel() {
-  const { user, isLoading: userLoading } = useUser()
+  const { user, isLoading: userLoading, refetch: refetchUser } = useUser()
   const { settings, isLoading: settingsLoading, updateSettings } = useSettings()
+  const { uploadApi, userApi } = useApi()
+  const { toast } = useToast()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
+  const [cropperImage, setCropperImage] = useState<string | null>(null)
 
   const isLoading = userLoading || settingsLoading
+  
+  // Use local avatar if set, otherwise use user's avatar
+  const displayAvatarUrl = localAvatarUrl ?? user?.avatarUrl
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type - only common web formats (no HEIC)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Please use JPG, PNG, WebP or GIF format", variant: "destructive" })
+      return
+    }
+
+    // Validate file size (max 10MB for cropping, will be compressed after)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "Image must be less than 10MB", variant: "destructive" })
+      return
+    }
+
+    // Create object URL for cropper
+    const imageUrl = URL.createObjectURL(file)
+    setCropperImage(imageUrl)
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperImage(null)
+    setIsUploadingAvatar(true)
+    
+    try {
+      // Create file from blob
+      const file = new File([croppedBlob], "avatar.jpg", { type: "image/jpeg" })
+      
+      // Upload to Azure
+      const { url } = await uploadApi.uploadImage(file)
+      
+      // Update user profile
+      await userApi.updateCurrentUser({ avatarUrl: url })
+      
+      // Set local state immediately for instant feedback
+      setLocalAvatarUrl(url)
+      
+      // Refresh user data in background
+      await refetchUser()
+      
+      toast({ title: "Profile picture updated!" })
+    } catch (error) {
+      console.error('Avatar upload error:', error)
+      toast({ title: "Failed to upload profile picture", variant: "destructive" })
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  const handleCropCancel = () => {
+    if (cropperImage) {
+      URL.revokeObjectURL(cropperImage)
+    }
+    setCropperImage(null)
+  }
+
+  const handleRemoveAvatar = async () => {
+    try {
+      await userApi.updateCurrentUser({ avatarUrl: '' })
+      setLocalAvatarUrl('')
+      await refetchUser()
+      toast({ title: "Profile picture removed" })
+    } catch (error) {
+      toast({ title: "Failed to remove profile picture", variant: "destructive" })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -27,12 +114,87 @@ export function SettingsPanel() {
     )
   }
   return (
+    <>
+    {/* Avatar Cropper Modal */}
+    {cropperImage && (
+      <AvatarCropper
+        imageSrc={cropperImage}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
+    )}
+    
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="space-y-1">
         <h1 className="font-playfair text-2xl sm:text-3xl font-medium tracking-tight text-foreground">Account & Privacy</h1>
         <p className="text-sm text-muted-foreground">Manage your subscription, privacy settings, and global preferences.</p>
       </div>
+
+      {/* Profile Picture Section */}
+      <Card className="border-border">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="relative">
+              <div className="h-24 w-24 rounded-full border-2 border-border overflow-hidden bg-muted flex items-center justify-center">
+                {displayAvatarUrl ? (
+                  <img 
+                    src={displayAvatarUrl} 
+                    alt={user?.name || 'Profile'} 
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl font-medium text-foreground">
+                    {user?.name?.split(' ').map(n => n.charAt(0)).join('').toUpperCase().slice(0, 2) || 'U'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="absolute bottom-0 right-0 rounded-full bg-primary p-2 text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {isUploadingAvatar ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+            <div className="flex-1 text-center sm:text-left space-y-2">
+              <h3 className="font-medium text-lg">{user?.name || 'User'}</h3>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                >
+                  {isUploadingAvatar ? 'Uploading...' : 'Change Photo'}
+                </Button>
+                {displayAvatarUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveAvatar}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Zone A: Membership & Status */}
       <Card className="relative overflow-hidden border-none bg-gradient-to-br from-[#2D1B36] to-[#1A1025]">
@@ -227,5 +389,6 @@ export function SettingsPanel() {
         </div>
       </section>
     </div>
+    </>
   )
 }

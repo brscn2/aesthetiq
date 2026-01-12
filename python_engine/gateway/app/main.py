@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.proxy import proxy
-from app.routes import health, ml, agent
+from app.routes import health, ml, agent, embeddings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -96,6 +96,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(ml.router, prefix=f"{settings.API_V1_PREFIX}/ml", tags=["machine-learning"])
 app.include_router(agent.router, prefix=f"{settings.API_V1_PREFIX}/agent", tags=["conversational-agent"])
+app.include_router(embeddings.router, prefix=f"{settings.API_V1_PREFIX}/embeddings", tags=["embeddings"])
 
 
 @app.get("/")

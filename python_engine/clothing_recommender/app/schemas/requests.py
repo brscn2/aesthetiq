@@ -57,3 +57,36 @@ class ConversationRequest(BaseConversationRequest):
 class ConversationStreamRequest(BaseConversationRequest):
     """Request schema for streaming conversational responses."""
     pass
+
+
+class RecommendRequest(BaseModel):
+    """Request schema for clothing recommendations."""
+    
+    message: str = Field(
+        ...,
+        description="User's clothing request/query",
+        min_length=1,
+        max_length=2000,
+        examples=["Find me a jacket for a party", "I need casual clothes for the weekend"]
+    )
+    
+    user_id: str = Field(
+        ...,
+        description="Unique identifier for the user",
+        examples=["user_36On4ZlnKfasGRPkKfsqX7W8FDm"]
+    )
+    
+    session_id: Optional[str] = Field(
+        None,
+        description="Optional session ID for tracking",
+        examples=["rec_20260110120000"]
+    )
+    
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        """Validate and sanitize message input."""
+        if not v.strip():
+            raise ValueError("Message cannot be empty or whitespace")
+        return sanitize_input(v, max_length=2000)
+

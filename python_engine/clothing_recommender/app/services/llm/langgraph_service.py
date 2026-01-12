@@ -1,5 +1,5 @@
 """LangGraph service for workflow orchestration."""
-from typing import Optional, Dict, Any, List, TypedDict, Literal, AsyncIterator
+from typing import Optional, Dict, Any, List, TypedDict, AsyncIterator
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
@@ -8,7 +8,8 @@ from langgraph.graph import StateGraph, END
 from app.core.logger import get_logger
 from app.services.llm.langchain_service import LangChainService
 from app.services.llm.langfuse_service import LangfuseService
-from app.agents.fashion_expert import FashionExpert
+from app.agents.recommender import RecommenderGraph, RecommenderStage
+from app.agents.recommender.graph import StreamEventType as RecommenderEventType
 from app.prompts import get_prompt_manager
 
 logger = get_logger(__name__)
@@ -20,8 +21,27 @@ class StreamEventType(str, Enum):
     STATUS = "status"
     CHUNK = "chunk"
     CLOTHING_ITEM = "clothing_item"
+    CLOTHING_RESULT = "clothing_result"  # Final clothing recommendations
+    RECOMMENDER_STAGE = "recommender_stage"  # Recommender progress updates
     METADATA = "metadata"
     DONE = "done"
+    ERROR = "error"
+
+
+# Route constants to avoid magic strings
+class Route(str, Enum):
+    """Workflow route identifiers."""
+    CLOTHING = "clothing"
+    GENERAL = "general"
+
+
+# Node name constants
+class NodeName(str, Enum):
+    """Workflow node identifiers."""
+    CLASSIFY = "classify"
+    CLOTHING = "clothing"
+    GENERAL = "general"
+    END = "end"
 
 
 @dataclass
@@ -41,7 +61,8 @@ class StreamEvent:
 
 class ConversationState(TypedDict):
     """State for conversation workflow."""
-    message: str
+    messages: List[Dict[str, Any]]  # Chat history for DB persistence
+    message: str  # Current user message (helper field)
     user_id: str
     session_id: str
     context: Dict[str, Any]
@@ -55,16 +76,56 @@ class ConversationState(TypedDict):
 class LangGraphService:
     """Service for managing LangGraph workflows and agent orchestration."""
     
-    def __init__(self, llm_service: LangChainService):
-        """Initialize LangGraph service."""
+    WORKFLOW_VERSION = "1.0"
+    
+    def __init__(self, llm_service: LangChainService, recommender_graph: Optional[RecommenderGraph] = None):
+        """Initialize LangGraph service.
+        
+        Args:
+            llm_service: LangChain service for LLM calls
+            recommender_graph: Optional pre-initialized RecommenderGraph.
+                              If not provided, one will be created.
+        """
         self.llm_service = llm_service
-        self.fashion_expert = FashionExpert()
+        # Initialize RecommenderGraph for clothing queries
+        self.recommender_graph = recommender_graph or RecommenderGraph(llm_service=llm_service)
         self.langfuse = LangfuseService()
+        
         # Compile workflow once.
         # Reasoning: compiling the graph on every request is unnecessary overhead.
         # The graph is deterministic given the code, so it is safe to reuse.
         self.workflow = self.create_conversation_workflow()
-        logger.info("LangGraphService initialized")
+        logger.info("LangGraphService initialized with RecommenderGraph")
+    
+    def _create_initial_state(
+        self,
+        message: str,
+        user_id: str,
+        session_id: str,
+        context: Optional[Dict[str, Any]] = None,
+        trace_context: Optional[Dict[str, Any]] = None
+    ) -> ConversationState:
+        """
+        Create initial state for workflow execution.
+        
+        NOTE: messages history is NOT passed in request body.
+        It will be loaded from database (e.g., Postgres) via a Checkpointer.
+        """
+        return {
+            "messages": [],  # Loaded from DB, not request
+            "message": message,
+            "user_id": user_id,
+            "session_id": session_id,
+            "context": context or {},
+            "route": "",
+            "response": "",
+            "clothing_data": None,
+            "metadata": {
+                "timestamp": datetime.now().isoformat(),
+                "workflow_version": self.WORKFLOW_VERSION
+            },
+            "trace_context": trace_context
+        }
     
     async def _classify_intent(self, state: ConversationState) -> ConversationState:
         """Classify user intent: fashion-related or general conversation."""
@@ -86,12 +147,12 @@ class LangGraphService:
             
             route = classification_result.strip().lower()
             
-            if route not in ["clothing", "general"]:
+            if route not in [Route.CLOTHING.value, Route.GENERAL.value]:
                 logger.warning(f"Invalid classification result: {route}, defaulting to general")
-                if "clothing" in route:
-                    route = "clothing"
+                if Route.CLOTHING.value in route:
+                    route = Route.CLOTHING.value
                 else:
-                    route = "general"
+                    route = Route.GENERAL.value
             
             logger.info(f"Intent classified as: {route}")
             state["route"] = route
@@ -107,42 +168,103 @@ class LangGraphService:
             
         except Exception as e:
             logger.error(f"Error in intent classification: {e}, defaulting to general")
-            state["route"] = "general"
-            state["metadata"]["intent_classification"] = "general"
+            state["route"] = Route.GENERAL.value
+            state["metadata"]["intent_classification"] = Route.GENERAL.value
             state["metadata"]["classification_error"] = str(e)
         
         return state
     
     async def _handle_clothing_query(self, state: ConversationState) -> ConversationState:
-        """Handle clothing recommendation queries using FashionExpert."""
-        logger.info("Handling clothing query with FashionExpert")
+        """Handle clothing recommendation queries using RecommenderGraph.
+        
+        This triggers the full recommender pipeline:
+        1. Query analysis (extract filters + semantic query)
+        2. Optional profile fetch
+        3. Vector search
+        4. Result verification (with retry loop)
+        5. Final response
+        """
+        logger.info("Routing to RecommenderGraph for clothing recommendations")
         trace_context = state.get("trace_context")
         
         self.langfuse.log_event(
-            name="clothing_expert_start",
+            name="recommender_start",
             input_data={"query": state["message"]},
             trace_context=trace_context
         )
         
-        clothing_data = await self.fashion_expert.get_clothing_recommendation(
-            query=state["message"],
-            user_context=state.get("context", {})
-        )
-        
-        response = await self._format_clothing_response(clothing_data)
-        
-        state["response"] = response
-        state["clothing_data"] = clothing_data
-        state["metadata"]["agent_used"] = "ClothingExpert"
-        
-        self.langfuse.log_event(
-            name="clothing_expert_complete",
-            input_data={"query": state["message"]},
-            output_data={"recommendations_count": len(clothing_data.get("recommendations", []))},
-            trace_context=trace_context
-        )
+        try:
+            # Run the recommender graph
+            result = await self.recommender_graph.recommend(
+                user_query=state["message"],
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+            )
+            
+            item_ids = result.get("item_ids", [])
+            iterations = result.get("iterations", 1)
+            fallback_message = result.get("message")
+            
+            # Format response based on results
+            if item_ids:
+                # Build response with item IDs
+                response = self._format_clothing_response(item_ids, state["message"])
+                state["clothing_data"] = {
+                    "item_ids": item_ids,
+                    "count": len(item_ids),
+                    "iterations": iterations,
+                }
+            else:
+                # No results - use fallback message
+                response = fallback_message or "I couldn't find any matching items. Try a different search."
+                state["clothing_data"] = {
+                    "item_ids": [],
+                    "count": 0,
+                    "iterations": iterations,
+                    "fallback": True,
+                }
+            
+            state["response"] = response
+            state["metadata"]["agent_used"] = "RecommenderGraph"
+            state["metadata"]["recommender_iterations"] = iterations
+            state["metadata"]["items_found"] = len(item_ids)
+            
+            self.langfuse.log_event(
+                name="recommender_complete",
+                input_data={"query": state["message"]},
+                output_data={
+                    "items_found": len(item_ids),
+                    "iterations": iterations,
+                },
+                trace_context=trace_context
+            )
+            
+        except Exception as e:
+            logger.error(f"RecommenderGraph error: {e}", exc_info=True)
+            state["response"] = "I had trouble searching for clothing. Please try again."
+            state["clothing_data"] = {"error": str(e)}
+            state["metadata"]["agent_used"] = "RecommenderGraph"
+            state["metadata"]["error"] = str(e)
         
         return state
+    
+    def _format_clothing_response(self, item_ids: List[str], query: str) -> str:
+        """Format a natural language response with clothing recommendations.
+        
+        Args:
+            item_ids: List of recommended item IDs
+            query: Original user query
+            
+        Returns:
+            Formatted response string
+        """
+        count = len(item_ids)
+        if count == 1:
+            return f"I found 1 item that matches your request. Check it out!"
+        elif count <= 5:
+            return f"I found {count} items that match what you're looking for!"
+        else:
+            return f"Great news! I found {count} items that could work for you. Take a look!"
     
     async def _handle_general_conversation(self, state: ConversationState) -> ConversationState:
         """Handle general conversation using LLM."""
@@ -176,34 +298,13 @@ class LangGraphService:
         
         return state
     
-    async def _format_clothing_response(self, clothing_data: Dict[str, Any]) -> str:
-        """Format clothing recommendation data into natural language."""
-        recommendations = clothing_data.get("recommendations", [])
-        styling_tips = clothing_data.get("styling_tips", [])
-        
-        response_parts = [
-            "Based on your style profile, here are my recommendations:\n"
-        ]
-        
-        for i, rec in enumerate(recommendations, 1):
-            response_parts.append(
-                f"\n{i}. **{rec['item']}** in {rec['color']}\n"
-                f"   - Style: {rec['style']}\n"
-                f"   - Why: {rec['reason']}\n"
-                f"   - Price: {rec['price_range']}\n"
-                f"   - Where: {', '.join(rec['where_to_buy'])}"
-            )
-        
-        if styling_tips:
-            response_parts.append("\n\n**Styling Tips:**")
-            for tip in styling_tips:
-                response_parts.append(f"- {tip}")
-        
-        return "\n".join(response_parts)
-    
-    def _route_decision(self, state: ConversationState) -> Literal["clothing", "general"]:
+    def _route_decision(self, state: ConversationState) -> str:
         """Determine which path to take based on classification."""
-        route = state.get("route", "general")
+        route = state.get("route", Route.GENERAL.value)
+        # Validate route is a known value
+        if route not in [Route.CLOTHING.value, Route.GENERAL.value]:
+            logger.warning(f"Unknown route '{route}', defaulting to general")
+            route = Route.GENERAL.value
         logger.info(f"Routing to: {route}")
         return route
     
@@ -213,23 +314,23 @@ class LangGraphService:
         
         workflow = StateGraph(ConversationState)
         
-        workflow.add_node("classify", self._classify_intent)
-        workflow.add_node("clothing", self._handle_clothing_query)
-        workflow.add_node("general", self._handle_general_conversation)
+        workflow.add_node(NodeName.CLASSIFY.value, self._classify_intent)
+        workflow.add_node(NodeName.CLOTHING.value, self._handle_clothing_query)
+        workflow.add_node(NodeName.GENERAL.value, self._handle_general_conversation)
         
-        workflow.set_entry_point("classify")
+        workflow.set_entry_point(NodeName.CLASSIFY.value)
         
         workflow.add_conditional_edges(
-            "classify",
+            NodeName.CLASSIFY.value,
             self._route_decision,
             {
-                "clothing": "clothing",
-                "general": "general"
+                Route.CLOTHING.value: NodeName.CLOTHING.value,
+                Route.GENERAL.value: NodeName.GENERAL.value
             }
         )
         
-        workflow.add_edge("clothing", END)
-        workflow.add_edge("general", END)
+        workflow.add_edge(NodeName.CLOTHING.value, END)
+        workflow.add_edge(NodeName.GENERAL.value, END)
         
         compiled = workflow.compile()
         logger.info("Conversation workflow compiled successfully")
@@ -245,25 +346,16 @@ class LangGraphService:
         trace_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a message through the workflow."""
-        workflow = self.workflow
-        
-        initial_state: ConversationState = {
-            "message": message,
-            "user_id": user_id,
-            "session_id": session_id,
-            "context": context or {},
-            "route": "",
-            "response": "",
-            "clothing_data": None,
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "workflow_version": "1.0"
-            },
-            "trace_context": trace_context
-        }
+        initial_state = self._create_initial_state(
+            message=message,
+            user_id=user_id,
+            session_id=session_id,
+            context=context,
+            trace_context=trace_context
+        )
         
         logger.info(f"Executing workflow for message: {message[:50]}...")
-        result = await workflow.ainvoke(initial_state)
+        result = await self.workflow.ainvoke(initial_state)
         
         logger.info(f"Workflow completed. Route: {result['route']}")
         
@@ -282,187 +374,158 @@ class LangGraphService:
         context: Optional[Dict[str, Any]] = None,
         trace_context: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[StreamEvent]:
-        """Stream a message through the workflow with progress updates."""
+        """Stream a message through the workflow with token-by-token streaming.
+        
+        NOTE: LangGraph's astream() streams node completions, not tokens.
+        For true token streaming, we:
+        1. Run classification through the graph
+        2. Stream tokens directly from the LLM based on the route
+        """
         logger.info(f"Streaming workflow for message: {message[:50]}...")
         
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Analyzing your request...",
-            node="classify"
-        )
-        
-        state: ConversationState = {
-            "message": message,
-            "user_id": user_id,
-            "session_id": session_id,
-            "context": context or {},
-            "route": "",
-            "response": "",
-            "clothing_data": None,
-            "metadata": {},
-            "trace_context": trace_context
-        }
-        
-        state = await self._classify_intent(state)
-        route = state["route"]
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"route": route, "session_id": session_id},
-            node="classify"
-        )
-        
-        if route == "clothing":
-            full_message = ""
-            async for event, msg_part in self._stream_clothing_query(message, context, trace_context):
-                if msg_part:
-                    full_message += msg_part
-                yield event
-        else:
-            full_message = ""
-            async for event, msg_part in self._stream_general_conversation(message, context, trace_context):
-                if msg_part:
-                    full_message += msg_part
-                yield event
-        
-        yield StreamEvent(
-            type=StreamEventType.DONE,
-            content={
-                "route": route,
-                "session_id": session_id,
-                "message": full_message
-            },
-            node="end"
-        )
-    
-    async def _stream_clothing_query(
-        self,
-        message: str,
-        context: Optional[Dict[str, Any]],
-        trace_context: Optional[Dict[str, Any]]
-    ) -> AsyncIterator[tuple[StreamEvent, Optional[str]]]:
-        """Stream clothing recommendations with progress updates."""
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Searching clothing database...",
-            node="clothing"
-        ), None
-        
-        self.langfuse.log_event(
-            name="clothing_expert_start",
-            input_data={"query": message},
-            trace_context=trace_context
-        )
-        
-        clothing_data = await self.fashion_expert.get_clothing_recommendation(
-            query=message,
-            user_context=context or {}
-        )
-        
-        recommendations = clothing_data.get("recommendations", [])
-        styling_tips = clothing_data.get("styling_tips", [])
-        
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content=f"Found {len(recommendations)} recommendations",
-            node="clothing"
-        ), None
-        
-        yield StreamEvent(
-            type=StreamEventType.CLOTHING_ITEM,
-            content={
-                "recommendations": [
-                    {
-                        "index": i,
-                        "item": rec["item"],
-                        "color": rec["color"],
-                        "style": rec["style"],
-                        "reason": rec["reason"],
-                        "price_range": rec["price_range"],
-                        "where_to_buy": rec["where_to_buy"],
-                        "hex_color": rec.get("hex_color")
-                    }
-                    for i, rec in enumerate(recommendations, 1)
-                ],
-                "styling_tips": styling_tips
-            },
-            node="clothing"
-        ), None
-        
-        full_message = await self._format_clothing_response(clothing_data)
-        
-        self.langfuse.log_event(
-            name="clothing_expert_complete",
-            input_data={"query": message},
-            output_data={
-                "recommendations_count": len(recommendations),
-                "recommendations": [
-                    {
-                        "item": rec["item"],
-                        "color": rec["color"],
-                        "style": rec["style"],
-                        "reason": rec["reason"],
-                        "price_range": rec["price_range"],
-                        "where_to_buy": rec["where_to_buy"],
-                        "hex_color": rec.get("hex_color")
-                    }
-                    for rec in recommendations
-                ],
-                "styling_tips": styling_tips
-            },
-            trace_context=trace_context
-        )
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"message_complete": True},
-            node="clothing"
-        ), full_message
-    
-    async def _stream_general_conversation(
-        self,
-        message: str,
-        context: Optional[Dict[str, Any]],
-        trace_context: Optional[Dict[str, Any]]
-    ) -> AsyncIterator[tuple[StreamEvent, Optional[str]]]:
-        """Stream general conversation response from LLM."""
-        yield StreamEvent(
-            type=StreamEventType.STATUS,
-            content="Generating response...",
-            node="general"
-        ), None
-        
-        self.langfuse.log_event(
-            name="general_conversation_start",
-            input_data={"message": message},
-            trace_context=trace_context
-        )
-        
-        system_prompt = prompt_manager.get_template("general_conversation")
-        
-        full_response = ""
-        async for chunk in self.llm_service.stream_response(
+        initial_state = self._create_initial_state(
             message=message,
+            user_id=user_id,
+            session_id=session_id,
             context=context,
-            system_prompt=system_prompt
-        ):
-            if chunk:
-                full_response += chunk
+            trace_context=trace_context
+        )
+
+        # Track full response for final DONE event (fallback if frontend streaming fails)
+        full_response = ""
+        final_route = ""
+
+        try:
+            # Step 1: Run classification only
+            yield StreamEvent(
+                type=StreamEventType.STATUS,
+                content="Understanding your request...",
+                node=NodeName.CLASSIFY.value
+            )
+            
+            # Classify intent
+            state = await self._classify_intent(initial_state)
+            final_route = state["route"]
+            
+            yield StreamEvent(
+                type=StreamEventType.METADATA,
+                content={"route": final_route, "session_id": session_id},
+                node=NodeName.CLASSIFY.value
+            )
+            
+            # Step 2: Stream based on route
+            if final_route == Route.CLOTHING.value:
+                # Use RecommenderGraph with streaming stages
+                yield StreamEvent(
+                    type=StreamEventType.STATUS,
+                    content="Starting clothing recommendation search...",
+                    node=NodeName.CLOTHING.value
+                )
+                
+                # Stream recommender stages
+                item_ids = []
+                iterations = 0
+                fallback_message = None
+                
+                async for rec_event in self.recommender_graph.recommend_stream(
+                    user_query=message,
+                    user_id=user_id,
+                    session_id=session_id,
+                ):
+                    # Map recommender events to langgraph_service StreamEvents
+                    if rec_event.type == RecommenderEventType.STAGE:
+                        # Emit stage progress
+                        yield StreamEvent(
+                            type=StreamEventType.RECOMMENDER_STAGE,
+                            content={
+                                "stage": rec_event.data.get("stage"),
+                                "node": rec_event.data.get("node"),
+                                "iteration": rec_event.data.get("iteration"),
+                            },
+                            node=NodeName.CLOTHING.value
+                        )
+                    
+                    elif rec_event.type == RecommenderEventType.RESULT:
+                        # Capture final results
+                        item_ids = rec_event.data.get("item_ids", [])
+                        fallback_message = rec_event.data.get("message")
+                    
+                    elif rec_event.type == RecommenderEventType.DONE:
+                        iterations = rec_event.data.get("total_iterations", 1)
+                    
+                    elif rec_event.type == RecommenderEventType.ERROR:
+                        logger.error(f"Recommender error: {rec_event.data.get('error')}")
+                        fallback_message = "I had trouble searching. Please try again."
+                
+                # Format and emit final response
+                if item_ids:
+                    full_response = self._format_clothing_response(item_ids, message)
+                    yield StreamEvent(
+                        type=StreamEventType.CLOTHING_RESULT,
+                        content={
+                            "item_ids": item_ids,
+                            "count": len(item_ids),
+                            "iterations": iterations,
+                        },
+                        node=NodeName.CLOTHING.value
+                    )
+                else:
+                    full_response = fallback_message or "I couldn't find matching items."
+                
                 yield StreamEvent(
                     type=StreamEventType.CHUNK,
-                    content=chunk,
-                    node="general"
-                ), chunk
+                    content=full_response,
+                    node=NodeName.CLOTHING.value
+                )
+                
+            else:  # General conversation - stream token by token
+                yield StreamEvent(
+                    type=StreamEventType.STATUS,
+                    content="Generating response...",
+                    node=NodeName.GENERAL.value
+                )
+                
+                system_prompt = prompt_manager.get_template("general_conversation")
+                
+                async for chunk in self.llm_service.stream_response(
+                    message=message,
+                    context=context,
+                    system_prompt=system_prompt
+                ):
+                    full_response += chunk
+                    yield StreamEvent(
+                        type=StreamEventType.CHUNK,
+                        content=chunk,
+                        node=NodeName.GENERAL.value
+                    )
+            
+            # Log completion
+            self.langfuse.log_event(
+                name=f"{final_route}_stream_complete",
+                input_data={"message": message},
+                output_data={"response_length": len(full_response)},
+                trace_context=trace_context
+            )
+            
+            # DONE event contains full response as fallback for frontend streaming errors
+            yield StreamEvent(
+                type=StreamEventType.DONE,
+                content={
+                    "session_id": session_id,
+                    "route": final_route,
+                    "full_response": full_response
+                },
+                node=NodeName.END.value
+            )
         
-        self.langfuse.log_event(
-            name="general_conversation_complete",
-            input_data={"message": message},
-            output_data={"response_length": len(full_response)},
-            trace_context=trace_context
-        )
-        
-        yield StreamEvent(
-            type=StreamEventType.METADATA,
-            content={"message_complete": True},
-            node="general"
-        ), None
+        except Exception as e:
+            logger.error(f"Error during streaming workflow: {e}", exc_info=True)
+            yield StreamEvent(
+                type=StreamEventType.ERROR,
+                content={
+                    "error": str(e),
+                    "session_id": session_id,
+                    "partial_response": full_response
+                },
+                node=NodeName.END.value
+            )

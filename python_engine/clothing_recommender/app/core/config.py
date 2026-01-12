@@ -44,9 +44,12 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     
-    # Database (Future)
+    # Database
     MONGODB_URL: Optional[str] = None
     MONGODB_DB_NAME: str = "aesthetiq"
+    
+    # HuggingFace (for embeddings)
+    HUGGINGFACE_API_KEY: Optional[str] = None
     
     # Redis Cache (Future)
     REDIS_URL: Optional[str] = None
@@ -65,6 +68,29 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8002
+    
+    # ==========================================================================
+    # Recommender Agent Settings
+    # ==========================================================================
+    
+    # Search Configuration
+    RECOMMENDER_SEARCH_LIMIT: int = 20          # Max items to fetch per search
+    RECOMMENDER_MIN_RESULTS: int = 3            # Minimum valid results before stopping
+    RECOMMENDER_MAX_ITERATIONS: int = 3         # Max search attempts (verification loops)
+    RECOMMENDER_NUM_CANDIDATES: int = 100       # Vector search candidates (before limit)
+    
+    # MongoDB Collections
+    MONGODB_WARDROBE_COLLECTION: str = "wardrobe"
+    MONGODB_STYLE_PROFILES_COLLECTION: str = "styleprofiles"
+    
+    # Vector Search
+    MONGODB_VECTOR_INDEX_NAME: str = "vector"
+    MONGODB_EMBEDDING_FIELD: str = "embedding"
+    EMBEDDING_DIMENSION: int = 512
+    
+    # Embedding Service
+    EMBEDDING_SERVICE_URL: str = "http://embedding_service:8004"
+    EMBEDDING_SERVICE_TIMEOUT: float = 30.0     # Timeout in seconds
     
     class Config:
         env_file = ".env"

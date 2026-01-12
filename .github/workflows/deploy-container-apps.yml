@@ -1,0 +1,100 @@
+name: Build and Deploy Aesthetiq (Container Apps)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: aesthetiq
+  ENVIRONMENT: aesthetiq-env
+  REGISTRY: aesthetiqregistry.azurecr.io
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_B7DE81F54E8446EC90BC56F33B37F696 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F160EB8B4C6A4C0EB69D50797DAD027D }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CCA7A56E0EB8424188B0AB0C230F6EBA }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name aesthetiqregistry
+
+      - name: Build and push images
+        run: |
+          docker build -t $REGISTRY/gateway:latest ./gateway
+          docker build -t $REGISTRY/face-analysis:latest ./face_analysis
+          docker build -t $REGISTRY/clothing-recommender:latest ./clothing_recommender
+          docker build -t $REGISTRY/embedding-service:latest ./embedding_service
+
+          docker push $REGISTRY/gateway:latest
+          docker push $REGISTRY/face-analysis:latest
+          docker push $REGISTRY/clothing-recommender:latest
+          docker push $REGISTRY/embedding-service:latest
+
+      # Face Analysis (internal)
+      - name: Deploy face analysis
+        run: |
+          az containerapp up \
+            --name aesthetiq-face-analysis \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT \
+            --image $REGISTRY/face-analysis:latest \
+            --target-port 8001 \
+            --ingress internal \
+            --cpu 2 \
+            --memory 4Gi \
+            --env-vars \
+              PORT=8001 \
+              DEVICE=cpu
+
+      # Clothing Recommender (internal)
+      - name: Deploy clothing recommender
+        run: |
+          az containerapp up \
+            --name aesthetiq-clothing-recommender \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT \
+            --image $REGISTRY/clothing-recommender:latest \
+            --target-port 8002 \
+            --ingress internal \
+            --cpu 1 \
+            --memory 2Gi \
+            --env-vars \
+              PORT=8002
+
+      # Embedding Service (internal)
+      - name: Deploy embedding service
+        run: |
+          az containerapp up \
+            --name aesthetiq-embedding-service \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT \
+            --image $REGISTRY/embedding-service:latest \
+            --target-port 8004 \
+            --ingress internal \
+            --cpu 2 \
+            --memory 4Gi \
+            --env-vars \
+              PORT=8004 \
+              LOG_LEVEL=INFO
+
+      # Gateway (external)
+      - name: Deploy gateway
+        run: |
+          az containerapp up \
+            --name aesthetiq-gateway \
+            --resource-group $RESOURCE_GROUP \
+            --environment $ENVIRONMENT \
+            --image $REGISTRY/gateway:latest \
+            --target-port 8000 \
+            --ingress external \
+            --env-vars FACE_ANALYSIS_URL=http://aesthetiq-face-analysis:8001 CLOTHING_RECOMMENDER_URL=http://aesthetiq-clothing-recommender:8002 EMBEDDING_SERVICE_URL=http://aesthetiq-embedding-service:8004
