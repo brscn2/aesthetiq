@@ -135,30 +135,15 @@ class LangGraphService:
         logger.info(f"Classifying intent for message: {message[:50]}...")
         
         try:
-            # Fast pattern matching for common clothing keywords (bypass LLM for obvious cases)
-            message_lower = message.lower()
-            clothing_keywords = [
-                "need", "want", "buy", "find", "show", "recommend", "suggest",
-                "pants", "shirt", "dress", "jacket", "shoes", "sneakers", "boots",
-                "top", "bottom", "outfit", "clothing", "clothes", "wardrobe",
-                "wedding", "party", "date", "work", "casual", "formal", "summer", "winter"
-            ]
-            
-            # Quick check: if message contains clothing keywords, skip LLM call
-            if any(keyword in message_lower for keyword in clothing_keywords):
-                logger.info(f"Fast classification: clothing (pattern match)")
-                state["route"] = Route.CLOTHING.value
-                state["metadata"]["intent_classification"] = Route.CLOTHING.value
-                state["metadata"]["classification_confidence"] = "pattern_match"
-                return state
-            
-            # For ambiguous cases, use LLM (but with max_tokens limit for speed)
+            # Use LLM for classification (pattern matching removed to avoid false positives)
+            # Example: "what kind of party clothing is trending" should be "general", not "clothing"
+            # Optimizations: max_tokens=5 and temperature=0.3 already provide fast classification
             classification_prompt = prompt_manager.get_template(
                 "intent_classifier",
                 message=message
             )
             
-            # Optimize: Use faster model for classification (gpt-4o-mini is already fast, but we can add max_tokens limit)
+            # Optimize: Use max_tokens limit for faster classification
             # Classification only needs "clothing" or "general" - very short response
             classification_result = await self.llm_service.generate_response(
                 message="",
