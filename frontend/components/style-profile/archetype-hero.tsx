@@ -6,12 +6,16 @@ import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } fro
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Sparkles } from "lucide-react"
 import { StyleProfile } from "@/types/api"
+import { PersonaRevealAnimation } from "./persona-reveal-animation"
 
 interface ArchetypeHeroProps {
   styleProfile: StyleProfile
+  showRevealAnimation?: boolean
+  analysisJobId?: string
+  onRevealComplete?: () => void
 }
 
-export function ArchetypeHero({ styleProfile }: ArchetypeHeroProps) {
+export function ArchetypeHero({ styleProfile, showRevealAnimation, analysisJobId, onRevealComplete }: ArchetypeHeroProps) {
   const chartData = useMemo(() => {
     const sliders = styleProfile.sliders || {}
     const defaultData = [
@@ -47,6 +51,19 @@ export function ArchetypeHero({ styleProfile }: ArchetypeHeroProps) {
     }
     return descriptions[styleProfile.archetype] || "Your unique style profile is being developed based on your preferences and wardrobe."
   }, [styleProfile.archetype])
+
+  // Show reveal animation if requested
+  if (showRevealAnimation) {
+    return (
+      <section>
+        <PersonaRevealAnimation
+          styleProfile={styleProfile}
+          jobId={analysisJobId}
+          onReveal={onRevealComplete}
+        />
+      </section>
+    )
+  }
 
   return (
     <section className="grid gap-8 lg:grid-cols-2 lg:items-center">

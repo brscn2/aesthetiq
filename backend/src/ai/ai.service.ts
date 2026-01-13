@@ -6,6 +6,7 @@ import {
   ClothingAnalysisResult,
   AnalyzeClothingResponse,
 } from './dto/analyze-clothing.dto';
+import { ImageAnalysis } from '../style-profile/schemas/image-analysis-cache.schema';
 
 // CSS color names to hex mapping (+ custom fashion colors)
 const COLOR_MAP: Record<string, string> = {
@@ -270,5 +271,279 @@ Return ONLY valid JSON. Example:
       this.logger.error(`Failed to parse OpenAI response: ${content}`);
       throw new Error('Failed to parse AI response');
     }
+  }
+
+  /**
+   * Analyze an inspiration image for style persona analysis
+   * This method analyzes the image and returns structured style data
+   */
+  async analyzeInspirationImage(imageUrl: string): Promise<ImageAnalysis> {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new BadRequestException('OpenAI API key not configured');
+    }
+
+    try {
+      this.logger.log(`Analyzing inspiration image: ${imageUrl.substring(0, 50)}...`);
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Analyze this fashion/style inspiration image and return a JSON object with:
+- styleKeywords: array of 3-8 style keywords that describe the aesthetic (e.g., "minimalist", "streetwear", "bohemian", "classic", "edgy", "romantic", "athleisure", "vintage")
+- colorPalette: array of 3-5 dominant color names from the image (e.g., "black", "white", "navy", "beige", "camel")
+- aestheticNotes: a brief 1-2 sentence description of the overall aesthetic and style vibe
+- formalityLevel: one of "casual", "smart-casual", "business", "formal"
+- silhouettePreferences: optional array of silhouette descriptions (e.g., "oversized", "fitted", "relaxed", "tailored")
+- patterns: optional array of pattern types if visible (e.g., "stripes", "solid", "floral", "geometric")
+- dominantColors: optional array of 2-3 most prominent color names
+
+Focus on the overall style aesthetic, not individual clothing items. This is for understanding a person's style inspiration.
+
+Return ONLY valid JSON. Example:
+{"styleKeywords":["minimalist","monochrome","architectural"],"colorPalette":["black","white","gray"],"aestheticNotes":"Clean, modern aesthetic with emphasis on silhouette and structure.","formalityLevel":"smart-casual","silhouettePreferences":["oversized","tailored"],"patterns":["solid"],"dominantColors":["black","white"]}`,
+              },
+              {
+                type: 'image_url',
+                image_url: { url: imageUrl },
+              },
+            ],
+          },
+        ],
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      this.logger.log(`OpenAI inspiration analysis response: ${content}`);
+
+      // Parse JSON response
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.slice(7);
+      }
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.slice(3);
+      }
+      if (jsonStr.endsWith('```')) {
+        jsonStr = jsonStr.slice(0, -3);
+      }
+      jsonStr = jsonStr.trim();
+
+      const parsed = JSON.parse(jsonStr);
+
+      // Validate and normalize
+      const validFormalityLevels = ['casual', 'smart-casual', 'business', 'formal'];
+      const formalityLevel = validFormalityLevels.includes(parsed.formalityLevel?.toLowerCase())
+        ? parsed.formalityLevel.toLowerCase()
+        : 'casual';
+
+      return {
+        styleKeywords: Array.isArray(parsed.styleKeywords) ? parsed.styleKeywords : [],
+        colorPalette: Array.isArray(parsed.colorPalette) ? parsed.colorPalette : [],
+        aestheticNotes: typeof parsed.aestheticNotes === 'string' ? parsed.aestheticNotes : '',
+        formalityLevel: formalityLevel as 'casual' | 'smart-casual' | 'business' | 'formal',
+        silhouettePreferences: Array.isArray(parsed.silhouettePreferences) ? parsed.silhouettePreferences : undefined,
+        patterns: Array.isArray(parsed.patterns) ? parsed.patterns : undefined,
+        dominantColors: Array.isArray(parsed.dominantColors) ? parsed.dominantColors : undefined,
+      };
+    } catch (error: any) {
+      this.logger.error(`OpenAI inspiration analysis failed: ${error.message}`, error.stack);
+      throw new Error(`Failed to analyze inspiration image: ${error.message}`);
+    }
+  }
+
+  /**
+   * Determine style persona from aggregated image analyses and user preferences
+   */
+  async determineStylePersona(
+    analyses: ImageAnalysis[],
+    preferences: {
+      sliders?: Record<string, number>;
+      favoriteBrands?: string[];
+      fitPreferences?: {
+        top?: string;
+        bottom?: string;
+        outerwear?: string;
+      };
+      budgetRange?: string;
+      negativeConstraints?: string[];
+    },
+  ): Promise<{ archetype: string; description: string }> {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new BadRequestException('OpenAI API key not configured');
+    }
+
+    try {
+      // Aggregate image analysis data
+      const allStyleKeywords = analyses.flatMap((a) => a.styleKeywords || []);
+      const allColors = analyses.flatMap((a) => a.colorPalette || []);
+      const aestheticNotes = analyses.map((a) => a.aestheticNotes).filter(Boolean).join('; ');
+      const formalityLevels = analyses.map((a) => a.formalityLevel);
+
+      // Count keyword frequency
+      const keywordCounts: Record<string, number> = {};
+      allStyleKeywords.forEach((keyword) => {
+        keywordCounts[keyword.toLowerCase()] = (keywordCounts[keyword.toLowerCase()] || 0) + 1;
+      });
+
+      const topKeywords = Object.entries(keywordCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([keyword]) => keyword);
+
+      // Build context for persona determination
+      const context = {
+        imageAnalyses: analyses.length,
+        topStyleKeywords: topKeywords,
+        dominantColors: [...new Set(allColors)].slice(0, 8),
+        aestheticNotes,
+        averageFormality: formalityLevels.length > 0
+          ? formalityLevels.reduce((acc, level) => {
+              const levels = { casual: 1, 'smart-casual': 2, business: 3, formal: 4 };
+              return acc + (levels[level] || 1);
+            }, 0) / formalityLevels.length
+          : 2,
+        userPreferences: {
+          sliders: preferences.sliders || {},
+          favoriteBrands: preferences.favoriteBrands || [],
+          fitPreferences: preferences.fitPreferences || {},
+          budgetRange: preferences.budgetRange || 'mid-range',
+          negativeConstraints: preferences.negativeConstraints || [],
+        },
+      };
+
+      this.logger.log('Determining style persona from aggregated data...');
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: `Based on the following style inspiration data and user preferences, determine the user's style persona (archetype).
+
+Image Analysis Summary:
+- ${analyses.length} inspiration images analyzed
+- Top style keywords: ${topKeywords.join(', ')}
+- Dominant colors: ${context.dominantColors.join(', ')}
+- Aesthetic notes: ${aestheticNotes || 'Not available'}
+- Average formality level: ${context.averageFormality.toFixed(1)}/4
+
+User Preferences:
+- Style sliders: ${JSON.stringify(preferences.sliders || {})}
+- Favorite brands: ${preferences.favoriteBrands?.join(', ') || 'None specified'}
+- Fit preferences: ${JSON.stringify(preferences.fitPreferences || {})}
+- Budget range: ${preferences.budgetRange || 'mid-range'}
+- No-go items: ${preferences.negativeConstraints?.join(', ') || 'None'}
+
+Determine the most appropriate style archetype from these options (or suggest a new one if none fit perfectly):
+1. "Urban Minimalist" - Clean lines, monochromatic tones, functional fabrics, architectural shapes
+2. "Classic Elegance" - Timeless pieces, refined sophistication, quality basics, elegant silhouettes
+3. "Bold Innovator" - Experimental with color/pattern/shape, creative spirit, boundary-pushing
+4. "Casual Comfort" - Comfort and ease prioritized, relaxed fits, versatile pieces
+
+Return a JSON object with:
+- archetype: the archetype name (use one of the 4 above, or suggest a new descriptive name if none fit)
+- description: a personalized 2-3 sentence description that reflects their specific style based on the data provided
+
+Return ONLY valid JSON. Example:
+{"archetype":"Urban Minimalist","description":"You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette over pattern, favoring architectural shapes that bridge the gap between office sophistication and street-style edge."}`,
+          },
+        ],
+        max_tokens: 300,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      this.logger.log(`OpenAI persona determination response: ${content}`);
+
+      // Parse JSON response
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.slice(7);
+      }
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.slice(3);
+      }
+      if (jsonStr.endsWith('```')) {
+        jsonStr = jsonStr.slice(0, -3);
+      }
+      jsonStr = jsonStr.trim();
+
+      const parsed = JSON.parse(jsonStr);
+
+      return {
+        archetype: typeof parsed.archetype === 'string' ? parsed.archetype : 'Urban Minimalist',
+        description: typeof parsed.description === 'string' ? parsed.description : 'Your unique style profile is being developed based on your preferences and wardrobe.',
+      };
+    } catch (error: any) {
+      this.logger.error(`OpenAI persona determination failed: ${error.message}`, error.stack);
+      // Fallback to default
+      return {
+        archetype: 'Urban Minimalist',
+        description: 'Your unique style profile is being developed based on your preferences and wardrobe.',
+      };
+    }
+  }
+
+  /**
+   * Generate a personalized description for a given archetype
+   * This can be used to enhance the description based on specific user data
+   */
+  async generatePersonaDescription(
+    archetype: string,
+    analyses: ImageAnalysis[],
+  ): Promise<string> {
+    if (!process.env.OPENAI_API_KEY) {
+      return 'Your unique style profile is being developed based on your preferences and wardrobe.';
+    }
+
+    try {
+      const allStyleKeywords = analyses.flatMap((a) => a.styleKeywords || []);
+      const aestheticNotes = analyses.map((a) => a.aestheticNotes).filter(Boolean).join('; ');
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: `Generate a personalized 2-3 sentence description for the style archetype "${archetype}" based on these inspiration images:
+
+Style keywords from images: ${[...new Set(allStyleKeywords)].slice(0, 15).join(', ')}
+Aesthetic notes: ${aestheticNotes || 'Not available'}
+
+The description should be personalized and specific to their style, not generic. Return ONLY the description text, no JSON.`,
+          },
+        ],
+        max_tokens: 200,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (content && content.trim()) {
+        return content.trim();
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to generate persona description: ${error.message}`);
+    }
+
+    // Fallback to default descriptions
+    const defaultDescriptions: Record<string, string> = {
+      'Urban Minimalist': 'You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette over pattern, favoring architectural shapes that bridge the gap between office sophistication and street-style edge.',
+      'Classic Elegance': 'You value timeless pieces and refined sophistication. Your style is built on quality basics and elegant silhouettes that never go out of fashion.',
+      'Bold Innovator': "You're not afraid to experiment with color, pattern, and shape. Your wardrobe reflects your creative spirit and willingness to push boundaries.",
+      'Casual Comfort': 'Comfort and ease are your priorities. You favor relaxed fits and versatile pieces that work for any occasion.',
+    };
+
+    return defaultDescriptions[archetype] || 'Your unique style profile is being developed based on your preferences and wardrobe.';
   }
 }
