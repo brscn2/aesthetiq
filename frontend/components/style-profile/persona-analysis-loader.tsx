@@ -11,7 +11,7 @@ interface PersonaAnalysisLoaderProps {
 }
 
 const analysisStages = [
-  { label: "Examining your wardrobe", duration: 3000 },
+  { label: "Examining your inspiration board", duration: 3000 },
   { label: "Identifying color patterns", duration: 3000 },
   { label: "Analyzing silhouettes", duration: 3000 },
   { label: "Mapping style preferences", duration: 3000 },
@@ -63,51 +63,51 @@ export function PersonaAnalysisLoader({ status = 'processing', className }: Pers
     )}>
       <CardContent className="p-12">
         <div className="flex flex-col items-center justify-center min-h-[450px] gap-12">
-          
+
           {/* Luxury scanning animation */}
           <div className="relative w-56 h-56 flex items-center justify-center">
             {/* Ambient background glow */}
             <div className="absolute inset-0 rounded-full bg-primary/10 blur-3xl animate-pulse" />
-            
+
             {/* Scanning rings */}
             <div className="absolute inset-0">
               {/* Outer pulsing ring */}
               <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]" />
-              
+
               {/* Main outer ring with gradient */}
               <div className="absolute inset-0 rounded-full border border-transparent bg-gradient-to-r from-primary/30 via-accent/20 to-primary/30 [mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] [mask-composite:xor] p-[1px]" />
             </div>
-            
+
             {/* Rotating scanner element */}
             <div className="absolute inset-4 animate-[spin_4s_linear_infinite]">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-1/2 bg-gradient-to-b from-primary via-primary/50 to-transparent rounded-full" />
             </div>
-            
+
             {/* Middle ring */}
             <div className="absolute inset-8 rounded-full border border-primary/30 animate-[spin_12s_linear_infinite_reverse]">
               <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent shadow-[0_0_12px_rgba(168,85,247,0.6)]" />
               <div className="absolute top-1/2 -left-0.5 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary/50" />
             </div>
-            
+
             {/* Inner ring */}
             <div className="absolute inset-16 rounded-full border border-primary/40 animate-[spin_8s_linear_infinite]">
               <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(168,85,247,0.7)]" />
             </div>
-            
+
             {/* Center AI core */}
             <div className="relative w-16 h-16 flex items-center justify-center">
               {/* Pulsing core background */}
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/40 to-accent/40 animate-pulse blur-sm" />
-              
+
               {/* Core ring */}
               <div className="absolute inset-0 rounded-full border border-primary/50" />
-              
+
               {/* Inner core */}
               <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-primary via-primary/80 to-accent flex items-center justify-center shadow-[0_0_30px_rgba(168,85,247,0.4)]">
                 <Sparkles className="w-5 h-5 text-primary-foreground animate-pulse" />
               </div>
             </div>
-            
+
             {/* Floating data particles */}
             <div className="absolute top-6 right-6 w-1 h-1 rounded-full bg-primary/60 animate-[float_3s_ease-in-out_infinite]" />
             <div className="absolute bottom-10 left-6 w-1.5 h-1.5 rounded-full bg-accent/50 animate-[float_4s_ease-in-out_infinite_0.5s]" />
@@ -139,7 +139,7 @@ export function PersonaAnalysisLoader({ status = 'processing', className }: Pers
             {/* Elegant progress bar */}
             <div className="w-full space-y-2">
               <div className="h-1 w-full bg-primary/10 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-primary via-accent to-primary rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${progress}%` }}
                 />

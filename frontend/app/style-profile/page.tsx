@@ -87,8 +87,8 @@ export default function StyleProfilePage() {
 
   const handleAnalysisStart = () => {
     // Immediately set status to pending to show the loader
-    setAnalysisStatus(prev => prev 
-      ? { ...prev, status: 'pending' as const } 
+    setAnalysisStatus(prev => prev
+      ? { ...prev, status: 'pending' as const }
       : { _id: '', userId: '', jobId: '', status: 'pending' as const, startedAt: new Date().toISOString() }
     )
     // Then reload to get the actual status

@@ -62,32 +62,32 @@ export function PersonaRevealAnimation({ styleProfile, jobId, onReveal }: Person
                 <div className="relative w-48 h-48 flex items-center justify-center">
                   {/* Ambient glow */}
                   <div className="absolute inset-0 rounded-full bg-primary/5 blur-3xl animate-pulse" />
-                  
+
                   {/* Outer ring */}
                   <div className="absolute inset-0 rounded-full border border-primary/20 animate-[spin_20s_linear_infinite]">
                     {/* Orbiting particles on outer ring */}
                     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-gradient-to-r from-primary to-primary/60 shadow-[0_0_12px_rgba(168,85,247,0.6)]" />
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary/40" />
                   </div>
-                  
+
                   {/* Middle ring */}
                   <div className="absolute inset-6 rounded-full border border-primary/30 animate-[spin_15s_linear_infinite_reverse]">
                     <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary/80 to-accent shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
                     <div className="absolute top-1/2 -right-0.5 -translate-y-1/2 w-1 h-1 rounded-full bg-primary/30" />
                   </div>
-                  
+
                   {/* Inner ring */}
                   <div className="absolute inset-12 rounded-full border border-primary/40 animate-[spin_10s_linear_infinite]">
                     <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary shadow-[0_0_6px_rgba(168,85,247,0.7)]" />
                   </div>
-                  
+
                   {/* Center diamond */}
                   <div className="relative w-6 h-6 animate-pulse">
                     <div className="absolute inset-0 rotate-45 bg-gradient-to-br from-primary via-primary/80 to-accent rounded-sm shadow-[0_0_20px_rgba(168,85,247,0.4)]" />
                     <div className="absolute inset-1 rotate-45 bg-card rounded-sm" />
                     <div className="absolute inset-2 rotate-45 bg-gradient-to-br from-primary/60 to-accent/60 rounded-sm" />
                   </div>
-                  
+
                   {/* Floating accent particles */}
                   <div className="absolute top-4 right-8 w-1 h-1 rounded-full bg-primary/50 animate-[float_4s_ease-in-out_infinite]" />
                   <div className="absolute bottom-8 left-4 w-0.5 h-0.5 rounded-full bg-accent/50 animate-[float_5s_ease-in-out_infinite_0.5s]" />
