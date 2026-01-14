@@ -142,7 +142,9 @@ graph TB
     style Ask fill:#ffccbc
 ```
 
-## Agent Communication (A2A Protocol)
+## Agent Communication (LangGraph State Management)
+
+**Note:** The following diagram shows the conceptual flow of agent communication. In the actual implementation, agents communicate through shared LangGraph state rather than explicit A2A protocol messages. State updates trigger workflow transitions automatically.
 
 ```mermaid
 sequenceDiagram
@@ -168,24 +170,26 @@ sequenceDiagram
     
     Recommender->>Workflow: Update state: retrieved_items
     
-    Workflow->>Analyzer: Request analysis (A2A)
-    Note over Analyzer: A2A Message:<br/>{from: recommender,<br/>to: analyzer,<br/>type: request_analysis,<br/>payload: {items, query, style_dna}}
+    Workflow->>Analyzer: State transition (retrieved_items updated)
+    Note over Analyzer: State-based communication:<br/>Analyzer reads retrieved_items<br/>from shared state
     
     Analyzer->>Analyzer: Analyze items vs query + style_dna
     
     alt Items Approved
-        Analyzer->>Workflow: A2A: analysis_result (APPROVE)
+        Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
         Workflow->>Gateway: Stream: items + response
     else Items Need Refinement
-        Analyzer->>Workflow: A2A: refinement_request (notes)
-        Workflow->>Recommender: Retry with notes
-        Recommender->>MCP: search_commerce_items(query + notes)
+        Analyzer->>Workflow: Update state: refinement_notes, iteration++
+        Note over Workflow: Conditional routing based on<br/>analysis_result.decision == "refine"
+        Workflow->>Recommender: Retry (reads refinement_notes from state)
+        Recommender->>MCP: search_commerce_items(query + refinement_notes)
         MCP-->>Recommender: List[Items]
-        Recommender->>Workflow: Update state
-        Workflow->>Analyzer: Request analysis again
-        Analyzer->>Workflow: A2A: analysis_result (APPROVE)
+        Recommender->>Workflow: Update state: retrieved_items
+        Workflow->>Analyzer: State transition (retrieved_items updated)
+        Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
     else Query Unclear
-        Analyzer->>Workflow: A2A: clarification_request
+        Analyzer->>Workflow: Update state: needs_clarification = True
+        Note over Workflow: Conditional routing based on<br/>needs_clarification == True
         Workflow->>Gateway: Stream: ask user
         Gateway->>User: "What occasion is this for?"
         User->>Gateway: Response

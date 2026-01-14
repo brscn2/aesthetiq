@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the new multi-agent conversational system that replaces the `clothing_recommender` service. The system uses **LangGraph** for orchestration, **A2A (Agent-to-Agent) protocol** for inter-agent communication, and **MCP (Model Context Protocol) servers** for tool calls.
+This document describes the new multi-agent conversational system that replaces the `clothing_recommender` service. The system uses **LangGraph** for orchestration with shared state management for inter-agent communication, **MCP (Model Context Protocol) servers** for tool calls, **input/output guardrails** for safety, and **Langfuse** for comprehensive LLM call tracing.
 
 ---
 
@@ -40,8 +40,12 @@ This document describes the new multi-agent conversational system that replaces 
 │  │                    LangGraph Workflow Engine                         │   │
 │  │                                                                      │   │
 │  │  ┌──────────────────────────────────────────────────────────────┐  │   │
-│  │  │                    Entry Node                                 │  │   │
-│  │  │              (Intent Classifier)                               │  │   │
+│  │  │                    Input Guardrails                          │  │   │
+│  │  │              (Content Moderation, PII Detection)              │  │   │
+│  │  └───────────────────────────┬──────────────────────────────────┘  │   │
+│  │                              │                                      │   │
+│  │  ┌───────────────────────────▼──────────────────────────────────┐  │   │
+│  │  │                    Intent Classifier Node                   │  │   │
 │  │  └──────────────┬───────────────────────────────┬───────────────┘  │   │
 │  │                 │                               │                   │   │
 │  │        ┌────────▼────────┐            ┌────────▼────────┐          │   │
@@ -50,11 +54,17 @@ This document describes the new multi-agent conversational system that replaces 
 │  │        │  Agent           │            │  Workflow       │          │   │
 │  │        └────────┬────────┘            └────────┬────────┘          │   │
 │  │                 │                               │                   │   │
+│  │        ┌────────▼────────┐            ┌────────▼────────┐          │   │
+│  │        │  Output         │            │  Output         │          │   │
+│  │        │  Guardrails     │            │  Guardrails     │          │   │
+│  │        └────────┬────────┘            └────────┬────────┘          │   │
+│  │                 │                               │                   │   │
 │  │                 └──────────────┬──────────────┘                   │   │
 │  │                                │                                    │   │
 │  │                        ┌───────▼────────┐                          │   │
 │  │                        │  Response       │                          │   │
 │  │                        │  Formatter     │                          │   │
+│  │                        │  Node          │                          │   │
 │  │                        └────────────────┘                          │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                               │
@@ -67,8 +77,8 @@ This document describes the new multi-agent conversational system that replaces 
 │  └─────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────┬──────────────────────────────────────────────────┘
                             │
-                            │ A2A Protocol
-                            │ (Agent-to-Agent Communication)
+                            │ LangGraph State Management
+                            │ (Shared State for Agent Communication)
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -152,27 +162,43 @@ This document describes the new multi-agent conversational system that replaces 
 │    "user_id": str,                                           │
 │    "session_id": str,                                         │
 │    "message": str,                                           │
+│    "conversation_history": List[Dict[str, str]],           │
 │    "intent": "general" | "clothing",                         │
-│    "conversation_history": List[Message],                   │
-│    "user_profile": UserProfile,                              │
-│    "style_dna": StyleDNA,                                    │
+│    "search_scope": "commerce" | "wardrobe" | "both",        │
+│    "extracted_filters": Optional[Dict[str, Any]],           │
+│    "user_profile": Optional[UserProfile],                    │
+│    "style_dna": Optional[StyleDNA],                          │
 │    "retrieved_items": List[ClothingItem],                    │
-│    "analysis_result": AnalysisResult,                        │
+│    "search_sources_used": List[str],                        │
+│    "fallback_used": bool,                                    │
+│    "analysis_result": Optional[AnalysisResult],              │
+│    "refinement_notes": Optional[List[str]],                  │
+│    "needs_clarification": bool,                              │
+│    "clarification_question": Optional[str],                 │
 │    "final_response": str,                                    │
-│    "metadata": Dict                                          │
+│    "streaming_events": List[StreamEvent],                   │
+│    "metadata": Dict[str, Any],                               │
+│    "langfuse_trace_id": Optional[str],                       │
+│    "iteration": int  # Track refinement iterations (max 3)  │
 │  }                                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 #### 2.2 Workflow Nodes
 
-**Node 1: Intent Classifier**
-- **Input:** User message
+**Node 1: Input Guardrails**
+- **Purpose:** Validate and sanitize user input
+- **Checks:** Content moderation, PII detection, input length, prompt injection patterns
+- **Output:** Sanitized input or error response
+- **Next:** Routes to Intent Classifier if safe
+
+**Node 2: Intent Classifier**
+- **Input:** Sanitized user message
 - **Output:** Intent classification (`general` or `clothing`)
 - **Logic:** LLM-based classification
 - **Next:** Routes to either General Conversation or Clothing Workflow
 
-**Node 2: General Conversation Agent**
+**Node 3: General Conversation Agent**
 - **Purpose:** Handles fashion advice, trends, blogs, general questions
 - **Tools Available:**
   - Web Search MCP Server (for latest trends, blogs)
@@ -180,14 +206,28 @@ This document describes the new multi-agent conversational system that replaces 
 - **Output:** Natural language response
 - **Streaming:** Token-by-token LLM streaming
 
-**Node 3: Clothing Recommendation Workflow**
-- **Sub-workflow with multiple agents:**
-  1. **Query Analyzer** - Determines search scope (commerce, wardrobe, both)
-  2. **Clothing Recommender Agent** - Retrieves items
-  3. **Clothing Analyzer Agent** - Validates and refines results
-  4. **Response Formatter** - Formats final response
+**Node 4: Query Analyzer Node**
+- **Purpose:** Analyze user query and determine search scope
+- **Input:** User message, conversation history
+- **Output:** Search scope (commerce/wardrobe/both), extracted filters
+- **Logic:** LLM-based query analysis
+- **Next:** Routes to Clothing Recommender Agent
 
-**Node 4: Response Formatter**
+**Node 5: Clothing Recommendation Workflow**
+- **Sub-workflow with multiple agents:**
+  1. **Clothing Recommender Agent** - Fetches context and retrieves items
+  2. **Clothing Analyzer Agent** - Validates and refines results
+  3. **Response Formatter** - Formats final response
+- **Refinement Loop:** Analyzer can request refinement (max 3 iterations)
+- **Clarification Loop:** Analyzer can request user clarification
+
+**Node 6: Output Guardrails**
+- **Purpose:** Validate LLM responses before sending to user
+- **Checks:** Content moderation, on-topic validation, format validation
+- **Applied:** After Conversation Agent and after Analyzer Agent
+- **Output:** Filtered response or error response
+
+**Node 7: Response Formatter**
 - Formats final response for user
 - Adds styling tips, explanations
 - Streams response to backend
@@ -313,13 +353,16 @@ Analyze: Retrieved Items + User Query + Style DNA
 **Purpose:** Search user's virtual wardrobe
 
 **Tools:**
-- `search_wardrobe_items(query: str, filters: Dict) -> List[Item]`
+- `search_wardrobe_items(query: str, user_id: str, filters: Dict) -> List[Item]`
   - Semantic search in user's wardrobe
   - Uses embeddings + metadata filtering
-- `get_wardrobe_item(item_id: str) -> Item`
+  - Requires user_id for user-specific searches
+- `get_wardrobe_item(item_id: str, user_id: str) -> Item`
   - Get specific item details
-- `filter_wardrobe_items(filters: Dict) -> List[Item]`
+  - Requires user_id for authorization
+- `filter_wardrobe_items(user_id: str, filters: Dict) -> List[Item]`
   - Filter by category, color, brand, etc.
+  - Requires user_id for user-specific filtering
 
 **Data Source:** MongoDB Wardrobe Collection
 
@@ -339,9 +382,10 @@ Analyze: Retrieved Items + User Query + Style DNA
 **Purpose:** Search commerce/retail clothing items
 
 **Tools:**
-- `search_commerce_items(query: str, user_style_dna: StyleDNA, filters: Dict) -> List[Item]`
+- `search_commerce_items(query: str, style_dna: StyleDNA, filters: Dict) -> List[Item]`
   - Semantic search in commerce embedding space
   - Filters by user's style DNA for relevance
+  - Uses style DNA to rank results
 - `get_commerce_item(item_id: str) -> Item`
   - Get specific commerce item details
 - `filter_commerce_items(filters: Dict) -> List[Item]`
@@ -412,40 +456,129 @@ Analyze: Retrieved Items + User Query + Style DNA
 
 ---
 
-### 5. A2A Protocol (Agent-to-Agent Communication)
+### 5. LangGraph State Management (Agent Communication)
 
-**Purpose:** Enable agents to communicate and coordinate
+**Purpose:** Enable agents to communicate and coordinate through shared state
 
-**Protocol Structure:**
-```json
-{
-  "from_agent": "clothing_recommender",
-  "to_agent": "clothing_analyzer",
-  "message_type": "request_analysis",
-  "payload": {
-    "retrieved_items": [...],
-    "user_query": "...",
-    "style_dna": {...}
-  },
-  "session_id": "...",
-  "timestamp": "..."
-}
-```
+**State-Based Communication:**
+- All agents read from and write to shared `ConversationState`
+- No explicit message passing needed - state transitions handle communication
+- State updates trigger workflow transitions automatically
 
-**Message Types:**
-- `request_analysis` - Analyzer requests analysis of items
-- `analysis_result` - Analyzer returns analysis result
-- `refinement_request` - Analyzer requests refinement with notes
-- `clarification_request` - Analyzer requests user clarification
+**State Fields for Agent Communication:**
+- `retrieved_items` - Recommender Agent writes, Analyzer Agent reads
+- `analysis_result` - Analyzer Agent writes, workflow routes based on decision
+- `refinement_notes` - Analyzer Agent writes, Recommender Agent reads (for retry)
+- `needs_clarification` - Analyzer Agent writes, workflow routes to clarification
+- `iteration` - Tracks refinement loop iterations (max 3 to prevent infinite loops)
 
-**Implementation:**
-- Agents communicate through shared state in LangGraph
-- Messages passed via workflow state updates
-- Async communication for parallel processing
+**Workflow Transitions:**
+- Recommender → Analyzer: Automatic via state update
+- Analyzer → Recommender (refine): Conditional routing based on `analysis_result.decision == "refine"`
+- Analyzer → Query Analyzer (clarify): Conditional routing based on `needs_clarification == True`
+- Analyzer → Response Formatter (approve): Conditional routing based on `analysis_result.decision == "approve"`
+
+**Benefits:**
+- Simpler than explicit message passing
+- State is always available for debugging
+- LangGraph handles state persistence and transitions
+- Easy to add new agents without protocol changes
 
 ---
 
-### 6. Data Flow Examples
+### 6. Session Management and Chat History
+
+**Purpose:** Manage conversation sessions and maintain chat history for context-aware responses
+
+**Session Service:**
+- **File:** `conversational_agent/app/services/session/session_service.py`
+- **Responsibilities:**
+  - Load or create sessions from backend
+  - Load conversation history for context
+  - Format history for LLM context (limits to last 10 messages)
+  - Persist messages to backend after workflow completion
+
+**Backend Client:**
+- **File:** `conversational_agent/app/services/backend_client.py`
+- **Methods:**
+  - `create_session(user_id, title)` - Create new chat session
+  - `get_session(session_id)` - Get session with history
+  - `add_message(session_id, role, content, metadata)` - Persist message
+
+**Workflow Integration:**
+1. **Before Workflow:** Load session and history from backend
+2. **During Workflow:** Use `conversation_history` in state for LLM context
+3. **After Workflow:** Save user message and assistant response to backend
+
+**History Formatting:**
+- Limits to last 10 messages to avoid token limits
+- Formats as LLM messages: `[SystemMessage, ...history, HumanMessage(current)]`
+- Maintains conversation context across multiple turns
+
+---
+
+### 7. Input and Output Guardrails
+
+**Purpose:** Ensure user safety, content moderation, and prevent inappropriate content
+
+**Input Guardrails:**
+- **File:** `conversational_agent/app/guardrails/input_guardrails.py`
+- **Checks:**
+  - Content moderation (inappropriate content detection)
+  - PII detection and redaction
+  - Input length validation (max 10,000 characters)
+  - Special character sanitization
+  - Prompt injection pattern detection
+- **Integration:** Applied at workflow entry (before Intent Classifier)
+
+**Output Guardrails:**
+- **File:** `conversational_agent/app/guardrails/output_guardrails.py`
+- **Checks:**
+  - Content moderation of LLM responses
+  - On-topic validation (ensure fashion-related)
+  - Inappropriate content filtering
+  - Response format validation
+- **Integration:** Applied after Conversation Agent and after Analyzer Agent (before Response Formatter)
+
+**Guardrail Result:**
+```python
+class GuardrailResult:
+    is_safe: bool
+    sanitized_input: str  # or filtered_response
+    warnings: List[str]
+```
+
+---
+
+### 8. Langfuse Tracing
+
+**Purpose:** Comprehensive tracing of all LLM calls, tool calls, and agent transitions
+
+**Tracing Service:**
+- **File:** `conversational_agent/app/services/tracing/langfuse_service.py`
+- **Capabilities:**
+  - Start parent trace at workflow entry
+  - Log LLM calls as spans (with input/output)
+  - Log MCP tool calls as spans (with parameters/results)
+  - Log agent transitions (state snapshots)
+  - Track performance metrics
+
+**Integration Points:**
+- Workflow entry: Start trace
+- Each agent: Log LLM calls
+- Each MCP call: Log tool calls
+- State transitions: Log agent transitions
+- Workflow completion: End trace
+
+**Benefits:**
+- Debugging: See complete execution flow
+- Performance: Identify bottlenecks
+- Monitoring: Track LLM usage and costs
+- Quality: Review agent decisions
+
+---
+
+### 9. Data Flow Examples
 
 #### Example 1: General Fashion Question
 
@@ -509,18 +642,28 @@ User: "I want to combine my blue shirt with something new"
 ```
 User: "Find me jackets"
 
-1. Clothing Recommender Agent:
+1. Input Guardrails → Validates input (safe)
+2. Intent Classifier → "clothing"
+3. Query Analyzer → Determines: commerce search
+4. Clothing Recommender Agent:
+   - Fetches user profile and style DNA
    - Searches commerce → Returns 5 jackets
-2. Clothing Analyzer Agent:
+   - State: retrieved_items = [5 jackets], iteration = 0
+5. Clothing Analyzer Agent:
    - Analyzes: Jackets don't match user's style DNA well
    - Decision: REFINE
-   - Notes: "Need jackets matching warm autumn palette, more formal"
-3. Clothing Recommender Agent (retry):
+   - State: refinement_notes = ["Need jackets matching warm autumn palette", "More formal options"], iteration = 1
+6. Clothing Recommender Agent (retry):
+   - Reads refinement_notes from state
    - Searches again with refinement notes
    - Returns 3 better jackets
-4. Clothing Analyzer Agent:
+   - State: retrieved_items = [3 jackets], iteration = 1
+7. Clothing Analyzer Agent:
    - Decision: APPROVE
-5. Response Formatter → Streams results
+   - State: analysis_result.decision = "approve", iteration = 1
+8. Output Guardrails → Validates response (safe)
+9. Response Formatter → Streams results
+10. Session Service → Saves messages to backend
 ```
 
 #### Example 5: Web Search Fallback
@@ -541,7 +684,7 @@ User: "Find me a specific brand jacket"
 
 ---
 
-### 7. Streaming Architecture
+### 10. Streaming Architecture
 
 **Stream Format (SSE):**
 
@@ -580,23 +723,25 @@ data: {"type": "done", "message": "Full response..."}
 
 ---
 
-### 8. Technology Stack
+### 11. Technology Stack
 
 | Component | Technology |
 |-----------|-----------|
 | **Orchestration** | LangGraph |
 | **LLM** | OpenAI GPT-4 / Anthropic Claude |
-| **Agent Communication** | A2A Protocol (custom) |
+| **Agent Communication** | LangGraph State Management (shared state) |
 | **Tool Protocol** | MCP (Model Context Protocol) |
 | **Web Search** | Tavily API / Google Custom Search |
 | **Database** | MongoDB (Wardrobe, Commerce, User Profiles) |
 | **Embeddings** | CLIP (via Embedding Service) |
 | **Streaming** | Server-Sent Events (SSE) |
 | **Backend Integration** | HTTP POST to NestJS Chat API |
+| **Tracing** | Langfuse |
+| **Guardrails** | Custom input/output validation |
 
 ---
 
-### 9. File Structure
+### 12. File Structure
 
 ```
 python_engine/
@@ -604,22 +749,48 @@ python_engine/
 │   ├── app/
 │   │   ├── main.py                # FastAPI app
 │   │   ├── agents/
+│   │   │   ├── __init__.py
 │   │   │   ├── conversation_agent.py
 │   │   │   ├── clothing_recommender_agent.py
 │   │   │   └── clothing_analyzer_agent.py
 │   │   ├── workflows/
-│   │   │   └── main_workflow.py   # LangGraph workflow
-│   │   ├── a2a/
-│   │   │   └── protocol.py        # A2A protocol implementation
+│   │   │   ├── __init__.py
+│   │   │   ├── main_workflow.py   # LangGraph workflow
+│   │   │   ├── state.py           # ConversationState definition
+│   │   │   └── nodes/
+│   │   │       ├── __init__.py
+│   │   │       ├── intent_classifier_node.py
+│   │   │       ├── query_analyzer_node.py
+│   │   │       └── response_formatter_node.py
+│   │   ├── guardrails/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── input_guardrails.py
+│   │   │   └── output_guardrails.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── llm_service.py
+│   │   │   ├── tracing/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── langfuse_service.py
+│   │   │   ├── session/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── session_service.py
+│   │   │   └── backend_client.py  # HTTP client for backend chat API
 │   │   ├── mcp/
+│   │   │   ├── __init__.py
 │   │   │   └── client.py          # MCP client for tool calls
 │   │   ├── api/
 │   │   │   └── v1/
 │   │   │       └── endpoints/
 │   │   │           └── chat.py   # Streaming endpoint
-│   │   └── services/
-│   │       ├── llm_service.py
-│   │       └── backend_client.py  # Streams to NestJS backend
+│   │   └── core/
+│   │       ├── config.py
+│   │       └── logger.py
+│   ├── tests/
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   └── guardrails/
 │   └── requirements.txt
 │
 ├── mcp_servers/                   # MCP server implementations
@@ -647,30 +818,16 @@ python_engine/
 
 ---
 
-### 10. Implementation Phases
+### 13. Implementation Phases
 
-#### Phase 1: Core Infrastructure
-- [ ] Set up LangGraph workflow structure
-- [ ] Implement A2A protocol
-- [ ] Create MCP client library
-- [ ] Set up streaming to backend
+See `python_engine/docs/issues/` for detailed implementation issues:
 
-#### Phase 2: MCP Servers
-- [ ] Wardrobe MCP Server
-- [ ] Commerce MCP Server
-- [ ] Web Search MCP Server
-- [ ] User Data MCP Server
-- [ ] Style DNA MCP Server
-
-#### Phase 3: Agents
-- [ ] Conversation Agent (general chat)
-- [ ] Clothing Recommender Agent
-- [ ] Clothing Analyzer Agent
-
-#### Phase 4: Integration
-- [ ] Integrate with backend chat API
-- [ ] End-to-end testing
-- [ ] Performance optimization
+1. **Issue 1: Core Infrastructure** - LangGraph state, MCP client, Langfuse, session management
+2. **Issue 2: MCP Servers** - All 5 MCP servers with test endpoints
+3. **Issue 3: Agents and Workflow** - All agents and complete workflow with Langfuse
+4. **Issue 4: Safety Guardrails** - Input/output guardrails
+5. **Issue 5: Integration and E2E** - Backend integration and end-to-end testing
+6. **Issue 6: Performance Optimization** - Performance optimization and bug fixes
 
 ---
 
@@ -678,7 +835,7 @@ python_engine/
 
 1. **MCP Servers for Tool Calls**: Allows agents to use tools via standardized protocol, making tools reusable across different agents.
 
-2. **A2A Protocol**: Enables agents to communicate and coordinate, allowing for complex multi-agent workflows.
+2. **LangGraph State Management**: Agents communicate through shared state, eliminating need for explicit message passing. State transitions handle agent coordination automatically.
 
 3. **LangGraph Orchestration**: Provides state management, conditional routing, and streaming capabilities.
 
@@ -694,9 +851,11 @@ python_engine/
 
 - **Authentication**: Gateway validates all requests
 - **Rate Limiting**: Per user/IP limits
-- **Input Sanitization**: All user inputs sanitized before LLM/tool calls
+- **Input Guardrails**: All user inputs validated and sanitized before processing
+- **Output Guardrails**: All LLM responses validated before sending to users
 - **Tool Call Validation**: MCP servers validate all tool call parameters
 - **Error Handling**: Graceful degradation if MCP servers unavailable
+- **Session Management**: Secure session handling and message persistence
 
 ---
 
@@ -706,6 +865,8 @@ python_engine/
 - **Parallel Tool Calls**: Agents can call multiple MCP tools in parallel
 - **Streaming**: Real-time response streaming for better UX
 - **Connection Pooling**: Reuse connections to MongoDB and external APIs
+- **Refinement Loop Limit**: Maximum 3 iterations to prevent infinite loops
+- **History Limiting**: Limit conversation history to last 10 messages to manage token usage
 
 ---
 
