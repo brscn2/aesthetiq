@@ -329,3 +329,28 @@ export interface AnalyzeClothingResponse {
   data?: ClothingAnalysisResult;
   error?: string;
 }
+
+// Persona Analysis Types
+export type PersonaAnalysisStatusType = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface ImageAnalysis {
+  styleKeywords: string[];
+  colorPalette: string[];
+  aestheticNotes: string;
+  formalityLevel: 'casual' | 'smart-casual' | 'business' | 'formal';
+  silhouettePreferences?: string[];
+  patterns?: string[];
+  dominantColors?: string[];
+}
+
+export interface PersonaAnalysisStatus {
+  _id: string;
+  userId: string;
+  status: PersonaAnalysisStatusType;
+  jobId: string;
+  startedAt: string;
+  completedAt?: string;
+  error?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

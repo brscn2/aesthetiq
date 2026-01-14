@@ -24,6 +24,7 @@ import type {
   UpdateWardrobeItemDto,
   User,
   WardrobeItem,
+  PersonaAnalysisStatus,
 } from "@/types/api"
 
 // Re-export types for admin use
@@ -128,6 +129,18 @@ const createStyleProfileApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateStyleProfileDto): Promise<StyleProfile> => client.patch(`/style-profile/${id}`, data).then((res) => res.data),
   updateByUserId: (data: UpdateStyleProfileDto): Promise<StyleProfile> => client.patch(`/style-profile/user`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/style-profile/${id}`).then(() => undefined),
+  analyzePersona: (): Promise<{ jobId: string }> => client.post("/style-profile/analyze-persona").then((res) => res.data),
+  getPersonaAnalysisStatus: async (): Promise<PersonaAnalysisStatus | null> => {
+    try {
+      const res = await client.get("/style-profile/persona-analysis/status")
+      return res.data
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null
+      }
+      throw error
+    }
+  },
 })
 
 const createChatApi = (client: AxiosInstance) => ({

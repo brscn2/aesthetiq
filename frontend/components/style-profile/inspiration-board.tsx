@@ -3,7 +3,6 @@
 import { useState, useRef } from "react"
 import { Plus, X, Upload, Link as LinkIcon, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,7 +25,6 @@ interface InspirationBoardProps {
   onProfileUpdate?: () => void
 }
 
-const DEFAULT_TAGS = ["Streetwear", "Oversized Silhouette", "Neutral Tones", "Layering", "Matte Textures"]
 const MAX_OUTPUT_SIZE = 5 * 1024 * 1024 // 5MB cap after compression
 const COMPRESSION_THRESHOLD = 1.5 * 1024 * 1024 // start compressing after 1.5MB
 const MAX_DIMENSION = 1920
@@ -41,7 +39,6 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { uploadApi, styleProfileApi } = useApi()
   const inspirationImages = styleProfile.inspirationImageUrls || []
-  const tags = DEFAULT_TAGS // In the future, these could be extracted from the profile or AI analysis
 
   const loadImageFromFile = (file: File) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
@@ -277,22 +274,6 @@ export function InspirationBoard({ styleProfile, onProfileUpdate }: InspirationB
           </div>
         ))}
       </div>
-
-      {/* AI Analysis Tags */}
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <span className="flex items-center px-2 text-sm text-muted-foreground">AI Detected:</span>
-          {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="group gap-1 px-3 py-1 text-sm hover:bg-secondary/80">
-              {tag}
-              <button className="ml-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <X className="h-3 w-3" />
-                <span className="sr-only">Remove {tag} tag</span>
-              </button>
-            </Badge>
-          ))}
-        </div>
-      )}
 
       {/* Add Inspiration Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
