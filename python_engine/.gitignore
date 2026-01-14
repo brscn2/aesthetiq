@@ -13,3 +13,13 @@
 /logs/app.log
 
 .venv*/
+venv/
+**/venv/
+
+# Coverage
+.coverage
+htmlcov/
+*.cover
+
+# Pytest
+.pytest_cache/

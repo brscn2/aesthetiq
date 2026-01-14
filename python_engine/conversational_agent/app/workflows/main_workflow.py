@@ -1,0 +1,369 @@
+"""Main LangGraph workflow for the conversational agent."""
+from typing import Dict, Any, Literal, Optional
+from langgraph.graph import StateGraph, END
+
+from app.workflows.state import ConversationState, create_initial_state
+from app.core.config import get_settings
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+# =============================================================================
+# Routing Functions
+# =============================================================================
+
+def route_after_input_guardrails(state: ConversationState) -> Literal["safe", "unsafe"]:
+    """Route after input guardrails check."""
+    is_safe = state.get("metadata", {}).get("input_safe", True)
+    logger.debug(f"Input guardrails result: {'safe' if is_safe else 'unsafe'}")
+    return "safe" if is_safe else "unsafe"
+
+
+def route_after_intent(state: ConversationState) -> Literal["general", "clothing"]:
+    """Route based on intent classification."""
+    intent = state.get("intent", "general")
+    logger.debug(f"Routing based on intent: {intent}")
+    return intent
+
+
+def route_after_analysis(state: ConversationState) -> Literal["approve", "refine", "clarify", "error"]:
+    """Route based on analyzer decision."""
+    iteration = state.get("iteration", 0)
+    max_iterations = get_settings().MAX_REFINEMENT_ITERATIONS
+    
+    # Prevent infinite loops
+    if iteration >= max_iterations:
+        logger.warning(f"Max iterations ({max_iterations}) reached, forcing approval")
+        return "error"
+    
+    analysis = state.get("analysis_result")
+    if not analysis:
+        logger.warning("No analysis result, defaulting to approve")
+        return "approve"
+    
+    decision = analysis.get("decision", "approve")
+    logger.debug(f"Analyzer decision: {decision} (iteration {iteration})")
+    return decision
+
+
+def route_after_output_guardrails(state: ConversationState) -> Literal["safe", "unsafe"]:
+    """Route after output guardrails check."""
+    is_safe = state.get("metadata", {}).get("output_safe", True)
+    logger.debug(f"Output guardrails result: {'safe' if is_safe else 'unsafe'}")
+    return "safe" if is_safe else "unsafe"
+
+
+# =============================================================================
+# Placeholder Node Functions (to be implemented in Issue 3)
+# =============================================================================
+
+async def input_guardrails_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Input guardrails node - validates and sanitizes user input.
+    
+    TODO: Implement in Issue 4 (Safety Guardrails)
+    """
+    logger.debug("Input guardrails node (placeholder)")
+    
+    # Placeholder: mark as safe
+    metadata = state.get("metadata", {})
+    metadata["input_safe"] = True
+    
+    return {"metadata": metadata}
+
+
+async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Intent classifier node - classifies user intent.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Intent classifier node (placeholder)")
+    
+    # Placeholder: default to general conversation
+    message = state.get("message", "").lower()
+    
+    # Simple keyword-based classification (placeholder)
+    clothing_keywords = ["jacket", "shirt", "pants", "dress", "outfit", "wear", "buy", "recommend"]
+    intent = "clothing" if any(kw in message for kw in clothing_keywords) else "general"
+    
+    return {"intent": intent}
+
+
+async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Query analyzer node - analyzes query and determines search scope.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Query analyzer node (placeholder)")
+    
+    # Placeholder: default to commerce search
+    return {
+        "search_scope": "commerce",
+        "extracted_filters": {},
+    }
+
+
+async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Conversation agent node - handles general fashion questions.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Conversation agent node (placeholder)")
+    
+    message = state.get("message", "")
+    
+    # Placeholder response
+    response = f"I understand you're asking about fashion. Your question was: '{message}'. " \
+               "This is a placeholder response - the full implementation will be added in Issue 3."
+    
+    return {
+        "final_response": response,
+        "metadata": {**state.get("metadata", {}), "agent_used": "conversation_agent"},
+    }
+
+
+async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Clothing recommender agent node - retrieves clothing items.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Clothing recommender node (placeholder)")
+    
+    # Placeholder: return empty items
+    return {
+        "retrieved_items": [],
+        "search_sources_used": ["commerce"],
+        "fallback_used": False,
+    }
+
+
+async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Clothing analyzer agent node - validates and refines results.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Clothing analyzer node (placeholder)")
+    
+    # Placeholder: approve with no items
+    return {
+        "analysis_result": {
+            "decision": "approve",
+            "approved": True,
+            "confidence": 1.0,
+            "notes": [],
+        },
+        "iteration": state.get("iteration", 0) + 1,
+    }
+
+
+async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Output guardrails node - validates LLM responses.
+    
+    TODO: Implement in Issue 4 (Safety Guardrails)
+    """
+    logger.debug("Output guardrails node (placeholder)")
+    
+    # Placeholder: mark as safe
+    metadata = state.get("metadata", {})
+    metadata["output_safe"] = True
+    
+    return {"metadata": metadata}
+
+
+async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Response formatter node - formats final response.
+    
+    TODO: Implement in Issue 3 (Agents and Workflow)
+    """
+    logger.debug("Response formatter node (placeholder)")
+    
+    # If we have a final response, use it
+    if state.get("final_response"):
+        return {}
+    
+    # Otherwise, format from retrieved items
+    items = state.get("retrieved_items", [])
+    if items:
+        response = f"I found {len(items)} items for you. " \
+                   "This is a placeholder response - the full implementation will be added in Issue 3."
+    else:
+        response = "I couldn't find any items matching your request. " \
+                   "This is a placeholder response - the full implementation will be added in Issue 3."
+    
+    return {"final_response": response}
+
+
+async def error_response_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Error response node - handles errors gracefully.
+    """
+    logger.debug("Error response node")
+    
+    # Check what type of error occurred
+    metadata = state.get("metadata", {})
+    
+    if not metadata.get("input_safe", True):
+        response = "I'm sorry, but I can't process that request. Please try rephrasing your question."
+    elif not metadata.get("output_safe", True):
+        response = "I apologize, but I encountered an issue generating a response. Please try again."
+    elif state.get("iteration", 0) >= get_settings().MAX_REFINEMENT_ITERATIONS:
+        response = "I'm having trouble finding exactly what you're looking for. " \
+                   "Could you please provide more details about what you need?"
+    else:
+        response = "I'm sorry, something went wrong. Please try again."
+    
+    return {"final_response": response}
+
+
+# =============================================================================
+# Workflow Creation
+# =============================================================================
+
+def create_workflow() -> StateGraph:
+    """
+    Create the main conversational agent workflow.
+    
+    Returns:
+        Compiled LangGraph StateGraph
+    """
+    logger.info("Creating conversational agent workflow")
+    
+    # Create the state graph
+    workflow = StateGraph(ConversationState)
+    
+    # Add nodes
+    workflow.add_node("input_guardrails", input_guardrails_node)
+    workflow.add_node("intent_classifier", intent_classifier_node)
+    workflow.add_node("query_analyzer", query_analyzer_node)
+    workflow.add_node("conversation_agent", conversation_agent_node)
+    workflow.add_node("clothing_recommender", clothing_recommender_node)
+    workflow.add_node("clothing_analyzer", clothing_analyzer_node)
+    workflow.add_node("output_guardrails", output_guardrails_node)
+    workflow.add_node("response_formatter", response_formatter_node)
+    workflow.add_node("error_response", error_response_node)
+    
+    # Set entry point
+    workflow.set_entry_point("input_guardrails")
+    
+    # Add conditional edges from input guardrails
+    workflow.add_conditional_edges(
+        "input_guardrails",
+        route_after_input_guardrails,
+        {
+            "safe": "intent_classifier",
+            "unsafe": "error_response",
+        }
+    )
+    
+    # Add conditional edges from intent classifier
+    workflow.add_conditional_edges(
+        "intent_classifier",
+        route_after_intent,
+        {
+            "general": "conversation_agent",
+            "clothing": "query_analyzer",
+        }
+    )
+    
+    # Query analyzer leads to clothing recommender
+    workflow.add_edge("query_analyzer", "clothing_recommender")
+    
+    # Clothing recommender leads to clothing analyzer
+    workflow.add_edge("clothing_recommender", "clothing_analyzer")
+    
+    # Add conditional edges from clothing analyzer
+    workflow.add_conditional_edges(
+        "clothing_analyzer",
+        route_after_analysis,
+        {
+            "approve": "output_guardrails",
+            "refine": "clothing_recommender",  # Loop back for refinement
+            "clarify": "query_analyzer",  # Loop back for clarification
+            "error": "error_response",
+        }
+    )
+    
+    # Conversation agent leads to output guardrails
+    workflow.add_edge("conversation_agent", "output_guardrails")
+    
+    # Add conditional edges from output guardrails
+    workflow.add_conditional_edges(
+        "output_guardrails",
+        route_after_output_guardrails,
+        {
+            "safe": "response_formatter",
+            "unsafe": "error_response",
+        }
+    )
+    
+    # Response formatter and error response lead to END
+    workflow.add_edge("response_formatter", END)
+    workflow.add_edge("error_response", END)
+    
+    logger.info("Workflow created successfully")
+    
+    return workflow.compile()
+
+
+# Global compiled workflow instance
+_workflow: Optional[StateGraph] = None
+
+
+def get_workflow() -> StateGraph:
+    """
+    Get the compiled workflow instance.
+    
+    Returns:
+        Compiled LangGraph workflow
+    """
+    global _workflow
+    
+    if _workflow is None:
+        _workflow = create_workflow()
+    
+    return _workflow
+
+
+async def run_workflow(
+    user_id: str,
+    session_id: str,
+    message: str,
+    conversation_history: Optional[list] = None,
+) -> ConversationState:
+    """
+    Run the workflow with the given input.
+    
+    Args:
+        user_id: The user's identifier
+        session_id: The session identifier
+        message: The user's message
+        conversation_history: Previous conversation messages
+        
+    Returns:
+        Final workflow state
+    """
+    workflow = get_workflow()
+    
+    initial_state = create_initial_state(
+        user_id=user_id,
+        session_id=session_id,
+        message=message,
+        conversation_history=conversation_history,
+    )
+    
+    logger.info(f"Running workflow for user {user_id}, session {session_id}")
+    
+    # Run the workflow
+    final_state = await workflow.ainvoke(initial_state)
+    
+    logger.info(f"Workflow completed with response length: {len(final_state.get('final_response', ''))}")
+    
+    return final_state
