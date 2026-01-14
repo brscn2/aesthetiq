@@ -147,7 +147,7 @@ class BackendClient:
         logger.debug(f"Creating session for user {user_id}")
         
         try:
-            response = await client.post("/chat", json=payload)
+            response = await client.post("/api/chat", json=payload)
             result = await self._handle_response(response)
             logger.info(f"Created session: {result.get('sessionId')}")
             return result
@@ -173,7 +173,7 @@ class BackendClient:
         logger.debug(f"Getting session: {session_id}")
         
         try:
-            response = await client.get(f"/chat/session/{session_id}")
+            response = await client.get(f"/api/chat/session/{session_id}")
             return await self._handle_response(response)
         except httpx.RequestError as e:
             logger.error(f"Network error getting session: {e}")
@@ -212,7 +212,7 @@ class BackendClient:
         logger.debug(f"Adding {role} message to session {session_id}")
         
         try:
-            response = await client.post(f"/chat/{session_id}/message", json=payload)
+            response = await client.post(f"/api/chat/{session_id}/message", json=payload)
             return await self._handle_response(response)
         except httpx.RequestError as e:
             logger.error(f"Network error adding message: {e}")
@@ -238,7 +238,7 @@ class BackendClient:
         logger.debug(f"Getting sessions for user {user_id}")
         
         try:
-            response = await client.get("/chat/user")
+            response = await client.get("/api/chat/user")
             return await self._handle_response(response)
         except httpx.RequestError as e:
             logger.error(f"Network error getting user sessions: {e}")
@@ -254,7 +254,8 @@ class BackendClient:
         client = await self._get_client()
         
         try:
-            response = await client.get("/health")
+            # Backend uses /api prefix and returns "Hello World!" at root
+            response = await client.get("/api")
             return response.status_code == 200
         except Exception as e:
             logger.warning(f"Backend health check failed: {e}")

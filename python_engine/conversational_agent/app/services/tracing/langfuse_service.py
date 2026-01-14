@@ -11,13 +11,12 @@ logger = get_logger(__name__)
 # Try to import langfuse, gracefully handle if not available
 try:
     from langfuse import Langfuse
-    from langfuse.client import StatefulTraceClient, StatefulSpanClient
+    from langfuse.types import TraceContext
     LANGFUSE_AVAILABLE = True
 except ImportError:
     LANGFUSE_AVAILABLE = False
     Langfuse = None
-    StatefulTraceClient = None
-    StatefulSpanClient = None
+    TraceContext = None
 
 
 class LangfuseTracingService:
@@ -25,6 +24,7 @@ class LangfuseTracingService:
     Service for tracing LLM calls, tool calls, and agent transitions.
     
     Provides comprehensive observability for the multi-agent workflow.
+    Uses Langfuse SDK v3 API.
     """
     
     def __init__(self):
@@ -32,7 +32,7 @@ class LangfuseTracingService:
         self.settings = get_settings()
         self.enabled = self.settings.LANGFUSE_ENABLED and LANGFUSE_AVAILABLE
         self._client: Optional[Any] = None
-        self._traces: Dict[str, Any] = {}  # Store active traces
+        self._traces: Dict[str, Any] = {}  # Store trace contexts
         self._spans: Dict[str, Any] = {}   # Store active spans
         
         if self.enabled:
@@ -80,21 +80,32 @@ class LangfuseTracingService:
         Returns:
             Trace ID
         """
-        trace_id = f"trace_{uuid.uuid4().hex[:16]}"
+        # Generate a unique trace ID
+        trace_id = self._client.create_trace_id() if self.enabled and self._client else f"trace_{uuid.uuid4().hex[:16]}"
         
         if not self.enabled:
             logger.debug(f"Tracing disabled, returning mock trace ID: {trace_id}")
             return trace_id
         
         try:
-            trace = self._client.trace(
-                id=trace_id,
-                name=name,
+            # Create trace context (Langfuse v3 API)
+            trace_context = TraceContext(
+                trace_id=trace_id,
                 user_id=user_id,
                 session_id=session_id,
+                tags=[name],
                 metadata=metadata or {},
             )
-            self._traces[trace_id] = trace
+            
+            # Store the trace context for later use
+            self._traces[trace_id] = {
+                "context": trace_context,
+                "name": name,
+                "user_id": user_id,
+                "session_id": session_id,
+                "metadata": metadata or {},
+            }
+            
             logger.debug(f"Started trace: {trace_id}")
             return trace_id
         except Exception as e:
@@ -131,21 +142,27 @@ class LangfuseTracingService:
         if not self.enabled:
             return None
         
-        trace = self._traces.get(trace_id)
-        if not trace:
+        trace_data = self._traces.get(trace_id)
+        if not trace_data:
             logger.warning(f"Trace not found: {trace_id}")
             return None
         
         try:
-            generation = trace.generation(
+            trace_context = trace_data["context"]
+            
+            # Start a generation span
+            generation = self._client.start_generation(
+                trace_context=trace_context,
                 name=f"{agent_name}_llm_call",
                 model=model or self.settings.OPENAI_MODEL,
                 input=input_text,
-                output=output_text,
                 metadata=metadata or {},
-                start_time=start_time,
-                end_time=end_time,
             )
+            
+            # Update with output and end
+            generation.update(output=output_text)
+            generation.end()
+            
             span_id = f"gen_{uuid.uuid4().hex[:8]}"
             self._spans[span_id] = generation
             logger.debug(f"Logged LLM call for {agent_name}: {span_id}")
@@ -180,22 +197,30 @@ class LangfuseTracingService:
         if not self.enabled:
             return None
         
-        trace = self._traces.get(trace_id)
-        if not trace:
+        trace_data = self._traces.get(trace_id)
+        if not trace_data:
             logger.warning(f"Trace not found: {trace_id}")
             return None
         
         try:
-            span = trace.span(
+            trace_context = trace_data["context"]
+            
+            # Start a span for the tool call
+            span = self._client.start_span(
+                trace_context=trace_context,
                 name=f"tool_{tool_name}",
                 input=input_params,
-                output=output if isinstance(output, (dict, list, str)) else str(output),
                 metadata={
                     **(metadata or {}),
                     "duration_ms": duration_ms,
                     "tool_type": "mcp",
                 },
             )
+            
+            # Update with output and end
+            span.update(output=output if isinstance(output, (dict, list, str)) else str(output))
+            span.end()
+            
             span_id = f"span_{uuid.uuid4().hex[:8]}"
             self._spans[span_id] = span
             logger.debug(f"Logged tool call: {tool_name}")
@@ -228,24 +253,30 @@ class LangfuseTracingService:
         if not self.enabled:
             return None
         
-        trace = self._traces.get(trace_id)
-        if not trace:
+        trace_data = self._traces.get(trace_id)
+        if not trace_data:
             logger.warning(f"Trace not found: {trace_id}")
             return None
         
         try:
+            trace_context = trace_data["context"]
+            
             # Sanitize state snapshot (remove large/sensitive data)
             sanitized_state = self._sanitize_state(state_snapshot) if state_snapshot else {}
             
-            event = trace.event(
+            # Create a span for the transition event
+            span = self._client.start_span(
+                trace_context=trace_context,
                 name="agent_transition",
                 input={
                     "from_agent": from_agent,
                     "to_agent": to_agent,
                     "reason": reason,
                 },
-                output=sanitized_state,
             )
+            span.update(output=sanitized_state)
+            span.end()
+            
             event_id = f"event_{uuid.uuid4().hex[:8]}"
             logger.debug(f"Logged transition: {from_agent} -> {to_agent}")
             return event_id
@@ -270,12 +301,15 @@ class LangfuseTracingService:
         if not self.enabled:
             return
         
-        trace = self._traces.get(trace_id)
-        if not trace:
+        trace_data = self._traces.get(trace_id)
+        if not trace_data:
             return
         
         try:
-            trace.event(
+            trace_context = trace_data["context"]
+            
+            span = self._client.start_span(
+                trace_context=trace_context,
                 name="error",
                 input={
                     "error_type": type(error).__name__,
@@ -284,6 +318,8 @@ class LangfuseTracingService:
                 },
                 level="ERROR",
             )
+            span.end()
+            
             logger.debug(f"Logged error: {type(error).__name__}")
         except Exception as e:
             logger.error(f"Failed to log error: {e}")
@@ -305,16 +341,25 @@ class LangfuseTracingService:
         if not self.enabled:
             return
         
-        trace = self._traces.pop(trace_id, None)
-        if not trace:
+        trace_data = self._traces.pop(trace_id, None)
+        if not trace_data:
             logger.warning(f"Trace not found for ending: {trace_id}")
             return
         
         try:
-            trace.update(
-                output=output,
-                metadata=metadata,
+            # In Langfuse v3, we use update_current_trace or just log a final event
+            trace_context = trace_data["context"]
+            
+            # Create a final "complete" span to mark the trace end
+            span = self._client.start_span(
+                trace_context=trace_context,
+                name="trace_complete",
+                input={"trace_id": trace_id},
+                metadata=metadata or {},
             )
+            span.update(output={"response": output} if output else {})
+            span.end()
+            
             logger.debug(f"Ended trace: {trace_id}")
         except Exception as e:
             logger.error(f"Failed to end trace: {e}")
@@ -368,6 +413,11 @@ class LangfuseTracingService:
         self.flush()
         self._traces.clear()
         self._spans.clear()
+        if self.enabled and self._client:
+            try:
+                self._client.shutdown()
+            except Exception:
+                pass
         logger.info("Langfuse tracing service shut down")
 
 
