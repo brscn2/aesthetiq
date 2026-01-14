@@ -18,15 +18,15 @@ RUN apt-get update && apt-get install -y \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
-# Upgrade pip
-RUN pip install --upgrade pip
+# Upgrade pip using python3.11 to ensure consistency
+RUN python3.11 -m pip install --upgrade pip
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Copy requirements and install dependencies using python3.11 -m pip
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app ./app
