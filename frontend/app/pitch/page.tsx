@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { 
-  Sparkles, 
-  Camera, 
-  Palette, 
-  MessageSquare, 
-  Users, 
+import {
+  Sparkles,
+  Camera,
+  Palette,
+  MessageSquare,
+  Users,
   TrendingUp,
   Brain,
   Shirt,
@@ -66,21 +66,21 @@ function useInView(threshold = 0.1) {
 }
 
 // Animated element wrapper with stagger support
-function AnimatedElement({ 
-  children, 
-  delay = 0, 
+function AnimatedElement({
+  children,
+  delay = 0,
   animation = "fade-in-up",
   className = ""
-}: { 
+}: {
   children: React.ReactNode
   delay?: number
   animation?: "fade-in-up" | "fade-in-left" | "fade-in-right" | "scale-in"
   className?: string
 }) {
   const { ref, isInView } = useInView(0.1)
-  
+
   return (
-    <div 
+    <div
       ref={ref}
       className={`${className} ${isInView ? `animate-${animation}` : 'opacity-0'}`}
       style={{ animationDelay: `${delay}ms` }}
@@ -114,12 +114,12 @@ function AnimatedCounter({ end, duration = 2000, suffix = "" }: { end: number; d
 }
 
 // Section wrapper with animation
-function Section({ 
-  children, 
-  className = "", 
+function Section({
+  children,
+  className = "",
   id,
-  dark = false 
-}: { 
+  dark = false
+}: {
   children: React.ReactNode
   className?: string
   id?: string
@@ -131,9 +131,8 @@ function Section({
     <section
       id={id}
       ref={ref}
-      className={`min-h-screen flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-all duration-700 ${
-        isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-      } ${dark ? "bg-card" : "bg-background"} ${className}`}
+      className={`min-h-screen flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-all duration-700 ${isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        } ${dark ? "bg-card" : "bg-background"} ${className}`}
     >
       {children}
     </section>
@@ -143,7 +142,7 @@ function Section({
 // ==================== HERO SECTION ====================
 function HeroSection() {
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -183,7 +182,7 @@ function HeroSection() {
         <div className={`transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <Badge variant="secondary" className="mb-6 px-4 py-2 text-sm">
             <Sparkles className="w-4 h-4 mr-2" />
-            Pitch Deck 2025
+            Pitch Deck 2026
           </Badge>
         </div>
 
@@ -196,7 +195,7 @@ function HeroSection() {
         </p>
 
         <p className={`text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto mb-12 leading-relaxed transition-all duration-700 delay-300 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          Analyze your colors and features from a photo, get personalized outfits via chat, 
+          Analyze your colors and features from a photo, get personalized outfits via chat,
           and join a fashion-only social space to share fit-checks, ask advice, and evolve your style with the community.
         </p>
 
@@ -256,8 +255,8 @@ function ProblemSection() {
 
         <div className="grid md:grid-cols-3 gap-8">
           {problems.map((problem, index) => (
-            <Card 
-              key={index} 
+            <Card
+              key={index}
               className="border-border/50 bg-background/50 backdrop-blur-sm hover:border-primary/50 transition-all duration-300 group"
             >
               <CardContent className="p-8">
@@ -341,7 +340,7 @@ function SolutionSection() {
 
         <div className="grid lg:grid-cols-3 gap-8 mb-16">
           {solutions.map((solution, index) => (
-            <Card 
+            <Card
               key={index}
               className="relative overflow-hidden border-border/50 bg-card hover:shadow-2xl transition-all duration-500 group"
             >
@@ -446,11 +445,10 @@ function HowItWorksSection() {
 
           <div className="space-y-8 lg:space-y-0">
             {steps.map((step, index) => (
-              <div 
+              <div
                 key={index}
-                className={`flex flex-col lg:flex-row items-center gap-8 lg:gap-16 ${
-                  index % 2 === 0 ? "lg:flex-row" : "lg:flex-row-reverse"
-                }`}
+                className={`flex flex-col lg:flex-row items-center gap-8 lg:gap-16 ${index % 2 === 0 ? "lg:flex-row" : "lg:flex-row-reverse"
+                  }`}
               >
                 <div className={`flex-1 ${index % 2 === 0 ? "lg:text-right" : "lg:text-left"}`}>
                   <Card className="inline-block border-border/50 bg-background/80 backdrop-blur-sm hover:shadow-xl transition-all">
@@ -518,7 +516,7 @@ function ProductDemoSection() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
-            <Card 
+            <Card
               key={index}
               className="overflow-hidden border-border/50 bg-card group hover:shadow-2xl transition-all duration-500"
             >
@@ -660,7 +658,7 @@ function KeyFeaturesSection() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
-            <Card 
+            <Card
               key={index}
               className="border-border/50 bg-background/80 backdrop-blur-sm hover:border-primary/50 hover:shadow-lg transition-all group"
             >
@@ -682,9 +680,9 @@ function KeyFeaturesSection() {
 // ==================== MARKET OPPORTUNITY SECTION ====================
 function MarketSection() {
   const stats = [
-    { value: 1.7, suffix: "T", label: "Global Apparel Market", subtext: "2024 Market Size", prefix: "$" },
-    { value: 4.4, suffix: "B", label: "AI in Fashion", subtext: "Expected by 2028", prefix: "$" },
-    { value: 28, suffix: "%", label: "CAGR Growth", subtext: "AI Styling Market", prefix: "" },
+    { value: 1.8, suffix: "T", label: "Global Apparel Market", subtext: "2024 Market Size", prefix: "$" },
+    { value: 26, suffix: "B", label: "AI in Fashion", subtext: "Expected by 2032", prefix: "$" },
+    { value: 40, suffix: "%", label: "CAGR Growth", subtext: "AI Fashion Market", prefix: "" },
     { value: 71, suffix: "%", label: "Consumers", subtext: "Want Personalization", prefix: "" }
   ]
 
@@ -744,7 +742,7 @@ function MarketSection() {
                       <span className="text-sm text-muted-foreground">{segment.percentage}%</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full gradient-ai rounded-full transition-all duration-1000"
                         style={{ width: `${segment.percentage}%` }}
                       />
@@ -903,7 +901,7 @@ function BusinessModelSection() {
                       <span className="text-sm font-bold">{item.percentage}%</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full gradient-ai rounded-full"
                         style={{ width: `${item.percentage}%` }}
                       />
@@ -931,7 +929,7 @@ function TechnologySection() {
 
   const mcpServers = [
     "Wardrobe Server",
-    "Commerce Server", 
+    "Commerce Server",
     "Web Search Server",
     "User Data Server",
     "Style DNA Server"
@@ -1065,7 +1063,7 @@ function RoadmapSection() {
       ]
     },
     {
-      phase: "Q2 2025",
+      phase: "Q1 2026",
       title: "Enhancement",
       status: "upcoming",
       items: [
@@ -1076,7 +1074,7 @@ function RoadmapSection() {
       ]
     },
     {
-      phase: "Q4 2025",
+      phase: "Q2 2026",
       title: "Expansion",
       status: "future",
       items: [
@@ -1100,17 +1098,16 @@ function RoadmapSection() {
 
         <div className="grid md:grid-cols-3 gap-8">
           {phases.map((phase, index) => (
-            <Card 
+            <Card
               key={index}
-              className={`border-border/50 bg-background/80 relative overflow-hidden ${
-                phase.status === "active" ? "border-primary/50" : ""
-              }`}
+              className={`border-border/50 bg-background/80 relative overflow-hidden ${phase.status === "active" ? "border-primary/50" : ""
+                }`}
             >
               {phase.status === "active" && (
                 <div className="absolute top-0 left-0 right-0 h-1 gradient-ai" />
               )}
               <CardContent className="p-8">
-                <Badge 
+                <Badge
                   variant={phase.status === "active" ? "default" : "secondary"}
                   className={phase.status === "active" ? "gradient-ai text-white mb-4" : "mb-4"}
                 >
