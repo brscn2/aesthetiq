@@ -58,12 +58,13 @@ app.include_router(style_dna_router, prefix=f"{settings.API_PREFIX}/style-dna", 
 # =============================================================================
 # FastApiMCP exposes all FastAPI endpoints as MCP tools at /mcp
 # This enables langchain-mcp-adapters to discover and call tools via MCP protocol
+# Use mount_http() for streamable HTTP transport (required for langchain-mcp-adapters)
 mcp = FastApiMCP(
     app,
     name="Aesthetiq MCP Server",
     description="MCP tools for fashion AI agents - includes wardrobe, commerce, style DNA, user data, and web search",
 )
-mcp.mount()  # Mounts at /mcp by default
+mcp.mount_http()  # Mounts streamable HTTP transport at /mcp (default path)
 
 
 @app.get("/")

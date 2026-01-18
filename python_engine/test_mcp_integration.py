@@ -16,12 +16,14 @@ Usage:
 """
 import asyncio
 import sys
+import traceback
 from pathlib import Path
 
 # Add python_engine to path
 python_engine_dir = Path(__file__).parent
 sys.path.insert(0, str(python_engine_dir))
 
+import httpx
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
@@ -32,9 +34,34 @@ async def test_mcp_integration():
     print("=" * 60)
     
     # MCP server URL (adjust if needed)
-    mcp_url = "http://localhost:8010/mcp"
+    base_url = "http://localhost:8010"
+    mcp_url = f"{base_url}/mcp"
     
-    print(f"\n1. Connecting to MCP server at: {mcp_url}")
+    print(f"\n1. Checking server accessibility...")
+    print("-" * 60)
+    
+    # First, verify server is running
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            health_resp = await client.get(f"{base_url}/health")
+            print(f"✓ Server is running (health: {health_resp.status_code})")
+            
+            # Try to access /mcp endpoint
+            try:
+                mcp_resp = await client.get(mcp_url)
+                print(f"✓ /mcp endpoint exists (status: {mcp_resp.status_code})")
+            except httpx.HTTPError as e:
+                print(f"⚠ /mcp endpoint check failed: {e}")
+                print("   This might be normal - MCP protocol uses POST, not GET")
+    except httpx.ConnectError:
+        print(f"✗ Cannot connect to server at {base_url}")
+        print("\nMake sure MCP servers are running:")
+        print("  cd python_engine && python -m mcp_servers.main")
+        sys.exit(1)
+    except Exception as e:
+        print(f"⚠ Server check warning: {e}")
+    
+    print(f"\n2. Connecting to MCP server at: {mcp_url}")
     print("-" * 60)
     
     config = {
@@ -45,13 +72,14 @@ async def test_mcp_integration():
     }
     
     try:
-        async with MultiServerMCPClient(config) as client:
-            print("✓ Connected successfully!\n")
+            # Create client (not a context manager in v0.1.0+)
+            client = MultiServerMCPClient(config)
+            print("✓ Client created successfully!\n")
             
             # Get all tools
-            print("2. Discovering available tools...")
+            print("3. Discovering available tools...")
             print("-" * 60)
-            tools = client.get_tools()
+            tools = await client.get_tools()
             
             if not tools:
                 print("⚠ No tools found! Make sure:")
@@ -111,12 +139,17 @@ async def test_mcp_integration():
             
     except Exception as e:
         print(f"\n✗ Connection failed: {e}")
+        print("\nFull error traceback:")
+        print("-" * 60)
+        traceback.print_exc()
+        print("-" * 60)
         print("\nTroubleshooting:")
         print("  1. Make sure MCP servers are running:")
         print("     cd python_engine && python -m mcp_servers.main")
         print("  2. Check that the server is accessible at http://localhost:8010")
         print("  3. Verify /mcp endpoint exists: curl http://localhost:8010/mcp")
         print("  4. Check server logs for errors")
+        print("  5. Verify fastapi-mcp is properly installed and mounted")
         sys.exit(1)
 
 

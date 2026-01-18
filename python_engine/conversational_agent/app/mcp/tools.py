@@ -56,10 +56,9 @@ async def init_mcp_client() -> MultiServerMCPClient:
     
     try:
         _mcp_client = MultiServerMCPClient(config)
-        await _mcp_client.__aenter__()
         
-        # Pre-load tools
-        _mcp_tools = _mcp_client.get_tools()
+        # Pre-load tools (get_tools is async in v0.1.0+)
+        _mcp_tools = await _mcp_client.get_tools()
         logger.info(f"MCP client initialized, loaded {len(_mcp_tools)} tools")
         
         # Log available tools
@@ -85,7 +84,8 @@ async def close_mcp_client() -> None:
     
     if _mcp_client is not None:
         try:
-            await _mcp_client.__aexit__(None, None, None)
+            # MultiServerMCPClient doesn't need explicit cleanup in v0.1.0+
+            # Just clear the reference
             logger.info("MCP client closed")
         except Exception as e:
             logger.warning(f"Error closing MCP client: {e}")
