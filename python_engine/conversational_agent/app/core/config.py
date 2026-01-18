@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     MONGODB_URI: Optional[str] = None
     
     # MCP Configuration
+    MCP_SERVERS_URL: str = "http://mcp_servers:8010"
     MCP_RETRY_ATTEMPTS: int = 3
     MCP_RETRY_DELAY: float = 1.0
     MCP_TIMEOUT: float = 30.0

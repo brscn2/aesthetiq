@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from typing import Dict, Any
 
 from app.core.config import get_settings
+from app.mcp.tools import is_mcp_connected
 
 router = APIRouter()
 settings = get_settings()
@@ -33,17 +34,19 @@ async def readiness_check() -> Dict[str, Any]:
     Returns:
         Readiness status
     """
-    # Add checks for dependencies when implemented
-    # - Backend connectivity
-    # - MCP server connectivity
-    # - LLM service connectivity
+    # Check MCP server connectivity
+    mcp_status = "connected" if is_mcp_connected() else "disconnected"
+    
+    # Determine overall readiness
+    # Service can still function without MCP (graceful degradation)
+    status = "ready"
     
     return {
-        "status": "ready",
+        "status": status,
         "checks": {
             "workflow": "available",
             "backend": "not_checked",  # Will be implemented in Issue 5
-            "mcp_servers": "not_checked",  # Will be implemented in Issue 2
+            "mcp_servers": mcp_status,
         },
     }
 

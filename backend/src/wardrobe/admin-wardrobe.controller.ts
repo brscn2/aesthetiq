@@ -30,7 +30,7 @@ export interface AdminWardrobeSearchOptions {
   userId?: string;
   category?: Category;
   colorHex?: string;
-  brandId?: string;
+  retailerId?: string;
   brand?: string;
   search?: string;
   limit?: number;
@@ -62,7 +62,7 @@ export class AdminWardrobeController {
   @ApiQuery({ name: 'userId', required: false, description: 'Filter by user ID' })
   @ApiQuery({ name: 'category', required: false, enum: Category, description: 'Filter by category' })
   @ApiQuery({ name: 'colorHex', required: false, description: 'Filter by color hex' })
-  @ApiQuery({ name: 'brandId', required: false, description: 'Filter by brand ID' })
+  @ApiQuery({ name: 'retailerId', required: false, description: 'Filter by retailer ID' })
   @ApiQuery({ name: 'brand', required: false, description: 'Filter by brand name' })
   @ApiQuery({ name: 'search', required: false, description: 'Search in brand and subcategory' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of results per page', type: Number })
@@ -73,7 +73,7 @@ export class AdminWardrobeController {
     @Query('userId') userId?: string,
     @Query('category') category?: Category,
     @Query('colorHex') colorHex?: string,
-    @Query('brandId') brandId?: string,
+    @Query('retailerId') retailerId?: string,
     @Query('brand') brand?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: number,
@@ -81,7 +81,7 @@ export class AdminWardrobeController {
   ): Promise<{ items: WardrobeItem[]; total: number }> {
     // For admin, we need to implement a more comprehensive search
     // This is a simplified version - in a real implementation, you'd want to use aggregation
-    const items = await this.wardrobeService.findAllWithBrands(userId || '', category, colorHex, brandId);
+    const items = await this.wardrobeService.findAllWithRetailers(userId || '', category, colorHex, retailerId);
     
     let filteredItems = items;
     
@@ -120,7 +120,7 @@ export class AdminWardrobeController {
   }> {
     // This would typically be implemented with MongoDB aggregation
     // For now, we'll return a simplified version
-    const allItems = await this.wardrobeService.findAllWithBrands('');
+    const allItems = await this.wardrobeService.findAllWithRetailers('');
     
     const totalItems = allItems.length;
     
@@ -151,12 +151,12 @@ export class AdminWardrobeController {
     };
   }
 
-  @Get('by-brand/:brandId')
-  @ApiOperation({ summary: 'Get all wardrobe items by brand ID (Admin)' })
+  @Get('by-retailer/:retailerId')
+  @ApiOperation({ summary: 'Get all wardrobe items by retailer ID (Admin)' })
   @ApiResponse({ status: 200, description: 'Wardrobe items retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Admin access required' })
-  async findByBrand(@Param('brandId') brandId: string): Promise<WardrobeItem[]> {
-    return this.wardrobeService.findByBrandId(brandId);
+  async findByRetailer(@Param('retailerId') retailerId: string): Promise<WardrobeItem[]> {
+    return this.wardrobeService.findByRetailerId(retailerId);
   }
 
   @Get(':id')

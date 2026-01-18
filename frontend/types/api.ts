@@ -110,6 +110,7 @@ export interface WardrobeItem {
   category: Category;
   subCategory?: string;
   brand?: string;
+  retailerId?: string | Retailer;
   colors?: string[];
   notes?: string;
   isFavorite: boolean;
@@ -125,6 +126,7 @@ export interface CreateWardrobeItemDto {
   category: Category;
   subCategory?: string;
   brand?: string;
+  retailerId?: string;
   colors?: string[];
   notes?: string;
   isFavorite?: boolean;
@@ -137,6 +139,7 @@ export interface UpdateWardrobeItemDto {
   category?: Category;
   subCategory?: string;
   brand?: string;
+  retailerId?: string;
   colors?: string[];
   notes?: string;
   isFavorite?: boolean;
@@ -328,4 +331,136 @@ export interface AnalyzeClothingResponse {
   success: boolean;
   data?: ClothingAnalysisResult;
   error?: string;
+}
+
+// Retailer Types
+export interface Retailer {
+  _id: string;
+  name: string;
+  website?: string;
+  logoUrl?: string;
+  description?: string;
+  country?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateRetailerDto {
+  name: string;
+  website?: string;
+  logoUrl?: string;
+  description?: string;
+  country?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateRetailerDto {
+  name?: string;
+  website?: string;
+  logoUrl?: string;
+  description?: string;
+  country?: string;
+  isActive?: boolean;
+}
+
+export interface RetailerSearchOptions {
+  search?: string;
+  country?: string;
+  isActive?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RetailerStats {
+  totalRetailers: number;
+  activeRetailers: number;
+  retailersByCountry: { country: string; count: number }[];
+}
+
+// Commerce Item Types
+export interface CommerceItem {
+  _id: string;
+  name: string;
+  description?: string;
+  imageUrl: string;
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId: string | Retailer;
+  colors: string[];
+  price?: number;
+  currency: string;
+  productUrl: string;
+  sku?: string;
+  tags: string[];
+  inStock: boolean;
+  seasonalPaletteScores?: SeasonalPaletteScores;
+  embedding?: number[];
+  metadata?: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateCommerceItemDto {
+  name: string;
+  description?: string;
+  imageUrl: string;
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId: string;
+  colors?: string[];
+  price?: number;
+  currency?: string;
+  productUrl: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  metadata?: Record<string, any>;
+}
+
+export interface UpdateCommerceItemDto {
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+  category?: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId?: string;
+  colors?: string[];
+  price?: number;
+  currency?: string;
+  productUrl?: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  metadata?: Record<string, any>;
+}
+
+export interface CommerceSearchOptions {
+  search?: string;
+  category?: Category;
+  brandId?: string;
+  retailerId?: string;
+  color?: string;
+  priceMin?: number;
+  priceMax?: number;
+  tags?: string[];
+  inStock?: boolean;
+  seasonalPalette?: string;
+  minPaletteScore?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface CommerceStats {
+  totalItems: number;
+  inStockItems: number;
+  itemsByCategory: { category: string; count: number }[];
+  itemsByRetailer: { retailerId: string; retailerName: string; count: number }[];
+  itemsByBrand: { brand: string; count: number }[];
 }

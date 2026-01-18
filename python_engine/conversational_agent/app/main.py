@@ -15,7 +15,7 @@ from app.core.logger import get_logger
 from app.api.v1 import router as api_v1_router
 from app.services.backend_client import get_backend_client
 from app.services.tracing.langfuse_service import get_tracing_service
-from app.mcp.client import get_mcp_manager
+from app.mcp.tools import init_mcp_client, close_mcp_client
 
 # Configure logging
 logger = get_logger(__name__)
@@ -29,11 +29,18 @@ async def lifespan(app: FastAPI):
     
     # Initialize services
     tracing_service = get_tracing_service()
-    mcp_manager = get_mcp_manager()
     
     # Log configuration
     logger.info(f"Backend URL: {settings.BACKEND_URL}")
+    logger.info(f"MCP Servers URL: {settings.MCP_SERVERS_URL}")
     logger.info(f"Langfuse enabled: {tracing_service.enabled}")
+    
+    # Initialize MCP client (connects to MCP servers and loads tools)
+    try:
+        await init_mcp_client()
+        logger.info("MCP client connected successfully")
+    except Exception as e:
+        logger.warning(f"MCP client connection failed (will retry on first use): {e}")
     
     yield
     
@@ -42,7 +49,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown services
     tracing_service.shutdown()
-    await mcp_manager.disconnect_all()
+    await close_mcp_client()
     
     # Close backend client
     backend_client = get_backend_client()

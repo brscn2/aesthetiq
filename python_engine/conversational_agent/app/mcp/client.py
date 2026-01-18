@@ -1,15 +1,38 @@
-"""MCP (Model Context Protocol) client for tool calls."""
+"""
+DEPRECATED: This module is deprecated in favor of langchain-mcp-adapters.
+
+Use app.mcp.tools instead:
+
+    from app.mcp import get_mcp_tools
+    
+    tools = await get_mcp_tools()
+    agent = create_react_agent(llm, tools)
+
+This file is kept for reference only. The custom MCPClient implementation
+has been replaced with the official langchain-mcp-adapters package which
+provides better integration with LangGraph and follows MCP best practices.
+"""
 import asyncio
 import json
 from typing import Dict, Any, Optional, List, Callable, Awaitable
 from dataclasses import dataclass, field
 from enum import Enum
 import time
+import warnings
+
+import httpx
 
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Emit deprecation warning when this module is imported
+warnings.warn(
+    "app.mcp.client is deprecated. Use app.mcp.tools instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class MCPTransport(str, Enum):
@@ -124,11 +147,39 @@ class MCPClient:
     
     async def _connect_http(self) -> None:
         """Connect to an HTTP-based MCP server."""
-        # For HTTP transport, we'll verify the server is available
-        # and fetch the list of available tools
-        # This is a placeholder - actual MCP HTTP protocol implementation
-        # will be added when MCP servers are implemented in Issue 2
-        pass
+        if not self.server_config or not self.server_config.url:
+            raise MCPConnectionError("HTTP transport requires server_config.url")
+
+        base_url = self.server_config.url.rstrip("/")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.server_config.timeout) as client:
+                # Basic liveness check
+                health = await client.get(f"{base_url}/health")
+                health.raise_for_status()
+
+                # Discover tool endpoints from OpenAPI (paths containing '/tools/')
+                openapi = await client.get(f"{base_url}/openapi.json")
+                openapi.raise_for_status()
+                spec = openapi.json()
+
+        except Exception as e:
+            raise MCPConnectionError(f"HTTP MCP server not reachable: {e}")
+
+        tools: Dict[str, Dict[str, Any]] = {}
+        paths = spec.get("paths") or {}
+        for path, methods in paths.items():
+            if "/tools/" not in path:
+                continue
+            # Example: /mcp/wardrobe/tools/search_wardrobe_items -> search_wardrobe_items
+            tool_name = path.split("/tools/")[-1].strip("/")
+            tools[tool_name] = {
+                "name": tool_name,
+                "path": path,
+                "methods": list((methods or {}).keys()),
+            }
+
+        self._available_tools = tools
     
     async def _connect_stdio(self) -> None:
         """Connect to a stdio-based MCP server."""
@@ -253,17 +304,36 @@ class MCPClient:
         Raises:
             MCPToolError: If the tool call fails
         """
-        # Placeholder implementation
-        # In the real implementation, this will:
-        # 1. Send JSON-RPC request to the MCP server
-        # 2. Wait for response with timeout
-        # 3. Parse and return the result
-        
-        raise MCPToolError(
-            message="MCP server not implemented yet (see Issue 2)",
-            tool_name=tool_name,
-            error_code="NOT_IMPLEMENTED",
-        )
+        if not self.server_config or not self.server_config.url:
+            raise MCPToolError("HTTP transport requires server_config.url", tool_name=tool_name, error_code="CONFIG")
+
+        if tool_name not in self._available_tools:
+            raise MCPToolError(f"Unknown tool: {tool_name}", tool_name=tool_name, error_code="UNKNOWN_TOOL")
+
+        base_url = self.server_config.url.rstrip("/")
+        path = self._available_tools[tool_name]["path"]
+        url = f"{base_url}{path}"
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=arguments)
+                resp.raise_for_status()
+                # Tools return JSON bodies; pass through
+                return resp.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            body = None
+            try:
+                body = e.response.json()
+            except Exception:
+                body = e.response.text
+            raise MCPToolError(
+                message=f"Tool call failed ({status}): {body}",
+                tool_name=tool_name,
+                error_code="HTTP_ERROR",
+            )
+        except Exception as e:
+            raise MCPToolError(message=f"Tool call failed: {e}", tool_name=tool_name, error_code="ERROR")
     
     @property
     def is_connected(self) -> bool:

@@ -22,8 +22,7 @@ langchain-openai>=0.2.0
 langfuse>=2.0.0
 
 # MCP (Model Context Protocol)
-# Note: mcp package will be added when MCP servers are implemented in Issue 2
-# mcp>=1.0.0
+langchain-mcp-adapters>=0.1.0
 
 # Testing
 pytest>=7.4.0

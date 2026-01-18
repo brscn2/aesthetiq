@@ -115,20 +115,46 @@ class TestMCPClient:
         assert "No server configuration provided" in str(exc_info.value)
     
     @pytest.mark.asyncio
-    async def test_call_tool_returns_not_implemented(self):
-        """Test that tool call returns not implemented (placeholder)."""
+    async def test_call_tool_http_success(self):
+        """Test that HTTP tool call succeeds with OpenAPI discovery."""
         config = MCPServerConfig(
             name="test",
             transport=MCPTransport.HTTP,
             url="http://localhost:8005",
         )
         client = MCPClient(server_config=config, retry_attempts=1)
-        
-        result = await client.call_tool("search", {"query": "jacket"})
-        
-        # Currently returns error because MCP servers aren't implemented yet
-        assert result.success is False
-        assert "NOT_IMPLEMENTED" in result.error or "not implemented" in result.error.lower()
+
+        # Mock httpx calls:
+        # - GET /health
+        # - GET /openapi.json (with a tools path)
+        # - POST tool endpoint
+        with patch("app.mcp.client.httpx.AsyncClient") as AsyncClient:
+            mock_client = AsyncMock()
+            AsyncClient.return_value.__aenter__.return_value = mock_client
+
+            mock_health = MagicMock()
+            mock_health.raise_for_status.return_value = None
+
+            mock_openapi = MagicMock()
+            mock_openapi.raise_for_status.return_value = None
+            mock_openapi.json.return_value = {
+                "paths": {
+                    "/mcp/wardrobe/tools/search_wardrobe_items": {"post": {}},
+                }
+            }
+
+            mock_post = MagicMock()
+            mock_post.raise_for_status.return_value = None
+            mock_post.json.return_value = {"ok": True}
+
+            mock_client.get = AsyncMock(side_effect=[mock_health, mock_openapi])
+            mock_client.post = AsyncMock(return_value=mock_post)
+
+            await client.connect()
+            result = await client.call_tool("search_wardrobe_items", {"query": "jackets", "user_id": "u1"})
+
+        assert result.success is True
+        assert result.result == {"ok": True}
     
     @pytest.mark.asyncio
     async def test_disconnect_when_not_connected(self):
