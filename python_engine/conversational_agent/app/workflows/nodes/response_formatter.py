@@ -1,0 +1,260 @@
+"""Response Formatter node for the conversational workflow.
+
+This node formats the final response based on the workflow results:
+- Formats approved clothing items nicely
+- Handles clarification requests
+- Generates fallback responses when needed
+"""
+from typing import Any, Dict, List, Optional
+
+from app.workflows.state import ConversationState
+from app.services.llm_service import get_llm_service
+from app.services.tracing.langfuse_service import get_tracing_service
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+FORMATTER_PROMPT = """You are the Response Formatter for AesthetIQ, a fashion AI assistant.
+
+Your task is to create a natural, helpful response based on the workflow results.
+
+**Formatting Guidelines:**
+
+1. **For Clothing Recommendations:**
+   - Present items in an organized, easy-to-read format
+   - Highlight key features (style, color, occasion suitability)
+   - Include personalized notes if style DNA is available
+   - Be enthusiastic but not overwhelming
+
+2. **For Clarification Requests:**
+   - Ask the clarification question naturally
+   - Explain briefly why you need the information
+   - Keep it conversational
+
+3. **For No Results:**
+   - Apologize briefly
+   - Suggest alternatives or ask if the user wants to broaden the search
+   - Be helpful and encouraging
+
+4. **General Guidelines:**
+   - Keep responses concise (2-3 paragraphs max)
+   - Use natural, conversational language
+   - Be helpful and friendly
+   - Don't repeat the user's query back to them verbatim
+"""
+
+
+async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Response formatter node - formats final response.
+    
+    Reads:
+        - state["final_response"]: Pre-existing response (from conversation agent)
+        - state["retrieved_items"]: Clothing items found
+        - state["analysis_result"]: Analysis result
+        - state["needs_clarification"]: Whether clarification is needed
+        - state["clarification_question"]: Question to ask
+        - state["message"]: Original user message
+        - state["style_dna"]: User's style preferences
+        
+    Writes:
+        - state["final_response"]: Formatted response string
+    """
+    # If we already have a final response (from conversation agent), just return
+    existing_response = state.get("final_response")
+    if existing_response:
+        logger.info("Using existing final response from conversation agent")
+        return {}
+    
+    message = state.get("message", "")
+    retrieved_items = state.get("retrieved_items", [])
+    analysis_result = state.get("analysis_result", {})
+    needs_clarification = state.get("needs_clarification", False)
+    clarification_question = state.get("clarification_question")
+    style_dna = state.get("style_dna")
+    search_sources_used = state.get("search_sources_used", [])
+    fallback_used = state.get("fallback_used", False)
+    trace_id = state.get("langfuse_trace_id")
+    
+    logger.info(f"Formatting response: {len(retrieved_items)} items, clarification={needs_clarification}")
+    
+    # Get services
+    llm_service = get_llm_service()
+    tracing_service = get_tracing_service()
+    
+    try:
+        # Handle clarification case
+        if needs_clarification and clarification_question:
+            logger.info("Generating clarification response")
+            response = await _format_clarification(
+                llm_service, 
+                message, 
+                clarification_question
+            )
+        
+        # Handle no items case
+        elif not retrieved_items or len(retrieved_items) == 0:
+            logger.info("Generating no-results response")
+            response = await _format_no_results(llm_service, message)
+        
+        # Handle items found case
+        else:
+            logger.info(f"Generating items response for {len(retrieved_items)} items")
+            response = await _format_items(
+                llm_service,
+                message,
+                retrieved_items,
+                style_dna,
+                search_sources_used,
+                fallback_used,
+            )
+        
+        # Log to Langfuse
+        if trace_id:
+            tracing_service.log_llm_call(
+                trace_id=trace_id,
+                agent_name="response_formatter",
+                input_text=f"Formatting {len(retrieved_items)} items",
+                output_text=response[:200],
+                metadata={
+                    "items_count": len(retrieved_items),
+                    "needs_clarification": needs_clarification,
+                    "sources": search_sources_used,
+                },
+            )
+        
+        logger.info(f"Formatted response: {len(response)} chars")
+        
+        return {"final_response": response}
+        
+    except Exception as e:
+        logger.error(f"Response formatting failed: {e}")
+        
+        # Log error
+        if trace_id:
+            tracing_service.log_error(trace_id=trace_id, error=e)
+        
+        # Fallback response
+        if retrieved_items:
+            response = (
+                "I found some options for you! Here's what I discovered:\n\n"
+                + _simple_format_items(retrieved_items)
+            )
+        else:
+            response = (
+                "I'm having trouble formatting my response, but I'm here to help! "
+                "Could you please try rephrasing your request?"
+            )
+        
+        return {"final_response": response}
+
+
+async def _format_clarification(
+    llm_service,
+    original_message: str,
+    clarification_question: str,
+) -> str:
+    """Format a clarification response."""
+    prompt = f"""
+Original user request: {original_message}
+
+We need clarification. The question to ask is: {clarification_question}
+
+Create a natural, friendly response that asks this clarification question.
+Keep it brief and conversational.
+"""
+    
+    response = await llm_service.chat_with_history(
+        system_prompt=FORMATTER_PROMPT,
+        user_message=prompt,
+    )
+    
+    return response
+
+
+async def _format_no_results(
+    llm_service,
+    original_message: str,
+) -> str:
+    """Format a no-results response."""
+    prompt = f"""
+Original user request: {original_message}
+
+We couldn't find any matching items. Create a helpful response that:
+1. Briefly apologizes
+2. Suggests alternatives or asks if the user wants to broaden their search
+3. Stays positive and helpful
+"""
+    
+    response = await llm_service.chat_with_history(
+        system_prompt=FORMATTER_PROMPT,
+        user_message=prompt,
+    )
+    
+    return response
+
+
+async def _format_items(
+    llm_service,
+    original_message: str,
+    retrieved_items: List[Dict[str, Any]],
+    style_dna: Optional[Dict[str, Any]],
+    search_sources: List[str],
+    fallback_used: bool,
+) -> str:
+    """Format a response with clothing items."""
+    # Build items summary
+    items_text = ""
+    for i, item in enumerate(retrieved_items[:5], 1):
+        if isinstance(item, dict):
+            item_type = item.get("type", "unknown")
+            content = item.get("content", "")
+            sources = item.get("sources", [])
+            items_text += f"\n{i}. [{item_type}] {content[:300]}"
+            if sources:
+                items_text += f" (from: {', '.join(sources)})"
+        else:
+            items_text += f"\n{i}. {str(item)[:300]}"
+    
+    style_text = ""
+    if style_dna:
+        style_text = f"\n\nUser's Style DNA: {style_dna}"
+    
+    source_note = ""
+    if fallback_used:
+        source_note = "\nNote: These recommendations are based on general fashion knowledge."
+    elif "web" in search_sources:
+        source_note = "\nNote: Some of these suggestions come from web search results."
+    
+    prompt = f"""
+Original user request: {original_message}
+
+Found items:{items_text}
+{style_text}
+{source_note}
+
+Create a helpful, natural response presenting these recommendations.
+Format it nicely and include personalized touches if style DNA is available.
+Keep it concise but informative.
+"""
+    
+    response = await llm_service.chat_with_history(
+        system_prompt=FORMATTER_PROMPT,
+        user_message=prompt,
+    )
+    
+    return response
+
+
+def _simple_format_items(items: List[Dict[str, Any]]) -> str:
+    """Simple fallback formatting for items."""
+    result = []
+    for i, item in enumerate(items[:5], 1):
+        if isinstance(item, dict):
+            content = item.get("content", str(item))
+            result.append(f"{i}. {content[:200]}")
+        else:
+            result.append(f"{i}. {str(item)[:200]}")
+    
+    return "\n".join(result)

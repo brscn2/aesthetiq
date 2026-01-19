@@ -3,6 +3,12 @@ from typing import Dict, Any, Literal, Optional
 from langgraph.graph import StateGraph, END
 
 from app.workflows.state import ConversationState, create_initial_state
+from app.workflows.nodes.intent_classifier import intent_classifier_node
+from app.workflows.nodes.query_analyzer import query_analyzer_node
+from app.workflows.nodes.response_formatter import response_formatter_node
+from app.agents.conversation_agent import conversation_agent_node
+from app.agents.clothing_recommender_agent import clothing_recommender_node
+from app.agents.clothing_analyzer_agent import clothing_analyzer_node
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
@@ -32,17 +38,23 @@ def route_after_analysis(state: ConversationState) -> Literal["approve", "refine
     iteration = state.get("iteration", 0)
     max_iterations = get_settings().MAX_REFINEMENT_ITERATIONS
     
-    # Prevent infinite loops
-    if iteration >= max_iterations:
-        logger.warning(f"Max iterations ({max_iterations}) reached, forcing approval")
-        return "error"
-    
     analysis = state.get("analysis_result")
     if not analysis:
         logger.warning("No analysis result, defaulting to approve")
         return "approve"
     
     decision = analysis.get("decision", "approve")
+    
+    # If analyzer approved, respect that decision
+    if decision == "approve":
+        logger.debug(f"Analyzer approved (iteration {iteration})")
+        return "approve"
+    
+    # For non-approve decisions, check if we've hit max iterations
+    if iteration >= max_iterations:
+        logger.warning(f"Max iterations ({max_iterations}) reached, routing to approve anyway")
+        return "approve"
+    
     logger.debug(f"Analyzer decision: {decision} (iteration {iteration})")
     return decision
 
@@ -73,93 +85,12 @@ async def input_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     return {"metadata": metadata}
 
 
-async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Intent classifier node - classifies user intent.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Intent classifier node (placeholder)")
-    
-    # Placeholder: default to general conversation
-    message = state.get("message", "").lower()
-    
-    # Simple keyword-based classification (placeholder)
-    clothing_keywords = ["jacket", "shirt", "pants", "dress", "outfit", "wear", "buy", "recommend"]
-    intent = "clothing" if any(kw in message for kw in clothing_keywords) else "general"
-    
-    return {"intent": intent}
-
-
-async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Query analyzer node - analyzes query and determines search scope.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Query analyzer node (placeholder)")
-    
-    # Placeholder: default to commerce search
-    return {
-        "search_scope": "commerce",
-        "extracted_filters": {},
-    }
-
-
-async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Conversation agent node - handles general fashion questions.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Conversation agent node (placeholder)")
-    
-    message = state.get("message", "")
-    
-    # Placeholder response
-    response = f"I understand you're asking about fashion. Your question was: '{message}'. " \
-               "This is a placeholder response - the full implementation will be added in Issue 3."
-    
-    return {
-        "final_response": response,
-        "metadata": {**state.get("metadata", {}), "agent_used": "conversation_agent"},
-    }
-
-
-async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Clothing recommender agent node - retrieves clothing items.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Clothing recommender node (placeholder)")
-    
-    # Placeholder: return empty items
-    return {
-        "retrieved_items": [],
-        "search_sources_used": ["commerce"],
-        "fallback_used": False,
-    }
-
-
-async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Clothing analyzer agent node - validates and refines results.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Clothing analyzer node (placeholder)")
-    
-    # Placeholder: approve with no items
-    return {
-        "analysis_result": {
-            "decision": "approve",
-            "approved": True,
-            "confidence": 1.0,
-            "notes": [],
-        },
-        "iteration": state.get("iteration", 0) + 1,
-    }
+# intent_classifier_node is imported from app.workflows.nodes.intent_classifier
+# query_analyzer_node is imported from app.workflows.nodes.query_analyzer
+# response_formatter_node is imported from app.workflows.nodes.response_formatter
+# conversation_agent_node is imported from app.agents.conversation_agent
+# clothing_recommender_node is imported from app.agents.clothing_recommender_agent
+# clothing_analyzer_node is imported from app.agents.clothing_analyzer_agent
 
 
 async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
@@ -175,30 +106,6 @@ async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     metadata["output_safe"] = True
     
     return {"metadata": metadata}
-
-
-async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
-    """
-    Response formatter node - formats final response.
-    
-    TODO: Implement in Issue 3 (Agents and Workflow)
-    """
-    logger.debug("Response formatter node (placeholder)")
-    
-    # If we have a final response, use it
-    if state.get("final_response"):
-        return {}
-    
-    # Otherwise, format from retrieved items
-    items = state.get("retrieved_items", [])
-    if items:
-        response = f"I found {len(items)} items for you. " \
-                   "This is a placeholder response - the full implementation will be added in Issue 3."
-    else:
-        response = "I couldn't find any items matching your request. " \
-                   "This is a placeholder response - the full implementation will be added in Issue 3."
-    
-    return {"final_response": response}
 
 
 async def error_response_node(state: ConversationState) -> Dict[str, Any]:
@@ -350,7 +257,18 @@ async def run_workflow(
     Returns:
         Final workflow state
     """
+    from app.services.tracing.langfuse_service import get_tracing_service
+    
     workflow = get_workflow()
+    tracing_service = get_tracing_service()
+    
+    # Start Langfuse trace
+    trace_id = tracing_service.start_trace(
+        user_id=user_id,
+        session_id=session_id,
+        name="conversation_workflow",
+        metadata={"message_preview": message[:100]},
+    )
     
     initial_state = create_initial_state(
         user_id=user_id,
@@ -359,11 +277,34 @@ async def run_workflow(
         conversation_history=conversation_history,
     )
     
-    logger.info(f"Running workflow for user {user_id}, session {session_id}")
+    # Add trace_id to state
+    initial_state["langfuse_trace_id"] = trace_id
     
-    # Run the workflow
-    final_state = await workflow.ainvoke(initial_state)
+    logger.info(f"Running workflow for user {user_id}, session {session_id}, trace {trace_id}")
     
-    logger.info(f"Workflow completed with response length: {len(final_state.get('final_response', ''))}")
-    
-    return final_state
+    try:
+        # Run the workflow
+        final_state = await workflow.ainvoke(initial_state)
+        
+        # End trace with success
+        tracing_service.end_trace(
+            trace_id=trace_id,
+            output=final_state.get("final_response", "")[:500],
+            metadata={
+                "intent": final_state.get("intent"),
+                "items_retrieved": len(final_state.get("retrieved_items", [])),
+            },
+        )
+        
+        logger.info(f"Workflow completed with response length: {len(final_state.get('final_response', ''))}")
+        
+        return final_state
+        
+    except Exception as e:
+        # Log error and end trace
+        tracing_service.log_error(trace_id=trace_id, error=e)
+        tracing_service.end_trace(trace_id=trace_id, output=f"Error: {str(e)}")
+        raise
+    finally:
+        # Ensure traces are flushed
+        tracing_service.flush()
