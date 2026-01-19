@@ -39,10 +39,10 @@ export class UpdateWardrobeItemDto {
   @IsOptional()
   brand?: string;
 
-  @ApiProperty({ required: false, example: '507f1f77bcf86cd799439011' })
+  @ApiProperty({ required: false, example: '507f1f77bcf86cd799439011', description: 'Retailer ID reference' })
   @IsMongoId()
   @IsOptional()
-  brandId?: string;
+  retailerId?: string;
 
   @ApiProperty({ required: false, example: ['#000000', '#FFFFFF'] })
   @IsArray()

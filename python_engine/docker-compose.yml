@@ -70,13 +70,14 @@ services:
           memory: 2G
 
   # =============================================================================
-  # CLOTHING RECOMMENDER - LLM/Agent Service (Port 8002 - Internal Only)
+  # CONVERSATIONAL AGENT - Multi-Agent LLM Service (Port 8002 - Internal Only)
+  # Replaces the old clothing_recommender service
   # =============================================================================
   clothing_recommender:
     build:
-      context: ./clothing_recommender
+      context: ./conversational_agent
       dockerfile: Dockerfile
-    container_name: aesthetiq-clothing-recommender
+    container_name: aesthetiq-conversational-agent
     # No external port exposure - internal only
     expose:
       - "8002"
@@ -84,6 +85,7 @@ services:
       - .env
     environment:
       - PORT=8002
+      - BACKEND_URL=http://host.docker.internal:3001
     volumes:
       # Mount logs directory for chat history
       - ./logs:/app/logs:rw
@@ -137,6 +139,34 @@ services:
           #   - driver: nvidia
           #     count: 1
           #     capabilities: [gpu]
+
+  # =============================================================================
+  # MCP SERVERS - Unified MCP tool service (Port 8010 - Internal Only)
+  # =============================================================================
+  mcp_servers:
+    build:
+      context: ./mcp_servers
+      dockerfile: Dockerfile
+    container_name: aesthetiq-mcp-servers
+    expose:
+      - "8010"
+    env_file:
+      - .env
+    environment:
+      - PORT=8010
+      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+    networks:
+      - aesthetiq-network
+    depends_on:
+      embedding_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
 networks:
   aesthetiq-network:

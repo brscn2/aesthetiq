@@ -43,10 +43,10 @@ export class WardrobeService {
       this.logger.warn(`Failed to get embedding, continuing without: ${error.message}`);
     }
 
-    // Convert brandId string to ObjectId if provided
+    // Convert retailerId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
-      brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
+      retailerId: createWardrobeItemDto.retailerId ? new Types.ObjectId(createWardrobeItemDto.retailerId) : undefined,
       seasonalPaletteScores,
       embedding,
     };
@@ -60,7 +60,7 @@ export class WardrobeService {
     userId: string,
     category?: Category,
     colorHex?: string,
-    brandId?: string,
+    retailerId?: string,
     search?: string,
     seasonalPalette?: string,
     minPaletteScore?: number,
@@ -72,8 +72,8 @@ export class WardrobeService {
     if (colorHex) {
       filter.colorHex = colorHex;
     }
-    if (brandId) {
-      filter.brandId = new Types.ObjectId(brandId);
+    if (retailerId) {
+      filter.retailerId = new Types.ObjectId(retailerId);
     }
     if (search && search.trim()) {
       const searchRegex = { $regex: search.trim(), $options: 'i' };
@@ -91,14 +91,14 @@ export class WardrobeService {
       filter[paletteKey] = { $gte: threshold };
     }
     
-    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
+    return this.wardrobeItemModel.find(filter).populate('retailerId').exec();
   }
 
-  async findAllWithBrands(
+  async findAllWithRetailers(
     userId: string,
     category?: Category,
     colorHex?: string,
-    brandId?: string,
+    retailerId?: string,
   ): Promise<WardrobeItem[]> {
     const filter: any = {};
     // Only filter by userId if provided and not empty
@@ -111,22 +111,22 @@ export class WardrobeService {
     if (colorHex) {
       filter.colorHex = colorHex;
     }
-    if (brandId) {
-      filter.brandId = new Types.ObjectId(brandId);
+    if (retailerId) {
+      filter.retailerId = new Types.ObjectId(retailerId);
     }
-    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
+    return this.wardrobeItemModel.find(filter).populate('retailerId').exec();
   }
 
   async findOne(id: string): Promise<WardrobeItem> {
-    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
     return item;
   }
 
-  async findByBrandId(brandId: string): Promise<WardrobeItem[]> {
-    return this.wardrobeItemModel.find({ brandId: new Types.ObjectId(brandId) }).populate('brandId').exec();
+  async findByRetailerId(retailerId: string): Promise<WardrobeItem[]> {
+    return this.wardrobeItemModel.find({ retailerId: new Types.ObjectId(retailerId) }).populate('retailerId').exec();
   }
 
   async update(
@@ -134,7 +134,7 @@ export class WardrobeService {
     updateWardrobeItemDto: UpdateWardrobeItemDto,
   ): Promise<{ updated: WardrobeItem; oldData: WardrobeItem }> {
     // Get the old data first for audit logging
-    const oldItem = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const oldItem = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!oldItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -144,10 +144,10 @@ export class WardrobeService {
       ? calculateSeasonalPaletteScores(updateWardrobeItemDto.colors)
       : null;
 
-    // Convert brandId string to ObjectId if provided
+    // Convert retailerId string to ObjectId if provided
     const updateData: any = {
       ...updateWardrobeItemDto,
-      brandId: updateWardrobeItemDto.brandId ? new Types.ObjectId(updateWardrobeItemDto.brandId) : undefined,
+      retailerId: updateWardrobeItemDto.retailerId ? new Types.ObjectId(updateWardrobeItemDto.retailerId) : undefined,
     };
 
     // Only update palette scores if colors were provided
@@ -158,7 +158,7 @@ export class WardrobeService {
     
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })
-      .populate('brandId')
+      .populate('retailerId')
       .exec();
     
     if (!updatedItem) {
@@ -170,7 +170,7 @@ export class WardrobeService {
 
   async remove(id: string): Promise<WardrobeItem> {
     // Find the item first to get the image URL and return it for audit logging
-    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }

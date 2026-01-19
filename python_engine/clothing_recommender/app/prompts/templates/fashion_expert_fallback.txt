@@ -1,9 +1,0 @@
-I'd love to help you with '{query}'! 
-
-However, I'm currently experiencing technical difficulties accessing our product catalog. 
-Please try again in a moment, or rephrase your question to be more specific about what you're looking for.
-
-For example:
-- "Show me blue jeans"
-- "Find casual summer tops"
-- "What yellow jackets are available?"

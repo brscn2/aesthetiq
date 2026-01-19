@@ -35,6 +35,34 @@ export type {
   UpdateWardrobeItemDto,
 }
 
+// Import additional types for admin
+import type {
+  Retailer,
+  CreateRetailerDto,
+  UpdateRetailerDto,
+  RetailerSearchOptions,
+  RetailerStats,
+  CommerceItem,
+  CreateCommerceItemDto,
+  UpdateCommerceItemDto,
+  CommerceSearchOptions,
+  CommerceStats,
+} from "@/types/api"
+
+// Re-export commerce and retailer types
+export type {
+  Retailer,
+  CreateRetailerDto,
+  UpdateRetailerDto,
+  RetailerSearchOptions,
+  RetailerStats,
+  CommerceItem,
+  CreateCommerceItemDto,
+  UpdateCommerceItemDto,
+  CommerceSearchOptions,
+  CommerceStats,
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
 
 const createHttpClient = () => {
@@ -166,50 +194,6 @@ export interface UploadResponse {
   url: string
 }
 
-export interface Brand {
-  _id: string
-  name: string
-  description?: string
-  logoUrl?: string
-  website?: string
-  foundedYear?: number
-  country?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface CreateBrandDto {
-  name: string
-  description?: string
-  logoUrl?: string
-  website?: string
-  foundedYear?: number
-  country?: string
-}
-
-export interface UpdateBrandDto {
-  name?: string
-  description?: string
-  logoUrl?: string
-  website?: string
-  foundedYear?: number
-  country?: string
-}
-
-export interface BrandSearchOptions {
-  search?: string
-  country?: string
-  foundedYear?: number
-  limit?: number
-  offset?: number
-}
-
-export interface BrandStats {
-  totalBrands: number
-  brandsByCountry: { country: string; count: number }[]
-  brandsByDecade: { decade: string; count: number }[]
-}
-
 export interface ChangeDetail {
   field: string
   oldValue: any
@@ -313,31 +297,12 @@ const createUploadApi = (client: AxiosInstance) => ({
 })
 
 // Admin API endpoints
-const createAdminBrandsApi = (client: AxiosInstance) => ({
-  getAll: (options?: BrandSearchOptions): Promise<{ brands: Brand[]; total: number }> => {
-    const params = new URLSearchParams()
-    if (options?.search) params.append("search", options.search)
-    if (options?.country) params.append("country", options.country)
-    if (options?.foundedYear) params.append("foundedYear", options.foundedYear.toString())
-    if (options?.limit) params.append("limit", options.limit.toString())
-    if (options?.offset) params.append("offset", options.offset.toString())
-    
-    const queryString = params.toString()
-    return client.get(`/admin/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
-  },
-  getById: (id: string): Promise<Brand> => client.get(`/admin/brands/${id}`).then((res) => res.data),
-  create: (data: CreateBrandDto): Promise<Brand> => client.post("/admin/brands", data).then((res) => res.data),
-  update: (id: string, data: UpdateBrandDto): Promise<Brand> => client.patch(`/admin/brands/${id}`, data).then((res) => res.data),
-  delete: (id: string): Promise<void> => client.delete(`/admin/brands/${id}`).then(() => undefined),
-  getStats: (): Promise<BrandStats> => client.get("/admin/brands/stats").then((res) => res.data),
-})
-
 const createAdminWardrobeApi = (client: AxiosInstance) => ({
   getAll: (options?: {
     userId?: string
     category?: Category
     colorHex?: string
-    brandId?: string
+    retailerId?: string
     brand?: string
     search?: string
     limit?: number
@@ -347,7 +312,7 @@ const createAdminWardrobeApi = (client: AxiosInstance) => ({
     if (options?.userId) params.append("userId", options.userId)
     if (options?.category) params.append("category", options.category)
     if (options?.colorHex) params.append("colorHex", options.colorHex)
-    if (options?.brandId) params.append("brandId", options.brandId)
+    if (options?.retailerId) params.append("retailerId", options.retailerId)
     if (options?.brand) params.append("brand", options.brand)
     if (options?.search) params.append("search", options.search)
     if (options?.limit) params.append("limit", options.limit.toString())
@@ -362,8 +327,8 @@ const createAdminWardrobeApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateWardrobeItemDto): Promise<WardrobeItem> => 
     client.patch(`/admin/wardrobe/${id}`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/admin/wardrobe/${id}`).then(() => undefined),
-  getByBrand: (brandId: string): Promise<WardrobeItem[]> => 
-    client.get(`/admin/wardrobe/by-brand/${brandId}`).then((res) => res.data),
+  getByRetailer: (retailerId: string): Promise<WardrobeItem[]> => 
+    client.get(`/admin/wardrobe/by-retailer/${retailerId}`).then((res) => res.data),
   getStats: (): Promise<{
     totalItems: number
     itemsByCategory: { category: string; count: number }[]
@@ -430,15 +395,78 @@ const createAdminSettingsApi = (client: AxiosInstance) => ({
     client.get("/admin/settings/system-info").then((res) => res.data),
 })
 
-// Public Brands API (for user-facing brand selection)
-const createBrandsApi = (client: AxiosInstance) => ({
-  getAll: (search?: string, limit?: number): Promise<{ brands: Brand[]; total: number }> => {
+const createAdminRetailersApi = (client: AxiosInstance) => ({
+  getAll: (options?: RetailerSearchOptions): Promise<{ retailers: Retailer[]; total: number }> => {
     const params = new URLSearchParams()
-    if (search) params.append("search", search)
-    if (limit) params.append("limit", limit.toString())
+    if (options?.search) params.append("search", options.search)
+    if (options?.country) params.append("country", options.country)
+    if (options?.isActive !== undefined) params.append("isActive", options.isActive.toString())
+    if (options?.limit) params.append("limit", options.limit.toString())
+    if (options?.offset) params.append("offset", options.offset.toString())
+    
     const queryString = params.toString()
-    return client.get(`/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+    return client.get(`/admin/retailers${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
   },
+  getById: (id: string): Promise<Retailer> => client.get(`/admin/retailers/${id}`).then((res) => res.data),
+  create: (data: CreateRetailerDto): Promise<Retailer> => client.post("/admin/retailers", data).then((res) => res.data),
+  update: (id: string, data: UpdateRetailerDto): Promise<Retailer> => client.patch(`/admin/retailers/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/admin/retailers/${id}`).then(() => undefined),
+  getStats: (): Promise<RetailerStats> => client.get("/admin/retailers/stats").then((res) => res.data),
+})
+
+const createAdminCommerceApi = (client: AxiosInstance) => ({
+  getAll: (options?: CommerceSearchOptions): Promise<{ items: CommerceItem[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (options?.search) params.append("search", options.search)
+    if (options?.category) params.append("category", options.category)
+    if (options?.brandId) params.append("brandId", options.brandId)
+    if (options?.retailerId) params.append("retailerId", options.retailerId)
+    if (options?.color) params.append("color", options.color)
+    if (options?.priceMin !== undefined) params.append("priceMin", options.priceMin.toString())
+    if (options?.priceMax !== undefined) params.append("priceMax", options.priceMax.toString())
+    if (options?.tags) params.append("tags", options.tags.join(","))
+    if (options?.inStock !== undefined) params.append("inStock", options.inStock.toString())
+    if (options?.seasonalPalette) params.append("seasonalPalette", options.seasonalPalette)
+    if (options?.minPaletteScore !== undefined) params.append("minPaletteScore", options.minPaletteScore.toString())
+    if (options?.limit) params.append("limit", options.limit.toString())
+    if (options?.offset) params.append("offset", options.offset.toString())
+    
+    const queryString = params.toString()
+    return client.get(`/admin/commerce${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
+  getById: (id: string): Promise<CommerceItem> => client.get(`/admin/commerce/${id}`).then((res) => res.data),
+  create: (data: CreateCommerceItemDto): Promise<CommerceItem> => client.post("/admin/commerce", data).then((res) => res.data),
+  createBulk: (items: CreateCommerceItemDto[]): Promise<{ created: number; errors: { index: number; error: string }[] }> =>
+    client.post("/admin/commerce/bulk", items).then((res) => res.data),
+  update: (id: string, data: UpdateCommerceItemDto): Promise<CommerceItem> => client.patch(`/admin/commerce/${id}`, data).then((res) => res.data),
+  delete: (id: string): Promise<void> => client.delete(`/admin/commerce/${id}`).then(() => undefined),
+  getByRetailer: (retailerId: string): Promise<CommerceItem[]> => 
+    client.get(`/admin/commerce/by-retailer/${retailerId}`).then((res) => res.data),
+  getStats: (): Promise<CommerceStats> => client.get("/admin/commerce/stats").then((res) => res.data),
+})
+
+// Public Commerce API (for authenticated users to browse products)
+const createCommerceApi = (client: AxiosInstance) => ({
+  getAll: (options?: CommerceSearchOptions): Promise<{ items: CommerceItem[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (options?.search) params.append("search", options.search)
+    if (options?.category) params.append("category", options.category)
+    if (options?.brandId) params.append("brandId", options.brandId)
+    if (options?.retailerId) params.append("retailerId", options.retailerId)
+    if (options?.color) params.append("color", options.color)
+    if (options?.priceMin !== undefined) params.append("priceMin", options.priceMin.toString())
+    if (options?.priceMax !== undefined) params.append("priceMax", options.priceMax.toString())
+    if (options?.tags) params.append("tags", options.tags.join(","))
+    if (options?.inStock !== undefined) params.append("inStock", options.inStock.toString())
+    if (options?.seasonalPalette) params.append("seasonalPalette", options.seasonalPalette)
+    if (options?.minPaletteScore !== undefined) params.append("minPaletteScore", options.minPaletteScore.toString())
+    if (options?.limit) params.append("limit", options.limit.toString())
+    if (options?.offset) params.append("offset", options.offset.toString())
+    
+    const queryString = params.toString()
+    return client.get(`/commerce${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
+  getById: (id: string): Promise<CommerceItem> => client.get(`/commerce/${id}`).then((res) => res.data),
 })
 
 // AI API (for clothing analysis)
@@ -459,13 +487,14 @@ const createApiHelpers = (client: AxiosInstance) => ({
   chatApi: createChatApi(client),
   outfitApi: createOutfitApi(client),
   uploadApi: createUploadApi(client),
-  brandsApi: createBrandsApi(client),
   aiApi: createAiApi(client),
+  commerceApi: createCommerceApi(client),
   // Admin APIs
-  adminBrandsApi: createAdminBrandsApi(client),
   adminWardrobeApi: createAdminWardrobeApi(client),
   adminAuditApi: createAdminAuditApi(client),
   adminSettingsApi: createAdminSettingsApi(client),
+  adminRetailersApi: createAdminRetailersApi(client),
+  adminCommerceApi: createAdminCommerceApi(client),
 })
 
 export const useApiClient = () => {
