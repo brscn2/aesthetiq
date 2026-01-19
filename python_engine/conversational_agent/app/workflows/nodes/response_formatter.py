@@ -84,14 +84,32 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
     tracing_service = get_tracing_service()
     
     try:
-        # Handle clarification case
+        # Handle clarification case - workflow will pause waiting for user response
         if needs_clarification and clarification_question:
-            logger.info("Generating clarification response")
+            logger.info("Generating clarification response - workflow will await user input")
             response = await _format_clarification(
                 llm_service, 
                 message, 
                 clarification_question
             )
+            
+            # Log to Langfuse
+            if trace_id:
+                tracing_service.log_llm_call(
+                    trace_id=trace_id,
+                    agent_name="response_formatter",
+                    input_text=f"Clarification needed: {clarification_question}",
+                    output_text=response[:200],
+                    metadata={
+                        "type": "clarification",
+                        "clarification_question": clarification_question,
+                    },
+                )
+            
+            return {
+                "final_response": response,
+                "workflow_status": "awaiting_clarification",
+            }
         
         # Handle no items case
         elif not retrieved_items or len(retrieved_items) == 0:
@@ -126,7 +144,10 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
         
         logger.info(f"Formatted response: {len(response)} chars")
         
-        return {"final_response": response}
+        return {
+            "final_response": response,
+            "workflow_status": "completed",
+        }
         
     except Exception as e:
         logger.error(f"Response formatting failed: {e}")

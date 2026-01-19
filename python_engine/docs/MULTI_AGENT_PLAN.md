@@ -91,6 +91,13 @@ class ConversationState(TypedDict, total=False):
     message: str
     conversation_history: List[Dict[str, str]]
     
+    # Workflow Control (Multi-Turn Support)
+    workflow_status: Literal["active", "awaiting_clarification", "completed"]
+    is_clarification_response: bool  # True if responding to a clarification
+    pending_clarification_context: Optional[Dict[str, Any]]
+    # Stores: original_message, clarification_question, extracted_filters,
+    #         search_scope, retrieved_items, iteration, style_dna, user_profile
+    
     # Intent Classification
     intent: Literal["general", "clothing"]
     
@@ -124,6 +131,8 @@ class ConversationState(TypedDict, total=False):
 ```
 
 **Key Design:** All agents read/write to shared state. No explicit A2A messages needed. State transitions handle agent communication.
+
+**Multi-Turn Support:** The `workflow_status`, `is_clarification_response`, and `pending_clarification_context` fields enable proper clarification flows where the workflow pauses, user provides input, and workflow resumes from the saved context.
 
 ### 2. Session Management & Chat History
 
@@ -699,7 +708,11 @@ class LangfuseTracingService:
 
 ```mermaid
 graph TB
-    Start([Start]) --> InputGuard[Input Guardrails]
+    Start([Start]) --> CheckClarify{Pending<br/>Clarification?}
+    
+    CheckClarify -->|Yes - Resume| Merge[Merge Clarification<br/>Context]
+    CheckClarify -->|No - Fresh| InputGuard[Input Guardrails]
+    
     InputGuard -->|safe| IC[Intent Classifier]
     InputGuard -->|unsafe| Error[Error Response]
     
@@ -710,27 +723,14 @@ graph TB
     OutputGuard1 -->|safe| RF[Response Formatter]
     OutputGuard1 -->|unsafe| Error
     
-    QA -->|Determine Scope| Scope{Search Scope?}
+    QA --> CRA[Clothing Recommender Agent]
+    Merge -->|Skip Intent/Query| CRA
     
-    Scope -->|Commerce Only| CRA1[Clothing Recommender Agent]
-    Scope -->|Wardrobe Only| CRA2[Clothing Recommender Agent]
-    Scope -->|Both| CRA3[Clothing Recommender Agent]
+    CRA -->|Fetch Context| UD[User Data MCP]
+    CRA -->|Fetch Context| SD[Style DNA MCP]
+    CRA -->|Search| MCP[Commerce/Wardrobe MCP]
     
-    CRA1 -->|Fetch Context| UD[User Data MCP<br/>Get Profile]
-    CRA1 -->|Fetch Context| SD[Style DNA MCP<br/>Get Style DNA]
-    CRA1 -->|Search| CS[Commerce MCP<br/>Search Items]
-    
-    CRA2 -->|Fetch Context| UD
-    CRA2 -->|Fetch Context| SD
-    CRA2 -->|Search| WS[Wardrobe MCP<br/>Search Items]
-    
-    CRA3 -->|Fetch Context| UD
-    CRA3 -->|Fetch Context| SD
-    CRA3 -->|Search| WS
-    CRA3 -->|Search| CS
-    
-    CS -->|Items Found?| Check1{Results?}
-    WS -->|Items Found?| Check1
+    MCP -->|Items Found?| Check1{Results?}
     
     Check1 -->|No Results| WSS[Web Search MCP<br/>Fallback Search]
     Check1 -->|Has Results| CAA[Clothing Analyzer Agent]
@@ -740,27 +740,30 @@ graph TB
     
     Analysis -->|APPROVE| OutputGuard2[Output Guardrails]
     Analysis -->|REFINE| Notes[Add Refinement Notes]
-    Analysis -->|CLARIFY| Ask[Clarification Response]
+    Analysis -->|CLARIFY| SaveCtx[Save Clarification<br/>Context]
     
-    Notes -->|Retry| CRA1
-    Notes -->|Retry| CRA2
-    Notes -->|Retry| CRA3
+    Notes -->|Retry with<br/>updated filters| CRA
     
-    Ask -->|User Response| QA
+    SaveCtx --> OutputGuard2
     
     OutputGuard2 -->|safe| RF
     OutputGuard2 -->|unsafe| Error
     
-    RF --> End([End])
-    Ask --> End
+    RF -->|Clarifying| WaitEnd([END<br/>status=awaiting])
+    RF -->|Complete| End([END<br/>status=completed])
     Error --> End
+    
+    WaitEnd -.->|Next Turn| CheckClarify
     
     style InputGuard fill:#ffccbc
     style OutputGuard1 fill:#ffccbc
     style OutputGuard2 fill:#ffccbc
-    style Scope fill:#fff9c4
+    style CheckClarify fill:#fff9c4
     style Check1 fill:#fff9c4
     style Analysis fill:#fff9c4
+    style Merge fill:#c8e6c9
+    style SaveCtx fill:#ffccbc
+    style WaitEnd fill:#ffcdd2
 ```
 
 **Node Implementation:**
@@ -969,11 +972,24 @@ def test_history_formatting():
 
 **Flow:** Recommender (commerce: no results) → Recommender (wardrobe: no results) → Web Search MCP → Analyzer → Response
 
-### Use Case 6: Clarification Needed
+### Use Case 6: Clarification Needed (Multi-Turn)
 
-**Query:** "Find me something nice"
+**Turn 1 Query:** "Find me something nice"
 
-**Flow:** Query Analyzer → Recommender → Analyzer (clarify) → User Response → Query Analyzer (retry) → Recommender → Analyzer → Response
+**Turn 1 Flow:** 
+1. Check Clarification (fresh) → Input Guardrails → Intent Classifier → Query Analyzer 
+2. Recommender (vague search) → Analyzer (clarify decision)
+3. Save Clarification Context → Response Formatter
+4. END with `workflow_status = "awaiting_clarification"`
+5. User receives: "What occasion is this for?"
+
+**Turn 2 Query:** "A formal dinner party"
+
+**Turn 2 Flow:**
+1. Check Clarification (resume - has pending context)
+2. Merge Clarification Context (extracts: occasion=party, style=formal)
+3. Recommender (searches with updated filters) → Analyzer (approve)
+4. Response Formatter → END with `workflow_status = "completed"`
 
 ## Potential Workflows
 
@@ -995,10 +1011,14 @@ Intent Classifier → Query Analyzer → Scope Decision → Recommender (fetch c
 Intent Classifier → Query Analyzer → Scope Decision → Recommender → Results Check → Analyzer → [Refine] → Recommender (retry with notes) → Analyzer → Response Formatter
 ```
 
-### Workflow 4: Clothing Recommendation (With Clarification)
+### Workflow 4: Clothing Recommendation (With Clarification - Multi-Turn)
 
 ```
-Intent Classifier → Query Analyzer → Scope Decision → Recommender → Results Check → Analyzer → [Clarify] → User Response → Query Analyzer (retry) → Recommender → Analyzer → Response Formatter
+Turn 1:
+Check Clarification (fresh) → Intent Classifier → Query Analyzer → Recommender → Analyzer → [Clarify] → Save Context → Response Formatter → END (awaiting)
+
+Turn 2:
+Check Clarification (resume) → Merge Context → Recommender → Analyzer → [Approve] → Response Formatter → END (completed)
 ```
 
 ### Workflow 5: Clothing Recommendation (With Web Search Fallback)

@@ -84,29 +84,28 @@ graph TB
 
 ```mermaid
 graph TB
-    Start([User Query:<br/>Clothing Request]) --> QA[Query Analyzer Node]
+    Start([User Query]) --> CheckClarify{Clarification<br/>Response?}
+    
+    CheckClarify -->|No - Fresh Request| IG[Input Guardrails]
+    CheckClarify -->|Yes - Resume| Merge[Merge Clarification<br/>Context]
+    
+    IG --> IC[Intent Classifier]
+    IC -->|clothing| QA[Query Analyzer Node]
+    IC -->|general| GCA[General Conversation Agent]
     
     QA -->|Determine Scope| Scope{Search Scope?}
     
-    Scope -->|Commerce Only| CRA1[Clothing Recommender Agent]
-    Scope -->|Wardrobe Only| CRA2[Clothing Recommender Agent]
-    Scope -->|Both| CRA3[Clothing Recommender Agent]
+    Scope -->|Commerce| CRA[Clothing Recommender Agent]
+    Scope -->|Wardrobe| CRA
+    Scope -->|Both| CRA
     
-    CRA1 -->|Fetch Context| UD[User Data MCP<br/>Get Profile]
-    CRA1 -->|Fetch Context| SD[Style DNA MCP<br/>Get Style DNA]
-    CRA1 -->|Search| CS[Commerce MCP<br/>Search Items]
+    Merge -->|Resume with<br/>updated filters| CRA
     
-    CRA2 -->|Fetch Context| UD
-    CRA2 -->|Fetch Context| SD
-    CRA2 -->|Search| WS[Wardrobe MCP<br/>Search Items]
+    CRA -->|Fetch Context| UD[User Data MCP]
+    CRA -->|Fetch Context| SD[Style DNA MCP]
+    CRA -->|Search| MCP[Commerce/Wardrobe MCP]
     
-    CRA3 -->|Fetch Context| UD
-    CRA3 -->|Fetch Context| SD
-    CRA3 -->|Search| WS
-    CRA3 -->|Search| CS
-    
-    CS -->|Items Found?| Check1{Results?}
-    WS -->|Items Found?| Check1
+    MCP -->|Items Found?| Check1{Results?}
     
     Check1 -->|No Results| WSS[Web Search MCP<br/>Fallback Search]
     Check1 -->|Has Results| CAA[Clothing Analyzer Agent]
@@ -114,32 +113,70 @@ graph TB
     
     CAA -->|Analyze| Analysis{Analysis Result}
     
-    Analysis -->|APPROVE| RF[Response Formatter]
+    Analysis -->|APPROVE| OG[Output Guardrails]
     Analysis -->|REFINE| Notes[Add Refinement Notes]
-    Analysis -->|CLARIFY| Ask[Ask User for Info]
+    Analysis -->|CLARIFY| SaveCtx[Save Clarification<br/>Context]
     
-    Notes -->|Retry| CRA1
-    Notes -->|Retry| CRA2
-    Notes -->|Retry| CRA3
+    Notes -->|Retry with<br/>updated filters| CRA
     
-    Ask -->|User Response| QA
+    SaveCtx --> OG
     
-    RF -->|Stream| Backend[Backend Chat API]
-    Backend -->|SSE| Frontend[Frontend]
+    OG --> RF[Response Formatter]
+    GCA --> OG
     
-    End([Response Delivered])
-    RF --> End
+    RF -->|If Clarifying| WaitUser([Wait for User<br/>workflow_status=awaiting])
+    RF -->|If Complete| End([Response Delivered<br/>workflow_status=completed])
+    
+    WaitUser -.->|Next Turn| CheckClarify
     
     style Start fill:#e3f2fd
+    style CheckClarify fill:#fff9c4
+    style Merge fill:#c8e6c9
     style QA fill:#fff3e0
-    style CRA1 fill:#e8f5e9
-    style CRA2 fill:#e8f5e9
-    style CRA3 fill:#e8f5e9
+    style CRA fill:#e8f5e9
     style CAA fill:#f3e5f5
     style RF fill:#e1bee7
     style Analysis fill:#fff9c4
     style Notes fill:#ffccbc
-    style Ask fill:#ffccbc
+    style SaveCtx fill:#ffccbc
+    style WaitUser fill:#ffcdd2
+```
+
+## Multi-Turn Clarification Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Workflow
+    participant Analyzer
+    participant SaveCtx as Save Context
+    participant Formatter
+    participant Merge as Merge Context
+    participant Recommender
+    
+    Note over User,Recommender: Turn 1: Vague Request
+    User->>Workflow: "I need something nice"
+    Workflow->>Analyzer: Analyze items
+    Analyzer->>Analyzer: Query too vague
+    Analyzer->>Workflow: decision: CLARIFY
+    Workflow->>SaveCtx: Save workflow state
+    SaveCtx->>SaveCtx: Store filters, items, iteration
+    SaveCtx->>Formatter: Send clarification question
+    Formatter->>User: "What occasion is this for?"
+    Note over User: workflow_status = awaiting_clarification
+    
+    Note over User,Recommender: Turn 2: Clarification Response
+    User->>Workflow: "A formal dinner party"
+    Workflow->>Workflow: Detect pending clarification
+    Workflow->>Merge: Merge user response
+    Merge->>Merge: Extract: occasion=party
+    Merge->>Merge: Merge with saved filters
+    Merge->>Recommender: Resume with updated filters
+    Recommender->>Analyzer: Updated items
+    Analyzer->>Workflow: decision: APPROVE
+    Workflow->>Formatter: Format response
+    Formatter->>User: "Here are formal party options..."
+    Note over User: workflow_status = completed
 ```
 
 ## Agent Communication (LangGraph State Management)
@@ -157,6 +194,7 @@ sequenceDiagram
     
     User->>Gateway: POST /api/v1/agent/chat/stream
     Gateway->>Workflow: Route request
+    Workflow->>Workflow: Check for pending clarification
     Workflow->>Recommender: Start recommendation
     
     Recommender->>MCP: get_user_profile(user_id)
@@ -177,27 +215,64 @@ sequenceDiagram
     
     alt Items Approved
         Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
+        Workflow->>Workflow: Set workflow_status = "completed"
         Workflow->>Gateway: Stream: items + response
     else Items Need Refinement
         Analyzer->>Workflow: Update state: refinement_notes, iteration++
         Note over Workflow: Conditional routing based on<br/>analysis_result.decision == "refine"
+        Note over Workflow: parse_refinement_notes_to_filters()<br/>extracts structured filter updates
         Workflow->>Recommender: Retry (reads refinement_notes from state)
         Recommender->>MCP: search_commerce_items(query + refinement_notes)
         MCP-->>Recommender: List[Items]
         Recommender->>Workflow: Update state: retrieved_items
         Workflow->>Analyzer: State transition (retrieved_items updated)
         Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
-    else Query Unclear
+    else Query Unclear (Clarification Needed)
         Analyzer->>Workflow: Update state: needs_clarification = True
-        Note over Workflow: Conditional routing based on<br/>needs_clarification == True
-        Workflow->>Gateway: Stream: ask user
+        Workflow->>Workflow: Save clarification context<br/>(filters, items, iteration)
+        Workflow->>Workflow: Set workflow_status = "awaiting_clarification"
+        Workflow->>Gateway: Stream: clarification question
         Gateway->>User: "What occasion is this for?"
-        User->>Gateway: Response
-        Gateway->>Workflow: Updated query
-        Workflow->>Recommender: Retry with clarification
+        Note over User,Workflow: Workflow ENDS - awaiting user response
     end
     
     Gateway->>User: SSE Stream: Final response
+```
+
+## Multi-Turn Clarification Resume Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Gateway
+    participant Workflow
+    participant CheckNode as Check Clarification
+    participant MergeNode as Merge Context
+    participant Recommender
+    participant Analyzer
+    
+    Note over User,Analyzer: Turn 2: User responds to clarification
+    User->>Gateway: "A formal dinner party"
+    Gateway->>Workflow: run_workflow(pending_context)
+    
+    Workflow->>CheckNode: Entry point
+    CheckNode->>CheckNode: Detect pending clarification
+    CheckNode->>MergeNode: Route to merge
+    
+    MergeNode->>MergeNode: Parse response:<br/>"formal dinner party"<br/>→ {occasion: "party"}
+    MergeNode->>MergeNode: Merge with saved filters
+    MergeNode->>MergeNode: Restore iteration count
+    
+    MergeNode->>Recommender: Resume with updated filters
+    Note over Recommender: Skipped Intent Classifier<br/>and Query Analyzer
+    
+    Recommender->>Recommender: Search with merged filters
+    Recommender->>Analyzer: Updated items
+    Analyzer->>Analyzer: Analyze items
+    Analyzer->>Workflow: decision = "approve"
+    Workflow->>Workflow: Set workflow_status = "completed"
+    Workflow->>Gateway: Stream response
+    Gateway->>User: "Here are formal party options..."
 ```
 
 ## MCP Server Tool Call Flow

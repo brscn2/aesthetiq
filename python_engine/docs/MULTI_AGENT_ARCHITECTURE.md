@@ -159,32 +159,61 @@ This document describes the new multi-agent conversational system that replaces 
 │                    Workflow State                            │
 │                                                              │
 │  {                                                           │
+│    // Input Fields                                           │
 │    "user_id": str,                                           │
 │    "session_id": str,                                         │
 │    "message": str,                                           │
 │    "conversation_history": List[Dict[str, str]],           │
+│                                                              │
+│    // Workflow Control (Multi-Turn Support)                 │
+│    "workflow_status": "active" | "awaiting_clarification"   │
+│                       | "completed",                         │
+│    "is_clarification_response": bool,                       │
+│    "pending_clarification_context": Optional[Dict],         │
+│                                                              │
+│    // Intent and Query Analysis                              │
 │    "intent": "general" | "clothing",                         │
 │    "search_scope": "commerce" | "wardrobe" | "both",        │
 │    "extracted_filters": Optional[Dict[str, Any]],           │
+│                                                              │
+│    // User Context                                           │
 │    "user_profile": Optional[UserProfile],                    │
 │    "style_dna": Optional[StyleDNA],                          │
+│                                                              │
+│    // Clothing Workflow                                      │
 │    "retrieved_items": List[ClothingItem],                    │
 │    "search_sources_used": List[str],                        │
 │    "fallback_used": bool,                                    │
+│                                                              │
+│    // Analysis Result                                        │
 │    "analysis_result": Optional[AnalysisResult],              │
 │    "refinement_notes": Optional[List[str]],                  │
 │    "needs_clarification": bool,                              │
 │    "clarification_question": Optional[str],                 │
+│                                                              │
+│    // Output                                                 │
 │    "final_response": str,                                    │
 │    "streaming_events": List[StreamEvent],                   │
 │    "metadata": Dict[str, Any],                               │
 │    "langfuse_trace_id": Optional[str],                       │
-│    "iteration": int  # Track refinement iterations (max 3)  │
+│    "iteration": int  // Track refinement iterations (max 3) │
 │  }                                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**New Multi-Turn Fields:**
+- `workflow_status`: Tracks if workflow is active, waiting for clarification, or completed
+- `is_clarification_response`: True when user is responding to a clarification question
+- `pending_clarification_context`: Saves workflow state when clarification is needed, enabling seamless resumption
+
 #### 2.2 Workflow Nodes
+
+**Entry Node: Check Clarification**
+- **Purpose:** Determine if this is a fresh request or a response to clarification
+- **Logic:** Checks `is_clarification_response` and `pending_clarification_context`
+- **Routes:**
+  - If clarification response → Merge Clarification Context
+  - If fresh request → Input Guardrails
 
 **Node 1: Input Guardrails**
 - **Purpose:** Validate and sanitize user input
@@ -213,23 +242,37 @@ This document describes the new multi-agent conversational system that replaces 
 - **Logic:** LLM-based query analysis
 - **Next:** Routes to Clothing Recommender Agent
 
-**Node 5: Clothing Recommendation Workflow**
+**Node 5: Merge Clarification Context**
+- **Purpose:** Merge user's clarification response into existing workflow context
+- **Input:** User's clarification, pending context from previous turn
+- **Logic:** Parses clarification to extract filters (occasion, budget, color, etc.)
+- **Output:** Updated filters merged with previous context
+- **Next:** Routes directly to Clothing Recommender (skips intent/query analysis)
+
+**Node 6: Clothing Recommendation Workflow**
 - **Sub-workflow with multiple agents:**
   1. **Clothing Recommender Agent** - Fetches context and retrieves items
   2. **Clothing Analyzer Agent** - Validates and refines results
   3. **Response Formatter** - Formats final response
 - **Refinement Loop:** Analyzer can request refinement (max 3 iterations)
-- **Clarification Loop:** Analyzer can request user clarification
+- **Clarification Flow:** Saves context and sends question to user
 
-**Node 6: Output Guardrails**
+**Node 7: Save Clarification Context**
+- **Purpose:** Save workflow state before asking user for clarification
+- **Saves:** Original message, extracted filters, search scope, retrieved items, iteration count
+- **Sets:** `workflow_status = "awaiting_clarification"`
+- **Next:** Routes to Output Guardrails to send the clarification question
+
+**Node 8: Output Guardrails**
 - **Purpose:** Validate LLM responses before sending to user
 - **Checks:** Content moderation, on-topic validation, format validation
 - **Applied:** After Conversation Agent and after Analyzer Agent
 - **Output:** Filtered response or error response
 
-**Node 7: Response Formatter**
+**Node 9: Response Formatter**
 - Formats final response for user
 - Adds styling tips, explanations
+- Sets `workflow_status = "completed"` or `"awaiting_clarification"`
 - Streams response to backend
 
 ---
@@ -469,20 +512,47 @@ Analyze: Retrieved Items + User Query + Style DNA
 - `retrieved_items` - Recommender Agent writes, Analyzer Agent reads
 - `analysis_result` - Analyzer Agent writes, workflow routes based on decision
 - `refinement_notes` - Analyzer Agent writes, Recommender Agent reads (for retry)
-- `needs_clarification` - Analyzer Agent writes, workflow routes to clarification
+- `needs_clarification` - Analyzer Agent writes, workflow routes to save context
 - `iteration` - Tracks refinement loop iterations (max 3 to prevent infinite loops)
 
+**Multi-Turn State Fields:**
+- `workflow_status` - Tracks workflow state: "active", "awaiting_clarification", "completed"
+- `is_clarification_response` - Set to true when user responds to a clarification
+- `pending_clarification_context` - Saves context needed to resume workflow
+
 **Workflow Transitions:**
+- Entry → Check Clarification: First node determines if resuming or starting fresh
+- Check Clarification → Merge Context (resume): When `is_clarification_response == True`
+- Check Clarification → Input Guardrails (fresh): When starting a new conversation
+- Merge Context → Recommender: Skips intent/query analysis when resuming
 - Recommender → Analyzer: Automatic via state update
 - Analyzer → Recommender (refine): Conditional routing based on `analysis_result.decision == "refine"`
-- Analyzer → Query Analyzer (clarify): Conditional routing based on `needs_clarification == True`
+- Analyzer → Save Clarification → Response (clarify): Saves context, sends question to user
 - Analyzer → Response Formatter (approve): Conditional routing based on `analysis_result.decision == "approve"`
+
+**Clarification Flow (Multi-Turn):**
+```
+Turn 1: User asks vague question
+  → Analyzer decides: CLARIFY
+  → Save Clarification Context (saves filters, items, iteration)
+  → Response Formatter (sends clarification question)
+  → workflow_status = "awaiting_clarification"
+  → END (workflow pauses)
+
+Turn 2: User provides clarification
+  → Check Clarification (detects pending context)
+  → Merge Clarification Context (updates filters with new info)
+  → Clothing Recommender (searches with updated filters)
+  → Analyzer → Approve → Response
+  → workflow_status = "completed"
+```
 
 **Benefits:**
 - Simpler than explicit message passing
 - State is always available for debugging
 - LangGraph handles state persistence and transitions
 - Easy to add new agents without protocol changes
+- Multi-turn conversations preserve context seamlessly
 
 ---
 
@@ -682,6 +752,57 @@ User: "Find me a specific brand jacket"
 4. Response Formatter → Streams web search results
 ```
 
+#### Example 6: Multi-Turn Clarification Flow
+
+```
+Turn 1: User: "I need something nice to wear"
+
+1. Check Clarification Node:
+   - is_clarification_response = False
+   - Routes to Input Guardrails (fresh request)
+2. Intent Classifier → "clothing"
+3. Query Analyzer:
+   - Determines: commerce search (vague query)
+   - Extracts: {} (no specific filters)
+4. Clothing Recommender Agent:
+   - Searches commerce with no specific filters
+   - Returns: Generic items
+5. Clothing Analyzer Agent:
+   - Analyzes: Query too vague, items don't match specific need
+   - Decision: CLARIFY
+   - Question: "What occasion is this for?"
+   - State: needs_clarification = True
+6. Save Clarification Context:
+   - Saves: original_message, extracted_filters, search_scope, iteration
+   - Sets: workflow_status = "awaiting_clarification"
+7. Response Formatter:
+   - Formats clarification question
+   - Returns: "I'd love to help! What occasion is this for?"
+   - Sets: workflow_status = "awaiting_clarification"
+8. END (workflow pauses, waiting for user)
+
+Turn 2: User: "A formal dinner party"
+
+1. run_workflow called with pending_context from Turn 1
+2. Check Clarification Node:
+   - is_clarification_response = True (pending_context provided)
+   - Routes to Merge Clarification Context
+3. Merge Clarification Context:
+   - Reads: "A formal dinner party"
+   - Extracts: occasion = "party", style = "formal"
+   - Merges with previous filters: {occasion: "party"}
+   - Restores: previous iteration count, search_scope
+4. Clothing Recommender Agent (skipped intent/query analysis):
+   - Has updated filters: {occasion: "party"}
+   - Searches commerce with refined criteria
+   - Returns: Formal party attire
+5. Clothing Analyzer Agent:
+   - Decision: APPROVE
+6. Response Formatter:
+   - Formats items with styling tips
+   - Sets: workflow_status = "completed"
+```
+
 ---
 
 ### 10. Streaming Architecture
@@ -751,17 +872,17 @@ python_engine/
 │   │   ├── agents/
 │   │   │   ├── __init__.py
 │   │   │   ├── conversation_agent.py
-│   │   │   ├── clothing_recommender_agent.py
+│   │   │   ├── clothing_recommender_agent.py   # Includes refinement filter parsing
 │   │   │   └── clothing_analyzer_agent.py
 │   │   ├── workflows/
 │   │   │   ├── __init__.py
-│   │   │   ├── main_workflow.py   # LangGraph workflow
-│   │   │   ├── state.py           # ConversationState definition
+│   │   │   ├── main_workflow.py   # LangGraph workflow with clarification handling
+│   │   │   ├── state.py           # ConversationState + helper functions
 │   │   │   └── nodes/
 │   │   │       ├── __init__.py
-│   │   │       ├── intent_classifier_node.py
-│   │   │       ├── query_analyzer_node.py
-│   │   │       └── response_formatter_node.py
+│   │   │       ├── intent_classifier.py
+│   │   │       ├── query_analyzer.py
+│   │   │       └── response_formatter.py
 │   │   ├── guardrails/
 │   │   │   ├── __init__.py
 │   │   │   ├── base.py
@@ -779,11 +900,13 @@ python_engine/
 │   │   │   └── backend_client.py  # HTTP client for backend chat API
 │   │   ├── mcp/
 │   │   │   ├── __init__.py
-│   │   │   └── client.py          # MCP client for tool calls
+│   │   │   ├── client.py          # MCP client manager
+│   │   │   └── tools.py           # MCP tool initialization
 │   │   ├── api/
 │   │   │   └── v1/
 │   │   │       └── endpoints/
-│   │   │           └── chat.py   # Streaming endpoint
+│   │   │           ├── chat.py    # Streaming endpoint
+│   │   │           └── health.py  # Health check
 │   │   └── core/
 │   │       ├── config.py
 │   │       └── logger.py
@@ -844,6 +967,10 @@ See `python_engine/docs/issues/` for detailed implementation issues:
 5. **Fallback to Web Search**: Ensures users can always find items, even if not in commerce/wardrobe databases.
 
 6. **Refinement Loop**: Analyzer can request improvements, creating a feedback loop for better results.
+
+7. **Multi-Turn Clarification with Checkpointing**: When clarification is needed, workflow state is saved (`pending_clarification_context`) and workflow ends with `workflow_status = "awaiting_clarification"`. On the next turn, the workflow detects the pending context and resumes from where it left off, skipping intent classification and query analysis. This prevents the infinite loop problem and preserves context across turns.
+
+8. **Structured Filter Extraction from Refinement Notes**: The `parse_refinement_notes_to_filters()` function extracts structured filter updates from natural language refinement notes (e.g., "Need more formal options" → `{occasion: "formal"}`), making refinement more effective.
 
 ---
 

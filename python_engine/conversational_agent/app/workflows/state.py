@@ -117,6 +117,13 @@ class StreamEvent:
         }
 
 
+class WorkflowStatus(str, Enum):
+    """Status of the workflow execution."""
+    ACTIVE = "active"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    COMPLETED = "completed"
+
+
 class ConversationState(TypedDict, total=False):
     """
     Shared state for the LangGraph conversational workflow.
@@ -132,6 +139,22 @@ class ConversationState(TypedDict, total=False):
     session_id: str
     message: str
     conversation_history: List[Dict[str, str]]
+    
+    # =========================================================================
+    # Workflow Control (for multi-turn conversations)
+    # =========================================================================
+    workflow_status: Literal["active", "awaiting_clarification", "completed"]
+    is_clarification_response: bool  # True if this message is a response to a clarification
+    pending_clarification_context: Optional[Dict[str, Any]]
+    # Stores context when awaiting clarification:
+    # {
+    #     "original_message": str,
+    #     "clarification_question": str,
+    #     "extracted_filters": Dict,
+    #     "search_scope": str,
+    #     "retrieved_items": List,
+    #     "iteration": int,
+    # }
     
     # =========================================================================
     # Intent Classification (Intent Classifier Node)
@@ -225,6 +248,7 @@ def create_initial_state(
     session_id: str,
     message: str,
     conversation_history: Optional[List[Dict[str, str]]] = None,
+    pending_context: Optional[Dict[str, Any]] = None,
 ) -> ConversationState:
     """
     Create an initial conversation state for a new workflow execution.
@@ -234,33 +258,171 @@ def create_initial_state(
         session_id: The chat session identifier
         message: The user's current message
         conversation_history: Previous messages in the conversation
+        pending_context: Previous workflow context if this is a clarification response
         
     Returns:
         Initial ConversationState with default values
     """
-    return ConversationState(
+    # Check if this is a response to a pending clarification
+    is_clarification = pending_context is not None
+    
+    state = ConversationState(
         user_id=user_id,
         session_id=session_id,
         message=message,
         conversation_history=conversation_history or [],
+        # Workflow control
+        workflow_status="active",
+        is_clarification_response=is_clarification,
+        pending_clarification_context=pending_context,
+        # Intent and query analysis
         intent=None,
         search_scope=None,
         extracted_filters=None,
         user_profile=None,
         style_dna=None,
+        # Clothing workflow
         retrieved_items=[],
         search_sources_used=[],
         fallback_used=False,
+        # Analysis
         analysis_result=None,
         refinement_notes=None,
         needs_clarification=False,
         clarification_question=None,
+        # Output
         final_response="",
         streaming_events=[],
         metadata={},
         langfuse_trace_id=None,
         iteration=0,
     )
+    
+    # If resuming from clarification, restore previous context
+    if pending_context:
+        state["extracted_filters"] = pending_context.get("extracted_filters")
+        state["search_scope"] = pending_context.get("search_scope")
+        state["retrieved_items"] = pending_context.get("retrieved_items", [])
+        state["iteration"] = pending_context.get("iteration", 0)
+        state["intent"] = "clothing"  # Clarification is always in clothing context
+    
+    return state
+
+
+def create_clarification_context(state: ConversationState) -> Dict[str, Any]:
+    """
+    Create a context snapshot when clarification is needed.
+    
+    This context will be stored and used to resume the workflow
+    when the user provides their clarification response.
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        Context dictionary to be stored
+    """
+    return {
+        "original_message": state.get("message", ""),
+        "clarification_question": state.get("clarification_question", ""),
+        "extracted_filters": state.get("extracted_filters"),
+        "search_scope": state.get("search_scope"),
+        "retrieved_items": state.get("retrieved_items", []),
+        "iteration": state.get("iteration", 0),
+        "style_dna": state.get("style_dna"),
+        "user_profile": state.get("user_profile"),
+        "intent": state.get("intent"),
+    }
+
+
+def merge_clarification_into_filters(
+    existing_filters: Optional[Dict[str, Any]],
+    clarification_response: str,
+    clarification_question: str,
+) -> Dict[str, Any]:
+    """
+    Merge a user's clarification response into existing filters.
+    
+    This is a simple heuristic-based merge. In production, you might
+    use an LLM to better understand the clarification.
+    
+    Args:
+        existing_filters: Previously extracted filters
+        clarification_response: User's response to clarification
+        clarification_question: The question that was asked
+        
+    Returns:
+        Updated filters dictionary
+    """
+    filters = existing_filters.copy() if existing_filters else {}
+    response_lower = clarification_response.lower()
+    question_lower = clarification_question.lower() if clarification_question else ""
+    
+    # Try to infer what the clarification is about based on the question
+    if "occasion" in question_lower or "event" in question_lower:
+        # Extract occasion from response
+        occasions = {
+            "interview": "interview",
+            "job": "interview",
+            "work": "business",
+            "office": "business",
+            "casual": "casual",
+            "party": "party",
+            "wedding": "wedding",
+            "date": "date",
+            "formal": "formal",
+            "everyday": "casual",
+        }
+        for keyword, occasion in occasions.items():
+            if keyword in response_lower:
+                filters["occasion"] = occasion
+                break
+    
+    elif "budget" in question_lower or "price" in question_lower or "spend" in question_lower:
+        # Extract price hints
+        if any(w in response_lower for w in ["cheap", "budget", "affordable", "low"]):
+            filters["price_range"] = "budget"
+        elif any(w in response_lower for w in ["mid", "moderate", "medium"]):
+            filters["price_range"] = "mid-range"
+        elif any(w in response_lower for w in ["expensive", "luxury", "high", "premium"]):
+            filters["price_range"] = "luxury"
+        # Try to extract numeric budget
+        import re
+        numbers = re.findall(r'\$?(\d+)', response_lower)
+        if numbers:
+            filters["max_price"] = int(numbers[0])
+    
+    elif "color" in question_lower:
+        colors = ["black", "white", "navy", "blue", "red", "green", "brown", 
+                  "grey", "gray", "beige", "cream", "pink", "purple"]
+        for color in colors:
+            if color in response_lower:
+                filters["color"] = color
+                break
+    
+    elif "style" in question_lower:
+        styles = {
+            "classic": "classic",
+            "modern": "modern",
+            "minimalist": "minimalist",
+            "bold": "bold",
+            "elegant": "elegant",
+            "casual": "casual",
+            "sporty": "sporty",
+        }
+        for keyword, style in styles.items():
+            if keyword in response_lower:
+                filters["style"] = style
+                break
+    
+    elif "size" in question_lower:
+        sizes = ["xs", "s", "m", "l", "xl", "xxl", "small", "medium", "large"]
+        for size in sizes:
+            if size in response_lower:
+                filters["size"] = size.upper() if len(size) <= 2 else size.capitalize()
+                break
+    
+    return filters
 
 
 def validate_state(state: ConversationState) -> List[str]:
