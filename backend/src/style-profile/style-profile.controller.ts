@@ -102,5 +102,64 @@ export class StyleProfileController {
   async remove(@Param('id') id: string) {
     return this.styleProfileService.remove(id);
   }
+
+  @Post('analyze-persona')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Trigger AI-powered persona analysis' })
+  @ApiResponse({
+    status: 202,
+    description: 'Analysis job started',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Style profile not found' })
+  async analyzePersona(@CurrentUser() user: { clerkId: string }) {
+    return this.styleProfileService.startPersonaAnalysis(user.clerkId);
+  }
+
+  @Get('persona-analysis/status')
+  @ApiOperation({ summary: 'Get persona analysis status for the authenticated user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Analysis status found',
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'string' },
+        status: { type: 'string', enum: ['pending', 'processing', 'completed', 'failed'] },
+        jobId: { type: 'string' },
+        startedAt: { type: 'string', format: 'date-time' },
+        completedAt: { type: 'string', format: 'date-time' },
+        error: { type: 'string' },
+      },
+    },
+  })
+  async getPersonaAnalysisStatus(@CurrentUser() user: { clerkId: string }) {
+    const status = await this.styleProfileService.getPersonaAnalysisStatus(user.clerkId);
+    if (!status) {
+      throw new NotFoundException('No persona analysis job found');
+    }
+    return status;
+  }
+
+  @Get('persona-analysis/:jobId')
+  @ApiOperation({ summary: 'Get persona analysis status by job ID' })
+  @ApiParam({ name: 'jobId', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Analysis status found' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  async getPersonaAnalysisByJobId(
+    @Param('jobId') jobId: string,
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    const status = await this.styleProfileService.getPersonaAnalysisStatus(user.clerkId);
+    if (!status || status.jobId !== jobId) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+    return status;
+  }
 }
 
