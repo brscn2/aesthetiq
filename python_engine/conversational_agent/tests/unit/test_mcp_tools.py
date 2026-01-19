@@ -64,7 +64,7 @@ async def test_init_mcp_client_connects_and_loads_tools(mock_settings):
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get_tools = MagicMock(return_value=[mock_tool])
+    mock_client.get_tools = AsyncMock(return_value=[mock_tool])
     
     with patch("app.mcp.tools.MultiServerMCPClient", return_value=mock_client):
         client = await init_mcp_client()
@@ -99,7 +99,7 @@ async def test_get_mcp_tools_returns_tools(mock_settings):
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get_tools = MagicMock(return_value=[mock_tool1, mock_tool2])
+    mock_client.get_tools = AsyncMock(return_value=[mock_tool1, mock_tool2])
     
     with patch("app.mcp.tools.MultiServerMCPClient", return_value=mock_client):
         tools = await get_mcp_tools()
@@ -155,7 +155,7 @@ async def test_init_mcp_client_is_idempotent(mock_settings):
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.get_tools = MagicMock(return_value=[])
+    mock_client.get_tools = AsyncMock(return_value=[])
     
     with patch("app.mcp.tools.MultiServerMCPClient", return_value=mock_client) as mock_class:
         client1 = await init_mcp_client()

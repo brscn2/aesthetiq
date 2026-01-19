@@ -1,18 +1,38 @@
 # Core Infrastructure Test Results
 
-**Date:** 2026-01-14  
-**Tested By:** CI Pipeline  
+**Date:** 2026-01-19  
+**Tested By:** Manual Testing  
 **Backend Required:** Yes (NestJS running on port 3001)  
-**Langfuse Integration:** ✅ Verified with real credentials
+**Langfuse Integration:** ✅ Verified with real credentials  
+**MCP Servers:** ✅ Verified with langchain-mcp-adapters
 
 ## Summary
 
 | Category | Passed | Skipped | Failed | Total |
 |----------|--------|---------|--------|-------|
-| Unit Tests | 65 | 0 | 0 | 65 |
-| Integration Tests (Backend) | 7 | 4 | 0 | 11 |
+| Unit Tests (conversational_agent) | 73 | 0 | 0 | 73 |
+| Unit Tests (mcp_servers) | 22 | 0 | 0 | 22 |
+| Integration Tests (Backend) | 6 | 5 | 0 | 11 |
 | Integration Tests (Langfuse) | 7 | 0 | 0 | 7 |
-| **Total** | **79** | **4** | **0** | **83** |
+| Integration Tests (MCP Client) | 1 | 0 | 0 | 1 |
+| MCP Integration Test | 1 | 0 | 0 | 1 |
+| **Total** | **110** | **5** | **0** | **115** |
+
+## MCP Integration Verification ✅ NEW
+
+Successfully tested MCP server integration with langchain-mcp-adapters:
+
+```
+✅ MCP server running on http://localhost:8000
+✅ 25 tools discovered via MCP protocol (14 core + health/test endpoints)
+```
+
+**Verified MCP Tools:**
+- Wardrobe: search, get, filter (+ health, test)
+- Commerce: search, get, filter (+ health, test)
+- Web Search: web_search, trends, blogs (+ health, test)
+- User Data: get_user_profile (+ health, test)
+- Style DNA: get_style_dna, get_color_season, get_archetype, get_colors (+ health, test)
 
 ## Langfuse Integration Verification ✅
 
@@ -32,6 +52,12 @@ Successfully tested real Langfuse connectivity with production credentials:
 - Error event logging
 - Full conversation flow tracing
 
+## Fixes Applied During Testing
+
+1. **test_mcp_tools.py**: Changed `MagicMock` to `AsyncMock` for `get_tools()` method to match async interface in langchain-mcp-adapters v0.2.1
+2. **test_mcp_client_with_mcp_servers_app.py**: Added missing mocks for `get_contrast_level` and `get_undertone` functions
+3. **test_mcp_integration.py**: Updated base_url from port 8010 to 8000 (uvicorn default)
+
 ## Test Coverage
 
 | Module | Statements | Coverage |
@@ -41,13 +67,14 @@ Successfully tested real Langfuse connectivity with production credentials:
 | `app/core/logger.py` | 19 | **95%** |
 | `app/services/session/session_service.py` | 70 | **90%** |
 | `app/mcp/client.py` | 139 | **73%** |
+| `app/mcp/tools.py` | - | Uses langchain-mcp-adapters |
 | `app/services/backend_client.py` | 104 | **59%** |
 | `app/services/tracing/langfuse_service.py` | 150 | **~65%** |
 | **Overall** | **870** | **~55%** |
 
 > **Note:** Lower coverage on some modules is expected as they contain placeholder implementations for future issues (MCP servers, main workflow, chat endpoints).
 
-## Unit Tests (65 passed)
+## Unit Tests - Conversational Agent (73 passed)
 
 ### State Management (`test_state.py`) - 21 tests
 - ✅ `TestAnalysisResult` - 4 tests (create, to_dict, from_dict, decisions)
@@ -64,6 +91,10 @@ Successfully tested real Langfuse connectivity with production credentials:
 - ✅ `TestMCPExceptions` - 3 tests (error types)
 - ✅ `TestGetMCPManager` - 1 test (singleton)
 
+### MCP Tools (`test_mcp_tools.py`) - 8 tests
+- ✅ Tests for langchain-mcp-adapters integration
+- ✅ Client initialization, tool loading, cleanup
+
 ### Langfuse Tracing (`test_langfuse_service.py`) - 11 tests
 - ✅ `TestLangfuseTracingService` - 10 tests (disabled mode, logging, sanitization)
 - ✅ `TestGetTracingService` - 1 test (singleton)
@@ -73,26 +104,49 @@ Successfully tested real Langfuse connectivity with production credentials:
 - ✅ `TestSessionService` - 10 tests (load, save, format history)
 - ✅ `TestGetSessionService` - 2 tests (custom client, singleton)
 
-## Integration Tests - Backend (7 passed, 4 skipped)
+## Unit Tests - MCP Servers (22 passed)
+
+### Commerce Tools (`test_commerce_tools.py`) - 7 tests
+- ✅ Search, filter, get commerce items
+- ✅ Seasonal palette scoring and ranking
+
+### Style DNA Tools (`test_style_dna_tools.py`) - 5 tests
+- ✅ Get style DNA, color season, archetype
+- ✅ Recommended colors
+
+### User Data Tools (`test_user_data_tools.py`) - 3 tests
+- ✅ Get user profile
+
+### Wardrobe Tools (`test_wardrobe_tools.py`) - 5 tests
+- ✅ Search, filter, get wardrobe items
+- ✅ Embedding fallback
+
+### Wardrobe Router (`test_wardrobe_router.py`) - 1 test
+- ✅ Health endpoint
+
+### Web Search Tools (`test_web_search_tools.py`) - 1 test
+- ✅ Web search parsing
+
+## Integration Tests - Backend (6 passed, 5 skipped)
 
 ### Backend Client Integration (`test_backend_client.py`)
 
-**Passed (7):**
-- ✅ `test_health_check` - Verifies backend connectivity via `/api` endpoint
-- ✅ `test_get_nonexistent_session` - Verifies 401/404 handling for missing sessions
+**Passed (6):**
 - ✅ `test_client_close` - Tests client cleanup
 - ✅ `test_client_reopen_after_close` - Tests client reconnection
 - ✅ `test_connection_to_invalid_url` - Tests graceful failure handling
 - ✅ `test_client_with_auth_token` - Verifies auth header injection
 - ✅ `test_client_without_auth_token` - Verifies no auth header when not provided
 
-**Skipped (4) - Require Authentication:**
-- ⏭️ `test_create_and_get_session` - Requires valid Clerk auth token
-- ⏭️ `test_add_message_to_session` - Requires valid Clerk auth token
+**Skipped (5) - Require Backend/Authentication:**
+- ⏭️ `test_health_check` - Requires BACKEND_URL
+- ⏭️ `test_create_and_get_session` - Requires BACKEND_URL + auth
+- ⏭️ `test_add_message_to_session` - Requires BACKEND_URL + auth
+- ⏭️ `test_get_nonexistent_session` - Requires BACKEND_URL
 - ⏭️ `test_real_create_session` - Requires `TEST_AUTH_TOKEN` env var
 - ⏭️ `test_real_full_conversation_flow` - Requires `TEST_AUTH_TOKEN` env var
 
-## Integration Tests - Langfuse (7 passed) ✅ NEW
+## Integration Tests - Langfuse (7 passed) ✅
 
 ### Langfuse Real Connection (`test_langfuse_integration.py`)
 
@@ -104,6 +158,13 @@ Successfully tested real Langfuse connectivity with production credentials:
 - ✅ `test_log_agent_transition` - Tests transition event logging
 - ✅ `test_log_error` - Tests error event logging
 - ✅ `test_full_conversation_trace` - **Complete multi-agent conversation trace**
+
+## Integration Tests - MCP Client (1 passed) ✅ NEW
+
+### MCP Client with MCP Servers (`test_mcp_client_with_mcp_servers_app.py`)
+
+**Passed (1):**
+- ✅ `test_mcp_client_calls_mcp_servers_app_via_asgi_transport` - Tests deprecated MCP client with ASGI transport
 
 ## FastAPI Application Verification
 

@@ -1,3 +1,8 @@
+"""Integration test for MCP client with MCP servers app.
+
+This test verifies that the deprecated MCPClient can communicate with
+the MCP servers app using ASGI transport (in-process, no network).
+"""
 import sys
 from pathlib import Path
 
@@ -14,11 +19,20 @@ async def test_mcp_client_calls_mcp_servers_app_via_asgi_transport(monkeypatch):
     from mcp_servers.main import app as mcp_app
     from mcp_servers.style_dna_server import tools as style_tools
 
+    # Mock all functions called by the get_color_season endpoint
     async def fake_get_color_season(user_id: str):
         assert user_id == "u1"
         return "warm_autumn"
 
+    async def fake_get_contrast_level(user_id: str):
+        return "medium"
+
+    async def fake_get_undertone(user_id: str):
+        return "warm"
+
     monkeypatch.setattr(style_tools, "get_color_season", fake_get_color_season)
+    monkeypatch.setattr(style_tools, "get_contrast_level", fake_get_contrast_level)
+    monkeypatch.setattr(style_tools, "get_undertone", fake_get_undertone)
 
     import httpx
     from httpx import ASGITransport

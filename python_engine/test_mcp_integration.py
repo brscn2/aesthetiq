@@ -34,7 +34,7 @@ async def test_mcp_integration():
     print("=" * 60)
     
     # MCP server URL (adjust if needed)
-    base_url = "http://localhost:8010"
+    base_url = "http://localhost:8000"
     mcp_url = f"{base_url}/mcp"
     
     print(f"\n1. Checking server accessibility...")
