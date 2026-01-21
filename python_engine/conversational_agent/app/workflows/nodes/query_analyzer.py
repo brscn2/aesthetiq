@@ -4,7 +4,7 @@ This node analyzes clothing-related queries to determine:
 - Search scope: commerce (buy new), wardrobe (existing clothes), or both
 - Extracted filters: category, subCategory, brand, color, occasion, etc.
 """
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -166,65 +166,13 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Query analysis failed: {e}")
         
-        # Fallback to keyword-based analysis
+        # Minimal fallback - just determine scope, let agent handle filters
         message_lower = message.lower()
+        scope = "wardrobe" if "wardrobe" in message_lower or "closet" in message_lower else "commerce"
         
-        # Determine scope
-        if any(kw in message_lower for kw in ["my wardrobe", "my closet", "what i have", "already own"]):
-            scope = "wardrobe"
-        elif any(kw in message_lower for kw in ["buy", "new", "purchase", "shop"]):
-            scope = "commerce"
-        elif any(kw in message_lower for kw in ["combine", "mix", "pair with"]):
-            scope = "both"
-        else:
-            scope = "commerce"  # Default
-        
-        # Simple filter extraction
-        filters = {}
-        
-        # Categories - Note: MCP schema only accepts TOP, BOTTOM, SHOE, ACCESSORY
-        if any(kw in message_lower for kw in ["jacket", "blazer"]):
-            filters["category"] = "TOP"
-            filters["sub_category"] = "Jacket"
-        elif "coat" in message_lower:
-            filters["category"] = "TOP"
-            filters["sub_category"] = "Coat"
-        elif any(kw in message_lower for kw in ["shirt", "blouse", "top"]):
-            filters["category"] = "TOP"
-        elif any(kw in message_lower for kw in ["pants", "jeans", "trousers"]):
-            filters["category"] = "BOTTOM"
-        elif "dress" in message_lower:
-            filters["category"] = "TOP"
-            filters["sub_category"] = "Dress"
-        elif any(kw in message_lower for kw in ["shoes", "sneakers", "boots", "heels"]):
-            filters["category"] = "SHOE"
-        elif any(kw in message_lower for kw in ["bag", "watch", "belt", "scarf", "hat"]):
-            filters["category"] = "ACCESSORY"
-        
-        # Occasions
-        if "interview" in message_lower or "job" in message_lower:
-            filters["occasion"] = "interview"
-        elif "party" in message_lower:
-            filters["occasion"] = "party"
-        elif "wedding" in message_lower:
-            filters["occasion"] = "wedding"
-        elif "casual" in message_lower:
-            filters["occasion"] = "casual"
-        elif "formal" in message_lower:
-            filters["occasion"] = "formal"
-        
-        logger.warning(f"Fallback query analysis: scope={scope}, filters={filters}")
+        logger.warning(f"Fallback query analysis: scope={scope}")
         
         metadata = state.get("metadata", {})
-        metadata["query_analysis"] = {
-            "search_scope": scope,
-            "filters": filters,
-            "reasoning": "Fallback keyword-based analysis due to LLM error",
-            "error": str(e),
-        }
+        metadata["query_analysis"] = {"search_scope": scope, "filters": {}, "error": str(e)}
         
-        return {
-            "search_scope": scope,
-            "extracted_filters": filters,
-            "metadata": metadata,
-        }
+        return {"search_scope": scope, "extracted_filters": {}, "metadata": metadata}

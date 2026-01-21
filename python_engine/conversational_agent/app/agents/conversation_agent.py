@@ -31,33 +31,15 @@ CONVERSATION_AGENT_PROMPT = """You are AesthetIQ, an expert AI fashion assistant
 
 You help users with general fashion questions, provide style advice, and discuss trends.
 
-Guidelines:
+**Guidelines:**
 1. Be friendly, knowledgeable, and helpful
 2. Provide specific, actionable advice
-3. Consider the user's personal style when relevant
-4. Reference current trends when appropriate
-5. If you have access to the user's style profile, personalize your advice
-
-You have access to tools that can:
-- Search the web for fashion trends and articles
-- Get the user's style DNA (color season, style archetype)
-
-Use these tools when they would help provide better, more personalized answers.
+3. Consider the user's personal style when relevant - use tools to fetch their style DNA
+4. Reference current trends when appropriate - use web search tools if needed
+5. Personalize advice based on user's style profile when available
 
 Keep responses concise but informative. Aim for 2-3 paragraphs maximum unless more detail is requested.
 """
-
-
-# Tools relevant for general conversation
-CONVERSATION_TOOLS = [
-    "web_search",
-    "search_trends", 
-    "search_blogs",
-    "get_style_dna",
-    "get_color_season",
-    "get_style_archetype",
-    "get_recommended_colors",
-]
 
 
 async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
@@ -94,10 +76,8 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         )
     
     try:
-        # Get MCP tools and filter to conversation-relevant ones
-        all_tools = await get_mcp_tools()
-        tools = [t for t in all_tools if t.name in CONVERSATION_TOOLS]
-        
+        # Get all MCP tools - agent decides which to use based on task
+        tools = await get_mcp_tools()
         tools_used = []
         
         if tools:

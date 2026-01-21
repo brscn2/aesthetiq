@@ -18,6 +18,17 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+class RefinementFilters(BaseModel):
+    """Structured filter updates for refinement."""
+    category: Optional[str] = Field(None, description="Category to filter: TOP, BOTTOM, SHOE, ACCESSORY")
+    sub_category: Optional[str] = Field(None, description="Specific type: Jacket, Shirt, Dress, Pants, etc.")
+    occasion: Optional[str] = Field(None, description="Occasion: casual, formal, business, party, wedding, interview")
+    style: Optional[str] = Field(None, description="Style: classic, modern, minimalist, bold, elegant")
+    color: Optional[str] = Field(None, description="Color preference")
+    price_range: Optional[str] = Field(None, description="Price range: budget, mid-range, luxury")
+    brand: Optional[str] = Field(None, description="Brand preference")
+
+
 class AnalysisDecision(BaseModel):
     """Structured output for analysis decision."""
     decision: Literal["approve", "refine", "clarify"] = Field(
@@ -31,9 +42,9 @@ class AnalysisDecision(BaseModel):
     reasoning: str = Field(
         description="Brief explanation of the decision"
     )
-    refinement_notes: Optional[List[str]] = Field(
+    filter_updates: Optional[RefinementFilters] = Field(
         None,
-        description="Specific suggestions for improvement (if decision is 'refine')"
+        description="Structured filter updates for refinement (only if decision is 'refine')"
     )
     clarification_question: Optional[str] = Field(
         None,
@@ -45,37 +56,39 @@ ANALYZER_PROMPT = """You are the Clothing Analyzer for AesthetIQ, a fashion AI a
 
 Your task is to evaluate the retrieved clothing items and decide what to do next.
 
-**Input Information:**
-- User's original request
-- Retrieved items from search
-- User's style DNA and preferences (if available)
-- Extracted filters from the query
-
 **Your Decision Options:**
 
 1. **APPROVE** - Use when:
-   - Items match the user's query well
+   - Items match the user's query reasonably well
    - Items align with the user's style DNA
    - There are enough relevant results
    - Confidence is high (>0.7)
 
 2. **REFINE** - Use when:
    - Items don't quite match the query
-   - There are too few results
+   - There are too few results or wrong category
    - Style DNA suggests different options would be better
-   - Provide specific refinement notes for the recommender
+   - Provide structured filter_updates with specific values to improve search
 
 3. **CLARIFY** - Use when:
    - The query is too vague
    - Essential information is missing (size, budget, specific style)
-   - You need more context to provide good recommendations
    - Provide a specific question to ask the user
+
+**For REFINE decisions, provide filter_updates with specific values:**
+- category: TOP, BOTTOM, SHOE, ACCESSORY
+- sub_category: Jacket, Shirt, Dress, Pants, Jeans, Sneakers, etc.
+- occasion: casual, formal, business, party, wedding, interview
+- style: classic, modern, minimalist, bold, elegant
+- color: specific color name
+- price_range: budget, mid-range, luxury
+- brand: specific brand name
 
 **Guidelines:**
 - Be lenient on first iteration - approve if items are reasonably relevant
 - Only ask for clarification if truly necessary
-- Provide actionable refinement notes
-- Consider the iteration count - don't loop forever
+- For refinement, only include filter_updates that need to change
+- Consider iteration count - don't loop forever
 """
 
 
@@ -239,10 +252,16 @@ Consider that this is iteration {iteration + 1} - be more lenient with approval 
             "needs_clarification": analysis.decision == "clarify",
         }
         
-        # Add refinement notes if refining
-        if analysis.decision == "refine" and analysis.refinement_notes:
-            result["refinement_notes"] = analysis.refinement_notes
-            result["analysis_result"]["notes"].extend(analysis.refinement_notes)
+        # Add structured filter updates if refining
+        if analysis.decision == "refine" and analysis.filter_updates:
+            # Convert Pydantic model to dict, excluding None values
+            filter_updates = {k: v for k, v in analysis.filter_updates.model_dump().items() if v is not None}
+            if filter_updates:
+                # Merge with existing filters
+                updated_filters = {**extracted_filters, **filter_updates}
+                result["extracted_filters"] = updated_filters
+                result["analysis_result"]["filter_updates"] = filter_updates
+                logger.info(f"Refinement filter updates: {filter_updates}")
         
         # Add clarification question if needed
         if analysis.decision == "clarify" and analysis.clarification_question:

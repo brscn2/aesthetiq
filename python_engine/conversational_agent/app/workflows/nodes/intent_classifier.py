@@ -4,7 +4,7 @@ This node analyzes the user's message to determine their intent:
 - "general": General fashion questions, trends, advice
 - "clothing": Specific clothing recommendations, search requests
 """
-from typing import Any, Dict, Literal, Optional, List
+from typing import Any, Dict, Literal
 
 from pydantic import BaseModel, Field
 
@@ -120,28 +120,11 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Intent classification failed: {e}")
         
-        # Fallback to keyword-based classification
-        message_lower = message.lower()
-        clothing_keywords = [
-            "jacket", "shirt", "pants", "dress", "outfit", "wear", "buy", 
-            "recommend", "find", "show me", "wardrobe", "closet", "clothes",
-            "top", "bottom", "shoes", "accessory", "suit", "blazer", "jeans",
-            "skirt", "sweater", "coat", "interview", "wedding", "party", "date"
-        ]
-        
-        intent = "clothing" if any(kw in message_lower for kw in clothing_keywords) else "general"
-        
-        logger.warning(f"Fallback intent classification: {intent}")
+        # Minimal fallback - default to clothing (more specific intent)
+        intent = "clothing"
+        logger.warning(f"Fallback intent: {intent}")
         
         metadata = state.get("metadata", {})
-        metadata["intent_classification"] = {
-            "intent": intent,
-            "confidence": 0.5,
-            "reasoning": "Fallback keyword-based classification due to LLM error",
-            "error": str(e),
-        }
+        metadata["intent_classification"] = {"intent": intent, "confidence": 0.5, "error": str(e)}
         
-        return {
-            "intent": intent,
-            "metadata": metadata,
-        }
+        return {"intent": intent, "metadata": metadata}

@@ -449,88 +449,22 @@ def merge_clarification_into_filters(
     clarification_question: str,
 ) -> Dict[str, Any]:
     """
-    Merge a user's clarification response into existing filters.
+    Minimal fallback for merging clarification response into filters.
     
-    This is a simple heuristic-based merge. In production, you might
-    use an LLM to better understand the clarification.
+    Primary extraction happens via LLM in merge_clarification_context_node.
+    This is only called if LLM extraction fails - just preserves existing filters.
     
     Args:
         existing_filters: Previously extracted filters
-        clarification_response: User's response to clarification
-        clarification_question: The question that was asked
+        clarification_response: User's response (logged for debugging)
+        clarification_question: The question asked (logged for debugging)
         
     Returns:
-        Updated filters dictionary
+        Existing filters (unchanged)
     """
-    filters = existing_filters.copy() if existing_filters else {}
-    response_lower = clarification_response.lower()
-    question_lower = clarification_question.lower() if clarification_question else ""
-    
-    # Try to infer what the clarification is about based on the question
-    if "occasion" in question_lower or "event" in question_lower:
-        # Extract occasion from response
-        occasions = {
-            "interview": "interview",
-            "job": "interview",
-            "work": "business",
-            "office": "business",
-            "casual": "casual",
-            "party": "party",
-            "wedding": "wedding",
-            "date": "date",
-            "formal": "formal",
-            "everyday": "casual",
-        }
-        for keyword, occasion in occasions.items():
-            if keyword in response_lower:
-                filters["occasion"] = occasion
-                break
-    
-    elif "budget" in question_lower or "price" in question_lower or "spend" in question_lower:
-        # Extract price hints
-        if any(w in response_lower for w in ["cheap", "budget", "affordable", "low"]):
-            filters["price_range"] = "budget"
-        elif any(w in response_lower for w in ["mid", "moderate", "medium"]):
-            filters["price_range"] = "mid-range"
-        elif any(w in response_lower for w in ["expensive", "luxury", "high", "premium"]):
-            filters["price_range"] = "luxury"
-        # Try to extract numeric budget
-        import re
-        numbers = re.findall(r'\$?(\d+)', response_lower)
-        if numbers:
-            filters["max_price"] = int(numbers[0])
-    
-    elif "color" in question_lower:
-        colors = ["black", "white", "navy", "blue", "red", "green", "brown", 
-                  "grey", "gray", "beige", "cream", "pink", "purple"]
-        for color in colors:
-            if color in response_lower:
-                filters["color"] = color
-                break
-    
-    elif "style" in question_lower:
-        styles = {
-            "classic": "classic",
-            "modern": "modern",
-            "minimalist": "minimalist",
-            "bold": "bold",
-            "elegant": "elegant",
-            "casual": "casual",
-            "sporty": "sporty",
-        }
-        for keyword, style in styles.items():
-            if keyword in response_lower:
-                filters["style"] = style
-                break
-    
-    elif "size" in question_lower:
-        sizes = ["xs", "s", "m", "l", "xl", "xxl", "small", "medium", "large"]
-        for size in sizes:
-            if size in response_lower:
-                filters["size"] = size.upper() if len(size) <= 2 else size.capitalize()
-                break
-    
-    return filters
+    # LLM extraction in main_workflow.py handles the heavy lifting
+    # This fallback just preserves existing filters
+    return existing_filters.copy() if existing_filters else {}
 
 
 def validate_state(state: ConversationState) -> List[str]:
