@@ -1,8 +1,7 @@
-"""Generic safety guardrails class supporting multiple providers."""
+"""Safety guardrails class using Guardrails AI provider."""
 from typing import List, Optional
 from app.guardrails.base import GuardrailProvider, GuardrailResult
-from app.guardrails.providers.llm_guard_provider import LLMGuardProvider
-from app.guardrails.providers.langkit_provider import LangKitProvider
+from app.guardrails.providers.guardrails_ai_provider import GuardrailsAIProvider
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
@@ -11,9 +10,9 @@ logger = get_logger(__name__)
 
 class SafetyGuardrails:
     """
-    Generic safety guardrails class that supports multiple providers.
+    Safety guardrails using Guardrails AI for prompt injection and toxic content detection.
     
-    Providers are determined by environment variables and can be combined.
+    Uses pattern-based fallback when Hub validators aren't installed.
     """
     
     def __init__(
@@ -23,11 +22,11 @@ class SafetyGuardrails:
         max_output_length: int = 50000,
     ):
         """
-        Initialize safety guardrails with specified providers.
+        Initialize safety guardrails.
         
         Args:
-            providers: List of provider names to use (e.g., ["llm-guard", "langkit"])
-                      If None, will use providers from environment variables
+            providers: List of provider names (only "guardrails-ai" supported)
+                      If None, will use GUARDRAIL_PROVIDERS from environment
             max_input_length: Maximum input length
             max_output_length: Maximum output length
         """
@@ -35,7 +34,7 @@ class SafetyGuardrails:
         
         # Get providers from env if not specified
         if providers is None:
-            providers_str = getattr(settings, "GUARDRAIL_PROVIDERS", "llm-guard")
+            providers_str = getattr(settings, "GUARDRAIL_PROVIDERS", "guardrails-ai")
             providers = [p.strip() for p in providers_str.split(",") if p.strip()]
         
         self.providers: List[GuardrailProvider] = []
@@ -69,7 +68,7 @@ class SafetyGuardrails:
         Create a provider instance based on name.
         
         Args:
-            provider_name: Name of the provider ("llm-guard", "langkit", etc.)
+            provider_name: Name of the provider (only "guardrails-ai" supported)
             max_input_length: Maximum input length
             max_output_length: Maximum output length
             settings: Application settings
@@ -79,41 +78,17 @@ class SafetyGuardrails:
         """
         provider_name_lower = provider_name.lower().strip()
         
-        if provider_name_lower == "llm-guard" or provider_name_lower == "llmguard":
-            # Get LLM Guard specific settings
-            input_scanners = getattr(settings, "LLM_GUARD_INPUT_SCANNERS", None)
-            output_scanners = getattr(settings, "LLM_GUARD_OUTPUT_SCANNERS", None)
-            threshold = float(getattr(settings, "LLM_GUARD_THRESHOLD", 0.5))
+        if provider_name_lower == "guardrails-ai" or provider_name_lower == "guardrailsai":
+            toxic_threshold = float(getattr(settings, "GUARDRAILS_AI_THRESHOLD", 0.5))
             
-            if input_scanners:
-                input_scanners = [s.strip() for s in input_scanners.split(",")]
-            if output_scanners:
-                output_scanners = [s.strip() for s in output_scanners.split(",")]
-            
-            return LLMGuardProvider(
+            return GuardrailsAIProvider(
                 max_input_length=max_input_length,
                 max_output_length=max_output_length,
-                input_scanners=input_scanners,
-                output_scanners=output_scanners,
-                threshold=threshold,
-            )
-        
-        elif provider_name_lower == "langkit":
-            # Get LangKit specific settings
-            whylabs_api_key = getattr(settings, "WHYLABS_API_KEY", None)
-            toxicity_threshold = float(getattr(settings, "LANGKIT_TOXICITY_THRESHOLD", 0.5))
-            pii_enabled = getattr(settings, "LANGKIT_PII_ENABLED", "true").lower() == "true"
-            
-            return LangKitProvider(
-                max_input_length=max_input_length,
-                max_output_length=max_output_length,
-                whylabs_api_key=whylabs_api_key,
-                toxicity_threshold=toxicity_threshold,
-                pii_enabled=pii_enabled,
+                toxic_threshold=toxic_threshold,
             )
         
         else:
-            logger.warning(f"Unknown guardrail provider: {provider_name}")
+            logger.warning(f"Unknown guardrail provider: {provider_name}. Only 'guardrails-ai' is supported.")
             return None
     
     def check_input(self, text: str) -> GuardrailResult:
