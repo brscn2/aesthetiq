@@ -20,7 +20,7 @@ class ExtractedFilters(BaseModel):
     """Structured filters extracted from the query."""
     category: Optional[str] = Field(
         None,
-        description="Clothing category: TOP, BOTTOM, FOOTWEAR, ACCESSORY, OUTERWEAR"
+        description="Clothing category: TOP, BOTTOM, SHOE, ACCESSORY (jackets/blazers/coats are TOP with sub_category)"
     )
     sub_category: Optional[str] = Field(
         None,
@@ -71,8 +71,8 @@ Your task is to analyze the user's clothing-related query and extract:
    - "both": User wants to COMBINE existing items with new purchases or compare options
 
 2. **Filters** - Extract any specific requirements:
-   - category: TOP, BOTTOM, FOOTWEAR, ACCESSORY, OUTERWEAR
-   - sub_category: Jacket, Blazer, Shirt, T-shirt, Pants, Jeans, Dress, Skirt, etc.
+   - category: TOP, BOTTOM, SHOE, ACCESSORY (Note: jackets, blazers, coats are categorized as TOP with appropriate sub_category)
+   - sub_category: Jacket, Blazer, Coat, Shirt, T-shirt, Pants, Jeans, Dress, Skirt, Sneakers, Boots, etc.
    - brand: Any mentioned brand name
    - color: Any mentioned color
    - occasion: casual, formal, business, party, date, wedding, interview, everyday
@@ -182,17 +182,24 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
         # Simple filter extraction
         filters = {}
         
-        # Categories
-        if any(kw in message_lower for kw in ["jacket", "blazer", "coat"]):
-            filters["category"] = "OUTERWEAR"
+        # Categories - Note: MCP schema only accepts TOP, BOTTOM, SHOE, ACCESSORY
+        if any(kw in message_lower for kw in ["jacket", "blazer"]):
+            filters["category"] = "TOP"
             filters["sub_category"] = "Jacket"
+        elif "coat" in message_lower:
+            filters["category"] = "TOP"
+            filters["sub_category"] = "Coat"
         elif any(kw in message_lower for kw in ["shirt", "blouse", "top"]):
             filters["category"] = "TOP"
         elif any(kw in message_lower for kw in ["pants", "jeans", "trousers"]):
             filters["category"] = "BOTTOM"
-        elif any(kw in message_lower for kw in ["dress"]):
+        elif "dress" in message_lower:
             filters["category"] = "TOP"
             filters["sub_category"] = "Dress"
+        elif any(kw in message_lower for kw in ["shoes", "sneakers", "boots", "heels"]):
+            filters["category"] = "SHOE"
+        elif any(kw in message_lower for kw in ["bag", "watch", "belt", "scarf", "hat"]):
+            filters["category"] = "ACCESSORY"
         
         # Occasions
         if "interview" in message_lower or "job" in message_lower:

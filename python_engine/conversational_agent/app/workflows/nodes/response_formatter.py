@@ -225,16 +225,44 @@ async def _format_items(
     fallback_used: bool,
 ) -> str:
     """Format a response with clothing items."""
-    # Build items summary
+    # Build items summary - handle both structured items and agent response format
     items_text = ""
     for i, item in enumerate(retrieved_items[:5], 1):
         if isinstance(item, dict):
-            item_type = item.get("type", "unknown")
-            content = item.get("content", "")
-            sources = item.get("sources", [])
-            items_text += f"\n{i}. [{item_type}] {content[:300]}"
-            if sources:
-                items_text += f" (from: {', '.join(sources)})"
+            # Check if this is a structured clothing item (from MCP tools)
+            if "name" in item:
+                name = item.get("name", "Unknown Item")
+                brand = item.get("brand", "")
+                price = item.get("price")
+                color = item.get("color") or item.get("raw", {}).get("color", "")
+                category = item.get("category", "")
+                source = item.get("source", "")
+                
+                # Build item description
+                item_desc = f"{name}"
+                if brand:
+                    item_desc += f" by {brand}"
+                if price:
+                    item_desc += f" - ${price}"
+                if color:
+                    item_desc += f" ({color})"
+                if source:
+                    item_desc += f" [from {source}]"
+                
+                items_text += f"\n{i}. {item_desc}"
+            
+            # Handle agent response format (legacy)
+            elif "type" in item or "content" in item:
+                item_type = item.get("type", "unknown")
+                content = item.get("content", "")
+                sources = item.get("sources", [])
+                items_text += f"\n{i}. [{item_type}] {content[:300]}"
+                if sources:
+                    items_text += f" (from: {', '.join(sources)})"
+            
+            # Handle raw dict (fallback)
+            else:
+                items_text += f"\n{i}. {str(item)[:300]}"
         else:
             items_text += f"\n{i}. {str(item)[:300]}"
     
@@ -273,8 +301,23 @@ def _simple_format_items(items: List[Dict[str, Any]]) -> str:
     result = []
     for i, item in enumerate(items[:5], 1):
         if isinstance(item, dict):
-            content = item.get("content", str(item))
-            result.append(f"{i}. {content[:200]}")
+            # Handle structured clothing items
+            if "name" in item:
+                name = item.get("name", "Unknown")
+                brand = item.get("brand", "")
+                price = item.get("price")
+                item_str = f"{name}"
+                if brand:
+                    item_str += f" by {brand}"
+                if price:
+                    item_str += f" - ${price}"
+                result.append(f"{i}. {item_str}")
+            # Handle agent response format
+            elif "content" in item:
+                content = item.get("content", str(item))
+                result.append(f"{i}. {content[:200]}")
+            else:
+                result.append(f"{i}. {str(item)[:200]}")
         else:
             result.append(f"{i}. {str(item)[:200]}")
     

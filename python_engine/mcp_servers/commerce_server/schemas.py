@@ -82,7 +82,9 @@ class CommerceFilters(BaseModel):
     """Filters for querying commerce items."""
     search: Optional[str] = None  # Text search in name, description, tags
     category: Optional[Category] = None
-    brandId: Optional[str] = None
+    subCategory: Optional[str] = None  # Specific type: Jacket, Dress, Sneakers, etc.
+    brand: Optional[str] = None  # Brand name (partial match)
+    brandId: Optional[str] = None  # Brand ID (exact match)
     retailerId: Optional[str] = None
     color: Optional[str] = None  # Filter by color hex code
     priceMin: Optional[float] = None  # Minimum price

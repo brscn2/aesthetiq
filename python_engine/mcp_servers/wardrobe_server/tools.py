@@ -22,9 +22,9 @@ def _sanitize_mongo_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     _id = doc.pop("_id", None)
     if _id is not None:
         doc["_id"] = str(_id)
-    # Also handle brandId if it's an ObjectId
-    if "brandId" in doc and doc["brandId"] is not None:
-        doc["brandId"] = str(doc["brandId"])
+    # Also handle retailerId if it's an ObjectId (matches backend WardrobeItem schema)
+    if "retailerId" in doc and doc["retailerId"] is not None:
+        doc["retailerId"] = str(doc["retailerId"])
     return doc
 
 
@@ -72,7 +72,7 @@ def _doc_to_item(doc: Dict[str, Any]) -> WardrobeItem:
         category=_parse_category(doc),
         subCategory=doc.get("subCategory"),
         brand=doc.get("brand"),
-        brandId=str(doc["brandId"]) if doc.get("brandId") else None,
+        retailerId=str(doc["retailerId"]) if doc.get("retailerId") else None,
         colors=list(doc.get("colors") or []),
         notes=doc.get("notes"),
         isFavorite=doc.get("isFavorite", False),

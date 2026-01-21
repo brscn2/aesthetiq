@@ -305,6 +305,9 @@ def create_initial_state(
         state["retrieved_items"] = pending_context.get("retrieved_items", [])
         state["iteration"] = pending_context.get("iteration", 0)
         state["intent"] = "clothing"  # Clarification is always in clothing context
+        # Restore style_dna and user_profile to avoid re-fetching
+        state["style_dna"] = pending_context.get("style_dna")
+        state["user_profile"] = pending_context.get("user_profile")
     
     return state
 

@@ -56,7 +56,7 @@ class WardrobeItem(BaseModel):
     category: Category
     subCategory: Optional[str] = None
     brand: Optional[str] = None
-    brandId: Optional[str] = None
+    retailerId: Optional[str] = None  # References Retailer collection (matches backend schema)
     colors: List[str] = Field(default_factory=list, description="Hex color codes")
     notes: Optional[str] = None
     isFavorite: bool = False

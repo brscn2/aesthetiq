@@ -24,6 +24,11 @@ export class SearchCommerceItemsDto {
   @IsOptional()
   category?: Category;
 
+  @ApiProperty({ required: false, description: 'Sub-category filter (e.g., Jacket, Dress, Sneakers)' })
+  @IsString()
+  @IsOptional()
+  subCategory?: string;
+
   @ApiProperty({ required: false, example: '507f1f77bcf86cd799439011' })
   @IsMongoId()
   @IsOptional()

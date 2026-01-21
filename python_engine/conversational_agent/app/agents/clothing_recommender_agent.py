@@ -8,8 +8,9 @@ This agent handles the "clothing" intent path:
 """
 from typing import Any, Dict, List, Optional
 import re
+import json
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
 
 from app.workflows.state import ConversationState
@@ -19,6 +20,44 @@ from app.mcp import get_mcp_tools
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def convert_filters_to_mcp_format(filters: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert filter keys from snake_case to camelCase for MCP servers.
+    
+    Agent uses snake_case (e.g., sub_category, price_range)
+    MCP servers use camelCase (e.g., subCategory, priceRange)
+    
+    Args:
+        filters: Filters with snake_case keys
+        
+    Returns:
+        Filters with camelCase keys for MCP compatibility
+    """
+    if not filters:
+        return {}
+    
+    key_mapping = {
+        "sub_category": "subCategory",
+        "price_range": "priceRange",
+        "max_price": "priceMax",
+        "min_price": "priceMin",
+        "is_favorite": "isFavorite",
+        "in_stock": "inStock",
+        "brand_id": "brandId",
+        "retailer_id": "retailerId",
+        "seasonal_palette": "seasonalPalette",
+        "min_palette_score": "minPaletteScore",
+    }
+    
+    converted = {}
+    for key, value in filters.items():
+        # Convert key if mapping exists, otherwise keep original
+        new_key = key_mapping.get(key, key)
+        converted[new_key] = value
+    
+    return converted
 
 
 def parse_refinement_notes_to_filters(
@@ -88,15 +127,21 @@ def parse_refinement_notes_to_filters(
         elif "smaller" in note_lower:
             filters["size_preference"] = "smaller"
         
-        # Category refinements
-        if "jacket" in note_lower or "outerwear" in note_lower:
-            filters["category"] = "OUTERWEAR"
+        # Category refinements - MCP schema only accepts TOP, BOTTOM, SHOE, ACCESSORY
+        if "jacket" in note_lower or "blazer" in note_lower or "coat" in note_lower:
+            filters["category"] = "TOP"
+            filters["sub_category"] = "Jacket"
         elif "pants" in note_lower or "trousers" in note_lower:
             filters["category"] = "BOTTOM"
         elif "shirt" in note_lower or "top" in note_lower or "blouse" in note_lower:
             filters["category"] = "TOP"
         elif "dress" in note_lower:
+            filters["category"] = "TOP"
             filters["sub_category"] = "Dress"
+        elif "shoes" in note_lower or "sneakers" in note_lower or "boots" in note_lower:
+            filters["category"] = "SHOE"
+        elif "bag" in note_lower or "accessory" in note_lower or "accessories" in note_lower:
+            filters["category"] = "ACCESSORY"
         
         # Specific attribute refinements
         color_matches = re.findall(r'(black|white|navy|blue|red|green|brown|grey|gray|beige|cream)', note_lower)
@@ -113,50 +158,48 @@ Your role is to find and recommend clothing items based on the user's request.
 You have access to several tools to help you:
 
 **User Context Tools:**
-- get_user_profile: Get user's preferences and sizes
 - get_style_dna: Get user's color season and style archetype
 - get_color_season: Get the user's color season
 - get_recommended_colors: Get colors that suit the user
+- get_user_profile: Get user's preferences and sizes
 
-**Search Tools:**
+**Database Search Tools (USE THESE FIRST):**
+- filter_commerce_items: Filter commerce items by EXACT criteria (category, brand, color, price)
+- search_commerce_items: Semantic search for vague queries
+- filter_wardrobe_items: Filter user's wardrobe by criteria
 - search_wardrobe_items: Search user's existing wardrobe
-- filter_wardrobe_items: Filter wardrobe by specific criteria
-- search_commerce_items: Search for new items to buy
-- filter_commerce_items: Filter commerce items by criteria
 
-**Fallback Tool:**
-- web_search: Search the web for fashion items and recommendations
+**External Search (LAST RESORT ONLY):**
+- web_search: Search the web - ONLY use if database returns 0 results AND user asks for trending/external items
 
-**Instructions:**
+**CRITICAL Instructions:**
 
-1. First, get the user's style profile if available (style DNA, color season)
-2. Based on the search scope, use the appropriate search tools:
-   - "commerce": Use search_commerce_items and filter_commerce_items
-   - "wardrobe": Use search_wardrobe_items and filter_wardrobe_items
-   - "both": Use both sets of tools
-3. Apply the extracted filters to narrow down results
-4. If no results found, use web_search as a fallback
-5. Return the best matching items
+1. Get user's style_dna FIRST (one call)
+2. For database searches:
+   - If filters have specific values (category, brand, color, price), use filter_commerce_items
+   - If query is vague/semantic, use search_commerce_items
+3. DO NOT call web_search if database returns ANY results
+4. DO NOT call multiple search tools sequentially - pick ONE appropriate tool
+5. Return results immediately after finding items
 
-Always try to personalize recommendations based on the user's style DNA and preferences.
-Keep your tool usage efficient - don't call unnecessary tools.
+Keep your tool usage minimal - ideally 2 calls maximum (style_dna + one search).
 """
 
 
-# Tools relevant for clothing recommendations
+# Tools relevant for clothing recommendations (ordered by priority)
 RECOMMENDER_TOOLS = [
-    # User context
-    "get_user_profile",
+    # User context (call first)
     "get_style_dna",
+    # Primary search - database (call one of these)
+    "filter_commerce_items",  # For specific criteria
+    "search_commerce_items",  # For semantic queries
+    "filter_wardrobe_items",
+    "search_wardrobe_items",
+    # Secondary context (optional)
+    "get_user_profile",
     "get_color_season",
     "get_recommended_colors",
-    # Wardrobe
-    "search_wardrobe_items",
-    "filter_wardrobe_items",
-    # Commerce
-    "search_commerce_items",
-    "filter_commerce_items",
-    # Fallback
+    # Fallback (LAST RESORT)
     "web_search",
 ]
 
@@ -197,7 +240,9 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
         )
         logger.info(f"Updated filters after refinement: {extracted_filters}")
     
-    logger.info(f"Clothing recommender processing: scope={search_scope}, filters={extracted_filters}, iteration={iteration}")
+    # Convert filter keys to camelCase for MCP server compatibility
+    mcp_filters = convert_filters_to_mcp_format(extracted_filters)
+    logger.info(f"Clothing recommender processing: scope={search_scope}, filters={mcp_filters}, iteration={iteration}")
     
     # Get services
     llm_service = get_llm_service()
@@ -209,7 +254,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             trace_id=trace_id,
             from_agent="query_analyzer",
             to_agent="clothing_recommender",
-            reason=f"Searching {search_scope} with filters: {extracted_filters}",
+            reason=f"Searching {search_scope} with filters: {mcp_filters}",
         )
     
     try:
@@ -234,8 +279,17 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                 prompt=RECOMMENDER_AGENT_PROMPT,
             )
             
-            # Build the search request message
-            filter_str = ", ".join(f"{k}={v}" for k, v in extracted_filters.items()) if extracted_filters else "none"
+            # Build the search request message using MCP-compatible filters
+            filter_str = ", ".join(f"{k}={v}" for k, v in mcp_filters.items()) if mcp_filters else "none"
+            
+            # Build tool selection hint based on filters
+            tool_hint = ""
+            if mcp_filters.get("category") or mcp_filters.get("brand") or mcp_filters.get("color"):
+                tool_hint = "\n**IMPORTANT: Use filter_commerce_items since specific filters are provided.**"
+            elif search_scope == "commerce":
+                tool_hint = "\n**Use search_commerce_items for semantic search.**"
+            elif search_scope == "wardrobe":
+                tool_hint = "\n**Use filter_wardrobe_items or search_wardrobe_items.**"
             
             # Build refinement context if this is a retry
             refinement_context = ""
@@ -254,22 +308,29 @@ User request: {message}
 User ID: {user_id}
 Search scope: {search_scope}
 Filters: {filter_str}
+{tool_hint}
 {refinement_context}
-Please find clothing items matching this request. Use the appropriate tools based on the search scope.
+Find items using the database tools. Do NOT use web_search unless database returns zero results.
 {f"This is refinement attempt {iteration + 1}. Pay special attention to the refinement requirements above." if iteration > 0 else ""}
 """
             
             messages = [HumanMessage(content=search_request)]
             
             # Invoke agent
-            result = await agent.ainvoke({"messages": messages})
+            agent_result = await agent.ainvoke({"messages": messages})
             
-            # Process results and extract tool calls
-            for msg in result["messages"]:
+            # Track tool calls from AIMessage objects
+            tool_call_ids = {}  # Map tool_call_id to tool_name
+            
+            # Process results and extract tool calls + results
+            for msg in agent_result["messages"]:
+                # Track tool calls from AIMessage
                 if hasattr(msg, "tool_calls") and msg.tool_calls:
                     for tool_call in msg.tool_calls:
                         tool_name = tool_call.get("name", "unknown")
+                        tool_call_id = tool_call.get("id", "")
                         tools_used.append(tool_name)
+                        tool_call_ids[tool_call_id] = tool_name
                         
                         # Track search sources
                         if "wardrobe" in tool_name.lower():
@@ -289,15 +350,211 @@ Please find clothing items matching this request. Use the appropriate tools base
                                 trace_id=trace_id,
                                 tool_name=tool_name,
                                 input_params=tool_call.get("args", {}),
-                                output="[processed]",
+                                output="[pending]",
                             )
+                
+                # Extract actual results from ToolMessage objects
+                if isinstance(msg, ToolMessage):
+                    tool_call_id = getattr(msg, "tool_call_id", "")
+                    tool_name = tool_call_ids.get(tool_call_id, getattr(msg, "name", "unknown"))
+                    tool_content = msg.content
+                    
+                    # Parse JSON content if possible
+                    try:
+                        tool_result = json.loads(tool_content) if isinstance(tool_content, str) else tool_content
+                    except (json.JSONDecodeError, TypeError):
+                        tool_result = tool_content
+                    
+                    logger.debug(f"Tool '{tool_name}' returned: {str(tool_result)[:200]}...")
+                    
+                    # Validate result - skip if error response
+                    if isinstance(tool_result, dict) and tool_result.get("error"):
+                        logger.warning(f"Tool '{tool_name}' returned error: {tool_result.get('error')}")
+                        continue
+                    if isinstance(tool_result, str) and ("error" in tool_result.lower() or "failed" in tool_result.lower()):
+                        logger.warning(f"Tool '{tool_name}' returned error string: {tool_result[:100]}")
+                        continue
+                    
+                    # Extract user profile
+                    if tool_name == "get_user_profile":
+                        if isinstance(tool_result, dict) and ("profile" in tool_result or "userId" in tool_result or "id" in tool_result):
+                            user_profile = tool_result.get("profile") or tool_result
+                            logger.info(f"Extracted user_profile from tool result")
+                        else:
+                            logger.warning(f"get_user_profile returned unexpected format: {type(tool_result)}")
+                    
+                    # Extract style DNA
+                    elif tool_name == "get_style_dna":
+                        # Handle various response formats from MCP
+                        extracted_dna = None
+                        
+                        if isinstance(tool_result, dict):
+                            # Direct dict format: {"style_dna": {...}} or {...}
+                            extracted_dna = tool_result.get("style_dna") or tool_result
+                        elif isinstance(tool_result, list) and len(tool_result) > 0:
+                            # List format: [{"style_dna": {...}}] or [{...}]
+                            first_item = tool_result[0]
+                            if isinstance(first_item, dict):
+                                extracted_dna = first_item.get("style_dna") or first_item
+                            logger.info(f"Parsed style_dna from list format")
+                        elif isinstance(tool_result, str):
+                            # JSON string format
+                            try:
+                                parsed = json.loads(tool_result)
+                                extracted_dna = parsed.get("style_dna") or parsed
+                            except json.JSONDecodeError:
+                                pass
+                        
+                        if extracted_dna and isinstance(extracted_dna, dict):
+                            # Validate it has expected fields
+                            if any(k in extracted_dna for k in ["archetype", "color_season", "user_id"]):
+                                style_dna = extracted_dna
+                                logger.info(f"Extracted style_dna: archetype={style_dna.get('archetype')}, season={style_dna.get('color_season')}")
+                            else:
+                                logger.warning(f"style_dna missing expected fields: {list(extracted_dna.keys())[:5]}")
+                        else:
+                            logger.warning(f"get_style_dna could not parse result: {type(tool_result)}")
+                    
+                    # Extract color season
+                    elif tool_name == "get_color_season":
+                        color_season = None
+                        
+                        if isinstance(tool_result, dict):
+                            color_season = tool_result.get("color_season") or tool_result.get("season")
+                        elif isinstance(tool_result, list) and len(tool_result) > 0:
+                            first_item = tool_result[0]
+                            if isinstance(first_item, dict):
+                                color_season = first_item.get("color_season") or first_item.get("season")
+                            logger.info(f"Parsed color_season from list format")
+                        elif isinstance(tool_result, str):
+                            try:
+                                parsed = json.loads(tool_result)
+                                color_season = parsed.get("color_season") or parsed.get("season")
+                            except json.JSONDecodeError:
+                                pass
+                        
+                        if color_season:
+                            if style_dna:
+                                style_dna["color_season"] = color_season
+                            else:
+                                style_dna = {"color_season": color_season}
+                            logger.info(f"Extracted color_season: {color_season}")
+                        else:
+                            logger.warning(f"get_color_season could not extract season from: {type(tool_result)}")
+                    
+                    # Extract recommended colors
+                    elif tool_name == "get_recommended_colors":
+                        if isinstance(tool_result, dict) and ("colors" in tool_result or "recommended_colors" in tool_result):
+                            recommended_colors = tool_result.get("colors") or tool_result.get("recommended_colors")
+                            if recommended_colors and style_dna:
+                                style_dna["recommended_colors"] = recommended_colors
+                            elif recommended_colors:
+                                style_dna = {"recommended_colors": recommended_colors}
+                            logger.info(f"Extracted recommended_colors: {recommended_colors}")
+                        else:
+                            logger.warning(f"get_recommended_colors returned unexpected format: {type(tool_result)}")
+                    
+                    # Extract wardrobe items
+                    elif tool_name in ["search_wardrobe_items", "filter_wardrobe_items"]:
+                        extracted_items = []
+                        if isinstance(tool_result, dict):
+                            # Handle search response format: {results: [{item: {...}, score: ...}]}
+                            if "results" in tool_result:
+                                results = tool_result.get("results", [])
+                                for r in results:
+                                    if isinstance(r, dict):
+                                        # Extract nested item or use result directly
+                                        item = r.get("item") if "item" in r else r
+                                        if isinstance(item, dict):
+                                            extracted_items.append(item)
+                                logger.info(f"Extracted {len(extracted_items)} wardrobe items from 'results' format")
+                            # Handle filter response format: {items: [...]}
+                            elif "items" in tool_result:
+                                items = tool_result.get("items", [])
+                                extracted_items = [item for item in items if isinstance(item, dict)]
+                                logger.info(f"Extracted {len(extracted_items)} wardrobe items from 'items' format")
+                        elif isinstance(tool_result, list):
+                            extracted_items = [item for item in tool_result if isinstance(item, dict)]
+                            logger.info(f"Extracted {len(extracted_items)} wardrobe items from list format")
+                        
+                        if extracted_items:
+                            for item in extracted_items:
+                                item["source"] = "wardrobe"
+                            retrieved_items.extend(extracted_items)
+                            # Early return: if we have enough items from local DB, skip further processing
+                            if len(retrieved_items) >= 3 and "web_search" not in tools_used:
+                                logger.info(f"Found {len(retrieved_items)} items from wardrobe, sufficient results")
+                        else:
+                            logger.warning(f"{tool_name} returned no valid items")
+                    
+                    # Extract commerce items
+                    elif tool_name in ["search_commerce_items", "filter_commerce_items"]:
+                        extracted_items = []
+                        if isinstance(tool_result, dict):
+                            # Handle search response format: {results: [{item: {...}, score: ..., breakdown: ...}]}
+                            if "results" in tool_result:
+                                results = tool_result.get("results", [])
+                                for r in results:
+                                    if isinstance(r, dict):
+                                        # Extract nested item or use result directly
+                                        item = r.get("item") if "item" in r else r
+                                        if isinstance(item, dict):
+                                            # Optionally preserve score/breakdown for ranking
+                                            if "score" in r:
+                                                item["_search_score"] = r.get("score")
+                                            extracted_items.append(item)
+                                logger.info(f"Extracted {len(extracted_items)} commerce items from 'results' format")
+                            # Handle filter response format: {items: [...]}
+                            elif "items" in tool_result:
+                                items = tool_result.get("items", [])
+                                extracted_items = [item for item in items if isinstance(item, dict)]
+                                logger.info(f"Extracted {len(extracted_items)} commerce items from 'items' format")
+                        elif isinstance(tool_result, list):
+                            extracted_items = [item for item in tool_result if isinstance(item, dict)]
+                            logger.info(f"Extracted {len(extracted_items)} commerce items from list format")
+                        
+                        if extracted_items:
+                            for item in extracted_items:
+                                item["source"] = "commerce"
+                            retrieved_items.extend(extracted_items)
+                            # Early return: if we have enough items from local DB, skip further processing
+                            if len(retrieved_items) >= 3 and "web_search" not in tools_used:
+                                logger.info(f"Found {len(retrieved_items)} items from local DB, sufficient results")
+                        else:
+                            logger.warning(f"{tool_name} returned no valid items")
+                    
+                    # Extract web search results
+                    elif tool_name == "web_search":
+                        if isinstance(tool_result, dict):
+                            web_items = tool_result.get("results", [])
+                            if web_items:
+                                for item in web_items:
+                                    if isinstance(item, dict):
+                                        item["source"] = "web"
+                                retrieved_items.extend(web_items)
+                                logger.info(f"Extracted {len(web_items)} web search results")
+                        elif isinstance(tool_result, str):
+                            # Web search might return a text summary
+                            retrieved_items.append({
+                                "type": "web_summary",
+                                "content": tool_result,
+                                "source": "web",
+                            })
+                    
+                    # Log actual tool output to Langfuse
+                    if trace_id:
+                        tracing_service.log_tool_call(
+                            trace_id=trace_id,
+                            tool_name=f"{tool_name}_result",
+                            input_params={},
+                            output=str(tool_result)[:500],
+                        )
             
-            # Try to extract items from the agent's final response
-            final_message = result["messages"][-1].content
+            # Get final message for context
+            final_message = agent_result["messages"][-1].content
             
-            # For now, we'll store the agent's response as a "pseudo-item"
-            # In a real implementation, we'd parse structured item data from tool results
-            if final_message and "no items" not in final_message.lower():
+            # If no structured items were extracted but agent has a response, add it
+            if not retrieved_items and final_message and "no items" not in final_message.lower():
                 retrieved_items = [{
                     "type": "agent_response",
                     "content": final_message,
@@ -312,7 +569,7 @@ Please find clothing items matching this request. Use the appropriate tools base
             # Generate a helpful response without tools
             response = await llm_service.chat_with_history(
                 system_prompt="You are a fashion AI. Help the user find clothing based on their request.",
-                user_message=f"User is looking for: {message}. Filters: {extracted_filters}. Scope: {search_scope}",
+                user_message=f"User is looking for: {message}. Filters: {mcp_filters}. Scope: {search_scope}",
             )
             
             retrieved_items = [{
@@ -326,7 +583,7 @@ Please find clothing items matching this request. Use the appropriate tools base
             tracing_service.log_llm_call(
                 trace_id=trace_id,
                 agent_name="clothing_recommender",
-                input_text=f"Search {search_scope} with filters {extracted_filters}",
+                input_text=f"Search {search_scope} with filters {mcp_filters}",
                 output_text=f"Found {len(retrieved_items)} items from {search_sources_used}",
                 metadata={
                     "tools_used": tools_used,
@@ -335,7 +592,10 @@ Please find clothing items matching this request. Use the appropriate tools base
                 },
             )
         
-        logger.info(f"Clothing recommender found {len(retrieved_items)} items from {search_sources_used}")
+        logger.info(
+            f"Clothing recommender found {len(retrieved_items)} items from {search_sources_used}, "
+            f"style_dna={'set' if style_dna else 'not set'}, user_profile={'set' if user_profile else 'not set'}"
+        )
         
         result = {
             "retrieved_items": retrieved_items,
@@ -347,11 +607,12 @@ Please find clothing items matching this request. Use the appropriate tools base
         
         # Update filters in state if they were refined
         if refinement_notes and iteration > 0:
-            result["extracted_filters"] = extracted_filters
+            result["extracted_filters"] = extracted_filters  # Keep snake_case in state
             result["metadata"] = {
                 **state.get("metadata", {}),
                 "refinement_applied": True,
                 "refined_filters": extracted_filters,
+                "mcp_filters": mcp_filters,  # Track converted filters for debugging
             }
         
         return result

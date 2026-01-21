@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     # (backend `ColorAnalysis` model → Mongo collection `coloranalyses`)
     MONGODB_COLLECTION_COLOR_ANALYSIS: str = "coloranalyses"
 
-    # Embedding service
-    EMBEDDING_SERVICE_URL: str = "http://embedding_service:8004"
+    # Embedding service (default to localhost for local dev, override to embedding_service:8004 for Docker)
+    EMBEDDING_SERVICE_URL: str = "http://localhost:8004"
 
     # Web search
     TAVILY_API_KEY: Optional[str] = None

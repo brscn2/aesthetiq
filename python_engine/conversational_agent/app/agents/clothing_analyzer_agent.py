@@ -137,14 +137,46 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 "needs_clarification": False,
             }
         
-        # Build analysis context
+        # Build analysis context - handle structured items from MCP tools
         items_summary = ""
         if retrieved_items:
             for i, item in enumerate(retrieved_items[:5], 1):  # Max 5 items
                 if isinstance(item, dict):
-                    item_type = item.get("type", "unknown")
-                    content = item.get("content", "")[:200]
-                    items_summary += f"\nItem {i} ({item_type}): {content}"
+                    # Check if this is a structured clothing item (from MCP tools)
+                    if "name" in item:
+                        name = item.get("name", "Unknown")
+                        brand = item.get("brand", "")
+                        price = item.get("price")
+                        color = item.get("color") or item.get("raw", {}).get("color", "")
+                        category = item.get("category", "")
+                        sub_category = item.get("subCategory") or item.get("raw", {}).get("sub_category", "")
+                        source = item.get("source", "unknown")
+                        
+                        # Build detailed item description for analysis
+                        item_details = [f"Name: {name}"]
+                        if brand:
+                            item_details.append(f"Brand: {brand}")
+                        if category:
+                            item_details.append(f"Category: {category}")
+                        if sub_category:
+                            item_details.append(f"Type: {sub_category}")
+                        if color:
+                            item_details.append(f"Color: {color}")
+                        if price:
+                            item_details.append(f"Price: ${price}")
+                        item_details.append(f"Source: {source}")
+                        
+                        items_summary += f"\nItem {i}: {' | '.join(item_details)}"
+                    
+                    # Handle agent response format (legacy)
+                    elif "type" in item or "content" in item:
+                        item_type = item.get("type", "unknown")
+                        content = item.get("content", "")[:200]
+                        items_summary += f"\nItem {i} ({item_type}): {content}"
+                    
+                    # Handle raw dict (fallback)
+                    else:
+                        items_summary += f"\nItem {i}: {str(item)[:200]}"
                 else:
                     items_summary += f"\nItem {i}: {str(item)[:200]}"
         else:

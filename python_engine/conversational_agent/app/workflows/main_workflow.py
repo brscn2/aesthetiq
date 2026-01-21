@@ -1,6 +1,7 @@
 """Main LangGraph workflow for the conversational agent."""
 from typing import Dict, Any, Literal, Optional
 from langgraph.graph import StateGraph, END
+from pydantic import BaseModel, Field
 
 from app.workflows.state import (
     ConversationState, 
@@ -18,6 +19,24 @@ from app.core.config import get_settings
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# Pydantic Schemas for LLM-based Extraction
+# =============================================================================
+
+class ClarificationExtraction(BaseModel):
+    """Extracted filter values from user's clarification response."""
+    occasion: Optional[str] = Field(None, description="Event type: interview, business, casual, party, wedding, date, formal")
+    budget: Optional[str] = Field(None, description="Budget level: budget, mid-range, luxury")
+    max_price: Optional[int] = Field(None, description="Maximum price in dollars if mentioned")
+    color: Optional[str] = Field(None, description="Color preference mentioned")
+    style: Optional[str] = Field(None, description="Style preference: classic, modern, minimalist, bold, elegant, casual, sporty")
+    size: Optional[str] = Field(None, description="Size if mentioned: XS, S, M, L, XL, XXL")
+    category: Optional[str] = Field(None, description="Clothing category: TOP, BOTTOM, SHOE, ACCESSORY")
+    sub_category: Optional[str] = Field(None, description="Specific type like Jacket, Dress, Sneakers, etc.")
+    season: Optional[str] = Field(None, description="Season: spring, summer, fall, winter")
+    additional_context: Optional[str] = Field(None, description="Any other relevant details from the response")
 
 
 # =============================================================================
@@ -151,8 +170,9 @@ async def merge_clarification_context_node(state: ConversationState) -> Dict[str
     
     This node:
     1. Takes the user's clarification response
-    2. Merges it with the previously extracted filters
-    3. Prepares the state to resume recommendation
+    2. Uses LLM to extract structured filters (with keyword fallback)
+    3. Merges with previously extracted filters
+    4. Prepares the state to resume recommendation
     """
     pending_context = state.get("pending_clarification_context", {})
     clarification_response = state.get("message", "")
@@ -161,14 +181,73 @@ async def merge_clarification_context_node(state: ConversationState) -> Dict[str
     
     logger.info(f"Merging clarification response: '{clarification_response[:50]}...'")
     
-    # Merge the clarification into existing filters
-    updated_filters = merge_clarification_into_filters(
-        existing_filters,
-        clarification_response,
-        clarification_question,
-    )
+    updated_filters = existing_filters.copy() if existing_filters else {}
+    llm_extraction_used = False
     
-    logger.info(f"Updated filters after clarification: {updated_filters}")
+    # Try LLM-based extraction first
+    try:
+        from app.services.llm_service import get_llm_service
+        llm_service = get_llm_service()
+        
+        extraction_prompt = f"""Extract clothing preferences from the user's response to a clarification question.
+
+Question asked: "{clarification_question}"
+User's response: "{clarification_response}"
+
+Extract any mentioned:
+- Occasion/event type (interview, business, casual, party, wedding, date, formal)
+- Budget (budget, mid-range, luxury) or specific price
+- Color preferences
+- Style preferences (classic, modern, minimalist, bold, elegant, casual, sporty)
+- Size
+- Clothing category (TOP, BOTTOM, SHOE, ACCESSORY)
+- Specific clothing type (Jacket, Dress, Jeans, Sneakers, etc.)
+- Season
+
+Only extract values that are clearly stated or strongly implied."""
+
+        extraction = await llm_service.structured_chat(
+            system_prompt="You are a fashion assistant that extracts clothing preferences from user responses.",
+            user_message=extraction_prompt,
+            output_schema=ClarificationExtraction,
+        )
+        
+        if extraction:
+            llm_extraction_used = True
+            # Merge LLM extraction into filters
+            if extraction.occasion:
+                updated_filters["occasion"] = extraction.occasion
+            if extraction.budget:
+                updated_filters["price_range"] = extraction.budget
+            if extraction.max_price:
+                updated_filters["max_price"] = extraction.max_price
+            if extraction.color:
+                updated_filters["color"] = extraction.color
+            if extraction.style:
+                updated_filters["style"] = extraction.style
+            if extraction.size:
+                updated_filters["size"] = extraction.size
+            if extraction.category:
+                updated_filters["category"] = extraction.category
+            if extraction.sub_category:
+                updated_filters["sub_category"] = extraction.sub_category
+            if extraction.season:
+                updated_filters["season"] = extraction.season
+            if extraction.additional_context:
+                updated_filters["additional_context"] = extraction.additional_context
+            
+            logger.info(f"LLM extracted filters: {extraction.model_dump(exclude_none=True)}")
+    
+    except Exception as e:
+        logger.warning(f"LLM-based clarification extraction failed, using keyword fallback: {e}")
+        # Fall back to keyword-based extraction
+        updated_filters = merge_clarification_into_filters(
+            existing_filters,
+            clarification_response,
+            clarification_question,
+        )
+    
+    logger.info(f"Updated filters after clarification (LLM={llm_extraction_used}): {updated_filters}")
     
     # Restore and update state from pending context
     return {
@@ -186,6 +265,7 @@ async def merge_clarification_context_node(state: ConversationState) -> Dict[str
             **state.get("metadata", {}),
             "clarification_merged": True,
             "merged_filters": updated_filters,
+            "llm_extraction_used": llm_extraction_used,
         },
     }
 

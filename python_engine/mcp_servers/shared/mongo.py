@@ -16,7 +16,12 @@ def get_mongo_client() -> AsyncIOMotorClient:
     settings = get_settings()
     if not settings.MONGODB_URI:
         raise RuntimeError("MONGODB_URI is not configured")
-    return AsyncIOMotorClient(settings.MONGODB_URI)
+    # Add tlsAllowInvalidCertificates for development with MongoDB Atlas
+    return AsyncIOMotorClient(
+        settings.MONGODB_URI,
+        tlsAllowInvalidCertificates=True,
+        serverSelectionTimeoutMS=30000,
+    )
 
 
 def get_db(db_name: str) -> AsyncIOMotorDatabase:
