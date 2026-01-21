@@ -16,7 +16,7 @@ import {
   ApiBearerAuth,
   ApiProduces,
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { AgentService } from './agent.service';
 import { ChatRequestDto } from './dto/chat-request.dto';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
