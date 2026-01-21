@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { Send, Mic, ImageIcon, Sparkles, X, Loader2 } from "lucide-react"
+import { Send, Mic, ImageIcon, Sparkles, X, Loader2, ExternalLink, ShoppingBag } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
+import { useChatApi, generateMessageId } from "@/lib/chat-api"
+import type { ClothingItem, DoneEvent } from "@/types/chat"
 
 // Speech Recognition types
 interface SpeechRecognition extends EventTarget {
@@ -61,54 +63,109 @@ interface Message {
   role: "user" | "assistant"
   content: string
   images?: string[]
-  outfit?: {
-    image: string
-    brand: string
-    items: string[]
+  items?: ClothingItem[]
+  isStreaming?: boolean
+  metadata?: {
+    intent?: string
+    sources?: string[]
+    needsClarification?: boolean
   }
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    role: "user",
-    content: "I have a summer wedding in Italy. What should I wear based on my palette?",
-  },
-  {
-    id: "2",
-    role: "assistant",
-    content:
-      "Perfect! For a summer wedding in Italy with your Autumn palette, I'd recommend a flowing midi dress in one of your signature warm tones. The burnt sienna or golden ochre would be stunning against the Italian backdrop. Here's a curated suggestion:",
-    outfit: {
-      image: "/placeholder.svg?key=fashion",
-      brand: "Zimmermann",
-      items: [
-        "Linen Midi Dress in Terracotta",
-        "Woven Leather Sandals",
-        "Gold Statement Earrings",
-        "Straw Clutch with Leather Detail",
-      ],
-    },
-  },
-]
-
 export function ChatStylist() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [isRecording, setIsRecording] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Use the chat API hook
+  const {
+    sessionState,
+    progress,
+    streamedText,
+    foundItems,
+    sendMessage,
+    cancelRequest,
+    clearError,
+  } = useChatApi({
+    onStreamStart: () => {
+      // Add a placeholder message for streaming
+      const streamingMessage: Message = {
+        id: generateMessageId(),
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      }
+      setMessages((prev) => [...prev, streamingMessage])
+    },
+    onStreamEnd: (result: DoneEvent | null) => {
+      if (result) {
+        // Update the streaming message with final content
+        setMessages((prev) => {
+          const newMessages = [...prev]
+          const lastMessage = newMessages[newMessages.length - 1]
+          if (lastMessage?.isStreaming) {
+            lastMessage.content = result.response
+            lastMessage.items = result.items
+            lastMessage.isStreaming = false
+            lastMessage.metadata = {
+              intent: result.intent || undefined,
+              sources: result.items?.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
+              needsClarification: result.needs_clarification,
+            }
+          }
+          return newMessages
+        })
+      }
+    },
+  })
+
+  // Update streaming message content in real-time
+  useEffect(() => {
+    if (streamedText && sessionState.isStreaming) {
+      setMessages((prev) => {
+        const newMessages = [...prev]
+        const lastMessage = newMessages[newMessages.length - 1]
+        if (lastMessage?.isStreaming) {
+          lastMessage.content = streamedText
+        }
+        return [...newMessages]
+      })
+    }
+  }, [streamedText, sessionState.isStreaming])
+
+  // Update streaming message items in real-time
+  useEffect(() => {
+    if (foundItems.length > 0 && sessionState.isStreaming) {
+      setMessages((prev) => {
+        const newMessages = [...prev]
+        const lastMessage = newMessages[newMessages.length - 1]
+        if (lastMessage?.isStreaming) {
+          lastMessage.items = foundItems
+        }
+        return [...newMessages]
+      })
+    }
+  }, [foundItems, sessionState.isStreaming])
+
+  // Show error toast
+  useEffect(() => {
+    if (sessionState.error) {
+      toast.error(sessionState.error)
+      clearError()
+    }
+  }, [sessionState.error, clearError])
 
   // Smooth scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" })
     }
-  }, [messages])
+  }, [messages, streamedText])
 
   // Initialize speech recognition
   useEffect(() => {
@@ -142,39 +199,38 @@ export function ChatStylist() {
     }
   }, [])
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = useCallback(async () => {
     if (!input.trim() && attachedImages.length === 0) return
 
+    const messageContent = input.trim()
+
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: generateMessageId(),
       role: "user",
-      content: input.trim(),
+      content: messageContent,
       images: attachedImages.length > 0 ? [...attachedImages] : undefined,
     }
 
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setAttachedImages([])
-    setIsLoading(true)
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "Thank you for your message! I'm analyzing your request and will provide personalized styling recommendations based on your preferences.",
-      }
-      setMessages((prev) => [...prev, aiMessage])
-      setIsLoading(false)
-    }, 1000)
-  }
+    // Send to the conversational agent API
+    await sendMessage(messageContent, sessionState.sessionId)
+  }, [input, attachedImages, sendMessage, sessionState.sessionId])
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
     }
+  }
+
+  const handleChipClick = (chip: string) => {
+    setInput((prev) => {
+      const newValue = prev ? `${prev} ${chip.toLowerCase()}` : `I'm looking for ${chip.toLowerCase()} style recommendations`
+      return newValue
+    })
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,6 +293,8 @@ export function ChatStylist() {
     }
   }
 
+  const isLoading = sessionState.isLoading
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
@@ -257,7 +315,8 @@ export function ChatStylist() {
             <Badge
               key={chip}
               variant="outline"
-              className="cursor-pointer border-border/50 hover:bg-accent hover:text-accent-foreground"
+              className="cursor-pointer border-border/50 hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => handleChipClick(chip)}
             >
               {chip}
             </Badge>
@@ -268,10 +327,25 @@ export function ChatStylist() {
       {/* Chat Messages */}
       <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
         <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+          {/* Welcome message if no messages */}
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-primary/10 p-4 mb-4">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Welcome to your AI Stylist
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                Ask me about fashion trends, get outfit recommendations, or explore items from your wardrobe and our catalog.
+              </p>
+            </div>
+          )}
+
           {messages.map((message) => (
             <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" && (
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-8 w-8 flex-shrink-0">
                   <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>
                 </Avatar>
               )}
@@ -286,7 +360,12 @@ export function ChatStylist() {
                       : "bg-card text-card-foreground border border-border/50"
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {message.content || (message.isStreaming ? "..." : "")}
+                  </p>
+                  {message.isStreaming && (
+                    <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                  )}
                 </div>
 
                 {/* Attached Images */}
@@ -300,54 +379,71 @@ export function ChatStylist() {
                   </div>
                 )}
 
-                {/* Outfit Suggestion Card */}
-                {message.outfit && (
-                  <Card className="w-full overflow-hidden border-border/50 bg-card">
-                    <div className="relative aspect-[16/10] w-full">
-                      <Image
-                        src="/placeholder.svg?key=fashion-outfit"
-                        alt="Outfit suggestion"
-                        fill
-                        className="object-cover"
-                      />
+                {/* Clothing Items Display */}
+                {message.items && message.items.length > 0 && (
+                  <div className="w-full mt-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShoppingBag className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">
+                        {message.items.length} item{message.items.length !== 1 ? "s" : ""} found
+                      </span>
+                      {message.metadata?.sources && message.metadata.sources.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          from {message.metadata.sources.join(", ")}
+                        </span>
+                      )}
                     </div>
-                    <CardHeader>
-                      <CardTitle className="text-base">{message.outfit.brand}</CardTitle>
-                      <CardDescription>Suggested Outfit</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2">
-                        {message.outfit.items.map((item, index) => (
-                          <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {message.items.slice(0, 4).map((item) => (
+                        <ClothingItemCard key={item.id} item={item} />
+                      ))}
+                    </div>
+                    {message.items.length > 4 && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        + {message.items.length - 4} more items
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
               {message.role === "user" && (
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-8 w-8 flex-shrink-0">
                   <AvatarImage src="/placeholder-user.jpg" alt="User" />
-                  <AvatarFallback className="bg-secondary text-secondary-foreground">SC</AvatarFallback>
+                  <AvatarFallback className="bg-secondary text-secondary-foreground">You</AvatarFallback>
                 </Avatar>
               )}
             </div>
           ))}
-          {isLoading && (
+
+          {/* Streaming Status Indicator */}
+          {isLoading && !sessionState.isStreaming && (
             <div className="flex gap-3 justify-start">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 flex-shrink-0">
                 <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-2 rounded-2xl bg-card border border-border/50 px-4 py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">Thinking...</span>
+                <span className="text-sm text-muted-foreground">
+                  {sessionState.currentStatus || progress.displayName || "Connecting..."}
+                </span>
               </div>
             </div>
           )}
+
+          {/* Progress Indicator During Streaming */}
+          {sessionState.isStreaming && progress.currentNode && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground px-12">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>{progress.displayName}</span>
+              {progress.itemsFound > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {progress.itemsFound} items
+                </Badge>
+              )}
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
@@ -412,20 +508,104 @@ export function ChatStylist() {
           >
             <Mic className={`h-4 w-4 sm:h-5 sm:w-5 ${isRecording ? "text-red-500 animate-pulse" : ""}`} />
           </Button>
-          <Button
-            size="icon"
-            className="gradient-ai h-10 w-10 sm:h-12 sm:w-12 text-white"
-            onClick={handleSendMessage}
-            disabled={isLoading || (!input.trim() && attachedImages.length === 0)}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-            ) : (
+          {isLoading ? (
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-10 w-10 sm:h-12 sm:w-12 border-border/50"
+              onClick={cancelRequest}
+              title="Cancel request"
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className="gradient-ai h-10 w-10 sm:h-12 sm:w-12 text-white"
+              onClick={handleSendMessage}
+              disabled={!input.trim() && attachedImages.length === 0}
+            >
               <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
-          </Button>
+            </Button>
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+// =============================================================================
+// Clothing Item Card Component
+// =============================================================================
+
+interface ClothingItemCardProps {
+  item: ClothingItem
+}
+
+function ClothingItemCard({ item }: ClothingItemCardProps) {
+  const sourceLabel = {
+    wardrobe: "Your Wardrobe",
+    commerce: "Shop",
+    web: "Web",
+  }[item.source] || item.source
+
+  return (
+    <Card className="overflow-hidden border-border/50 bg-card hover:shadow-md transition-shadow">
+      {item.imageUrl && (
+        <div className="relative aspect-square w-full bg-muted">
+          <Image
+            src={item.imageUrl}
+            alt={item.name}
+            fill
+            className="object-cover"
+            onError={(e) => {
+              // Hide image on error
+              (e.target as HTMLImageElement).style.display = "none"
+            }}
+          />
+        </div>
+      )}
+      <CardHeader className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-sm font-medium truncate">{item.name}</CardTitle>
+            {item.brand && (
+              <CardDescription className="text-xs truncate">{item.brand}</CardDescription>
+            )}
+          </div>
+          <Badge variant="secondary" className="text-xs flex-shrink-0">
+            {sourceLabel}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <div className="flex items-center justify-between">
+          {item.price && (
+            <span className="text-sm font-semibold text-foreground">
+              ${item.price.toFixed(2)}
+            </span>
+          )}
+          {item.productUrl && (
+            <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
+              <a href={item.productUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3 mr-1" />
+                View
+              </a>
+            </Button>
+          )}
+        </div>
+        {item.colorHex && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <div
+              className="w-4 h-4 rounded-full border border-border"
+              style={{ backgroundColor: item.colorHex }}
+            />
+            <span className="text-xs text-muted-foreground">
+              {item.category || "Item"}
+            </span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
