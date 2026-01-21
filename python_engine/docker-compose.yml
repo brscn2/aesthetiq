@@ -14,14 +14,14 @@ services:
     environment:
       # Override service URLs to point to internal Docker network
       - FACE_ANALYSIS_URL=http://face_analysis:8001
-      - CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
+      - CLOTHING_RECOMMENDER_URL=http://conversational_agent:8002
       - EMBEDDING_SERVICE_URL=http://embedding_service:8004
     networks:
       - aesthetiq-network
     depends_on:
       face_analysis:
         condition: service_healthy
-      clothing_recommender:
+      conversational_agent:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -71,9 +71,8 @@ services:
 
   # =============================================================================
   # CONVERSATIONAL AGENT - Multi-Agent LLM Service (Port 8002 - Internal Only)
-  # Replaces the old clothing_recommender service
   # =============================================================================
-  clothing_recommender:
+  conversational_agent:
     build:
       context: ./conversational_agent
       dockerfile: Dockerfile
