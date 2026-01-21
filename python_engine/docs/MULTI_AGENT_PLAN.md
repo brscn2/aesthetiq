@@ -4,36 +4,36 @@ overview: Build a new multi-agent conversational system using LangGraph for orch
 todos:
   - id: setup-infrastructure
     content: "Set up core infrastructure: LangGraph workflow structure, state management, MCP client library, Langfuse tracing service, and input/output guardrails"
-    status: pending
+    status: completed
   - id: implement-mcp-servers
     content: "Implement all 5 MCP servers: Wardrobe, Commerce, Web Search, User Data, and Style DNA servers with tool handlers"
-    status: pending
+    status: completed
     dependencies:
       - setup-infrastructure
   - id: implement-agents
     content: "Implement three agents: Conversation Agent, Clothing Recommender Agent, and Clothing Analyzer Agent with Langfuse tracing"
-    status: pending
+    status: completed
     dependencies:
       - setup-infrastructure
       - implement-mcp-servers
   - id: build-workflow
     content: Build main LangGraph workflow with all nodes, conditional routing, guardrails integration, and state management
-    status: pending
+    status: completed
     dependencies:
       - implement-agents
   - id: integrate-backend
     content: Integrate with backend chat API for SSE streaming, update gateway routes, and test end-to-end flow
-    status: pending
+    status: completed
     dependencies:
       - build-workflow
   - id: testing
     content: "Create comprehensive test suite: unit tests for agents/guardrails, integration tests for workflows, guardrail tests, and MCP server tests"
-    status: pending
+    status: completed
     dependencies:
       - integrate-backend
   - id: documentation
     content: Update architecture documentation, create API documentation, and document testing procedures
-    status: pending
+    status: in_progress
     dependencies:
       - testing
 ---
@@ -48,31 +48,38 @@ The system uses **LangGraph** for workflow orchestration with shared state (repl
 
 ```mermaid
 graph TB
-    User[User Query] --> Gateway[Gateway<br/>Auth + Rate Limit]
-    Gateway --> CAS[Conversational Agent Service<br/>LangGraph Workflow]
+    User[User Query] --> Frontend[Frontend<br/>Next.js]
+    Frontend -->|NEXT_PUBLIC_API_URL| Backend[NestJS Backend<br/>Port 3001<br/>Clerk Auth]
+    Backend -->|PYTHON_GATEWAY_URL| Gateway[Python Gateway<br/>Port 8000]
+    Gateway --> CAS[Conversational Agent<br/>Port 8002<br/>LangGraph Workflow]
     
-    CAS --> IC[Intent Classifier Node]
-    IC -->|general| GCA[General Conversation Agent]
-    IC -->|clothing| CWF[Clothing Workflow]
+    CAS --> CheckClarify{Check<br/>Clarification}
+    CheckClarify -->|fresh| IG[Input Guardrails]
+    CheckClarify -->|resume| Merge[Merge Context]
     
-    GCA --> RF[Response Formatter]
+    IG --> IC[Intent Classifier]
+    IC -->|general| GCA[Conversation Agent]
+    IC -->|clothing| QA[Query Analyzer]
     
-    CWF --> QA[Query Analyzer Node]
-    QA --> CRA[Clothing Recommender Agent]
-    CRA --> CAA[Clothing Analyzer Agent]
-    CAA -->|approve| RF
+    GCA --> OG[Output Guardrails]
+    
+    QA --> CRA[Clothing Recommender]
+    Merge --> CRA
+    CRA --> CAA[Clothing Analyzer]
+    CAA -->|approve| OG
     CAA -->|refine| CRA
-    CAA -->|clarify| User
+    CAA -->|clarify| SaveCtx[Save Context]
+    SaveCtx --> OG
     
-    RF --> Backend[Backend Chat API<br/>SSE Stream]
-    Backend --> Frontend[Frontend]
+    OG --> RF[Response Formatter]
+    RF --> CAS
+    CAS -->|SSE Stream| Gateway
+    Gateway -->|SSE Proxy| Backend
+    Backend -->|SSE Proxy| Frontend
+    Frontend --> User
     
-    CRA -.->|MCP Calls| MCP[MCP Servers]
-    GCA -.->|MCP Calls| MCP
-    
-    style CAS fill:#e8f5e9
-    style CWF fill:#fff3e0
-    style MCP fill:#fff9c4
+    CRA -.->|MCP via langchain-mcp-adapters| MCP[MCP Servers<br/>Port 8010<br/>fastapi-mcp]
+    GCA -.->|MCP| MCP
 ```
 
 ## Core Components
@@ -133,6 +140,29 @@ class ConversationState(TypedDict, total=False):
 **Key Design:** All agents read/write to shared state. No explicit A2A messages needed. State transitions handle agent communication.
 
 **Multi-Turn Support:** The `workflow_status`, `is_clarification_response`, and `pending_clarification_context` fields enable proper clarification flows where the workflow pauses, user provides input, and workflow resumes from the saved context.
+
+### MCP Client Configuration
+
+**File:** `conversational_agent/app/mcp/tools.py`
+
+Uses `langchain-mcp-adapters` for MCP integration:
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+config = {
+    "aesthetiq": {
+        "transport": "streamable_http",
+        "url": f"{settings.MCP_SERVERS_URL}/mcp",  # e.g., http://mcp_servers:8010/mcp
+    }
+}
+
+# Initialize during app startup (lifespan)
+_mcp_client = MultiServerMCPClient(config)
+_mcp_tools = await _mcp_client.get_tools()  # Returns LangChain BaseTool objects
+```
+
+Tools are then used with LangGraph agents via `create_react_agent(model, tools)`.
 
 ### 2. Session Management & Chat History
 
@@ -595,176 +625,162 @@ class LangfuseTracingService:
 
 ## MCP Servers
 
+**Implementation:** Uses `fastapi-mcp` to expose FastAPI routes as MCP tools at `/mcp` endpoint.
+
+**Main File:** `mcp_servers/main.py`
+
+```python
+from fastapi_mcp import FastApiMCP
+
+mcp = FastApiMCP(app, name="Aesthetiq MCP Server", ...)
+mcp.mount_http()  # Mounts streamable HTTP transport at /mcp
+```
+
 ### MCP Server 1: Wardrobe Server
 
-**File:** `mcp_servers/wardrobe_server/server.py`
+**Router:** `mcp_servers/wardrobe_server/router.py`
+**Prefix:** `/api/v1/wardrobe`
 
 **Tools:**
 
-- `search_wardrobe_items(query: str, filters: Dict) -> List[Item]`
-- `get_wardrobe_item(item_id: str) -> Item`
-- `filter_wardrobe_items(filters: Dict) -> List[Item]`
+- `POST /tools/search_wardrobe_items` - Semantic search with CLIP embeddings
+  - Input: `{query, user_id, filters?: WardrobeFilters, limit?}`
+  - Output: `List[{item: WardrobeItem, score: float}]`
+- `POST /tools/get_wardrobe_item` - Get item by ID
+  - Input: `{item_id, user_id}`
+- `POST /tools/filter_wardrobe_items` - Filter by metadata
+  - Input: `{user_id, filters?: WardrobeFilters, limit?}`
 
-**Data Source:** MongoDB Wardrobe Collection
-
-**Implementation:**
-
-- Use embedding service for semantic search
-- Filter by user_id, category, color, brand
-- Return items with metadata (season, AI explanations)
-
-**Testing:**
-
-- Unit test: Mock MongoDB, verify search logic
-- Integration test: Real MongoDB, verify item retrieval
-- Performance test: Large wardrobe collections
+**Data Source:** MongoDB `wardrobeitems` collection
 
 ### MCP Server 2: Commerce Server
 
-**File:** `mcp_servers/commerce_server/server.py`
+**Router:** `mcp_servers/commerce_server/router.py`
+**Prefix:** `/api/v1/commerce`
 
 **Tools:**
 
-- `search_commerce_items(query: str, style_dna: StyleDNA, filters: Dict) -> List[Item]`
-- `get_commerce_item(item_id: str) -> Item`
-- `filter_commerce_items(filters: Dict) -> List[Item]`
+- `POST /tools/search_commerce_items` - Semantic search + style DNA ranking
+  - Input: `{query, style_dna?: string, filters?: CommerceFilters, limit?, candidate_pool?}`
+  - Output: `List[{item: CommerceItem, score: float, breakdown: dict}]`
+  - Uses `seasonalPaletteScores` for accurate color season matching
+- `POST /tools/get_commerce_item` - Get item by ID
+- `POST /tools/filter_commerce_items` - Filter by metadata
 
-**Data Source:** MongoDB Commerce Collection (with embeddings)
+**Data Source:** MongoDB `commerceitems` collection
 
-**Key Feature:** Uses style_dna to rank results by relevance
-
-**Testing:**
-
-- Unit test: Mock MongoDB, verify style DNA filtering
-- Integration test: Real MongoDB, verify relevance ranking
-- Style DNA test: Verify items match user's color season
+**Ranking:** `combine_scores(semantic_score, season_score)` from `style_ranking.py`
 
 ### MCP Server 3: Web Search Server
 
-**File:** `mcp_servers/web_search_server/server.py`
+**Router:** `mcp_servers/web_search_server/router.py`
+**Prefix:** `/api/v1/web-search`
 
 **Tools:**
 
-- `web_search(query: str, max_results: int = 5) -> List[SearchResult]`
-- `search_trends(topic: str) -> List[Trend]`
-- `search_blogs(query: str) -> List[BlogPost]`
+- `POST /tools/web_search` - General web search
+  - Input: `{query, max_results?}`
+  - Uses: Tavily API via `tavily_client.py`
+- `POST /tools/search_trends` - Fashion trends
+  - Searches: `"fashion trends {topic} 2026"`
+- `POST /tools/search_blogs` - Fashion blogs
+  - Searches: `"{query} site:fashion blog OR site:blog"`
 
-**Data Source:** Tavily API (or similar)
-
-**Use Cases:**
-
-- Fallback when commerce/wardrobe don't have items
-- Latest fashion trends
-- Expert blog articles
-
-**Testing:**
-
-- Unit test: Mock Tavily API
-- Integration test: Real Tavily API calls
-- Rate limit test: Handle API limits gracefully
+**External API:** Tavily Search API (`TAVILY_API_KEY`)
 
 ### MCP Server 4: User Data Server
 
-**File:** `mcp_servers/user_data_server/server.py`
+**Router:** `mcp_servers/user_data_server/router.py`
+**Prefix:** `/api/v1/user-data`
 
 **Tools:**
 
-- `get_user_profile(user_id: str) -> UserProfile`
-- `get_user_wardrobe(user_id: str) -> List[Item]`
-- `get_user_preferences(user_id: str) -> Preferences`
+- `POST /tools/get_user_profile` - Get user by clerkId
+  - Input: `{user_id}`
+  - Output: `UserProfile{user_id, email, name, subscription_status, role, settings}`
 
-**Data Source:** MongoDB User Profiles Collection
-
-**Testing:**
-
-- Unit test: Mock MongoDB
-- Integration test: Real MongoDB
-- Cache test: Verify caching of user data
+**Data Source:** MongoDB `users` collection
 
 ### MCP Server 5: Style DNA Server
 
-**File:** `mcp_servers/style_dna_server/server.py`
+**Router:** `mcp_servers/style_dna_server/router.py`
+**Prefix:** `/api/v1/style-dna`
 
 **Tools:**
 
-- `get_style_dna(user_id: str) -> StyleDNA`
-- `get_color_season(user_id: str) -> ColorSeason`
-- `get_style_archetype(user_id: str) -> Archetype`
-- `get_recommended_colors(user_id: str) -> List[Color]`
+- `POST /tools/get_style_dna` - Complete style DNA
+  - Input: `{user_id}`
+  - Output: Combined data from `styleprofiles` + `coloranalyses`
+  - Includes: color_season, contrast_level, undertone, palette, archetype, sizes, budget_range
+- `POST /tools/get_color_season` - Just color season
+- `POST /tools/get_style_archetype` - Style archetype
+- `POST /tools/get_recommended_colors` - Color palette for season
+- Additional: `get_contrast_level`, `get_undertone`, `get_style_sliders`, `get_user_palette`
 
-**Data Source:** MongoDB Style Profiles Collection
-
-**Testing:**
-
-- Unit test: Mock MongoDB
-- Integration test: Real MongoDB
-- Cache test: Verify caching of style DNA
+**Data Sources:** MongoDB `styleprofiles` and `coloranalyses` collections
 
 ## LangGraph Workflow
 
 **File:** `conversational_agent/app/workflows/main_workflow.py`
 
+**Actual Workflow Nodes:**
+
+| Node Name | Display Name | Function |
+|-----------|--------------|----------|
+| `check_clarification` | "Checking conversation context" | Entry point - determines if resuming |
+| `merge_clarification` | "Processing your clarification" | Merges clarification into filters |
+| `input_guardrails` | "Validating input" | GuardrailsAI check |
+| `intent_classifier` | "Understanding your request" | LLM-based intent classification |
+| `query_analyzer` | "Analyzing what you're looking for" | Extracts filters and search scope |
+| `conversation_agent` | "Preparing response" | General fashion questions |
+| `clothing_recommender` | "Searching for items" | MCP tool calls to retrieve items |
+| `clothing_analyzer` | "Evaluating recommendations" | Decides approve/refine/clarify |
+| `save_clarification` | "Preparing follow-up question" | Saves context for resumption |
+| `output_guardrails` | "Validating response" | Output validation (passthrough) |
+| `response_formatter` | "Formatting your response" | Formats final response |
+| `error_response` | "Handling error" | Error handling |
+
 **Workflow Structure:**
 
 ```mermaid
 graph TB
-    Start([Start]) --> CheckClarify{Pending<br/>Clarification?}
+    Start([Start]) --> CheckClarify[check_clarification]
     
-    CheckClarify -->|Yes - Resume| Merge[Merge Clarification<br/>Context]
-    CheckClarify -->|No - Fresh| InputGuard[Input Guardrails]
+    CheckClarify -->|resume| Merge[merge_clarification]
+    CheckClarify -->|fresh| InputGuard[input_guardrails]
     
-    InputGuard -->|safe| IC[Intent Classifier]
-    InputGuard -->|unsafe| Error[Error Response]
+    InputGuard -->|safe| IC[intent_classifier]
+    InputGuard -->|unsafe| Error[error_response]
     
-    IC -->|general| GCA[General Conversation Agent]
-    IC -->|clothing| QA[Query Analyzer Node]
+    IC -->|general| GCA[conversation_agent]
+    IC -->|clothing| QA[query_analyzer]
     
-    GCA --> OutputGuard1[Output Guardrails]
-    OutputGuard1 -->|safe| RF[Response Formatter]
-    OutputGuard1 -->|unsafe| Error
+    GCA --> OutputGuard[output_guardrails]
     
-    QA --> CRA[Clothing Recommender Agent]
-    Merge -->|Skip Intent/Query| CRA
+    QA --> CRA[clothing_recommender]
+    Merge --> CRA
     
-    CRA -->|Fetch Context| UD[User Data MCP]
-    CRA -->|Fetch Context| SD[Style DNA MCP]
-    CRA -->|Search| MCP[Commerce/Wardrobe MCP]
+    CRA --> CAA[clothing_analyzer]
     
-    MCP -->|Items Found?| Check1{Results?}
+    CAA -->|approve| OutputGuard
+    CAA -->|refine| CRA
+    CAA -->|clarify| SaveCtx[save_clarification]
     
-    Check1 -->|No Results| WSS[Web Search MCP<br/>Fallback Search]
-    Check1 -->|Has Results| CAA[Clothing Analyzer Agent]
-    WSS --> CAA
+    SaveCtx --> OutputGuard
     
-    CAA -->|Analyze| Analysis{Analysis Result}
+    OutputGuard -->|safe| RF[response_formatter]
+    OutputGuard -->|unsafe| Error
     
-    Analysis -->|APPROVE| OutputGuard2[Output Guardrails]
-    Analysis -->|REFINE| Notes[Add Refinement Notes]
-    Analysis -->|CLARIFY| SaveCtx[Save Clarification<br/>Context]
-    
-    Notes -->|Retry with<br/>updated filters| CRA
-    
-    SaveCtx --> OutputGuard2
-    
-    OutputGuard2 -->|safe| RF
-    OutputGuard2 -->|unsafe| Error
-    
-    RF -->|Clarifying| WaitEnd([END<br/>status=awaiting])
-    RF -->|Complete| End([END<br/>status=completed])
+    RF --> End([END])
     Error --> End
-    
-    WaitEnd -.->|Next Turn| CheckClarify
-    
-    style InputGuard fill:#ffccbc
-    style OutputGuard1 fill:#ffccbc
-    style OutputGuard2 fill:#ffccbc
-    style CheckClarify fill:#fff9c4
-    style Check1 fill:#fff9c4
-    style Analysis fill:#fff9c4
-    style Merge fill:#c8e6c9
-    style SaveCtx fill:#ffccbc
-    style WaitEnd fill:#ffcdd2
 ```
+
+**Routing Functions:**
+- `route_after_clarification_check`: Returns "resume" or "fresh"
+- `route_after_input_guardrails`: Returns "safe" or "unsafe"
+- `route_after_intent`: Returns "general" or "clothing"
+- `route_after_analysis`: Returns "approve", "refine", "clarify", or "error"
+- `route_after_output_guardrails`: Returns "safe" or "unsafe"
 
 **Node Implementation:**
 
@@ -899,46 +915,53 @@ def test_history_formatting():
 
 ### Request Flow
 
-1. **User sends query** → Frontend
-2. **Frontend** → Backend Chat API (POST /chat/:sessionId/message)
-3. **Backend** → Gateway (POST /api/v1/agent/chat/stream)
-4. **Gateway** → Input Guardrails → Conversational Agent Service
+1. **User sends message** → Frontend (Next.js)
+2. **Frontend** → NestJS Backend (POST /api/agent/chat/stream)
+   - `useChatApi` hook sends request with Clerk JWT
+   - Backend validates Clerk token
+   - Backend extracts `user_id` from authenticated token
+3. **NestJS Backend** → Python Gateway (POST /api/v1/agent/chat/stream)
+   - AgentService proxies SSE stream
+   - Sets proper headers: `Content-Type: text/event-stream`
+4. **Python Gateway** → Conversational Agent Service (POST /api/v1/agent/chat/stream)
+   - Proxies with 600s timeout for agentic workflows
 5. **Agent Service** → Session Service:
-
-   - Load session (create if new) from backend
+   - Load session from backend (via BackendClient)
    - Load conversation history
-   - Format history for LLM context
-
-6. **Agent Service** → LangGraph Workflow:
-
+   - Format history for LLM context (limit 10 messages)
+6. **Agent Service** → LangGraph Workflow (`run_workflow_streaming`):
    - Create initial state with history
-   - Intent Classifier
-   - Route to agent
-   - Agent processes (with MCP tool calls, using history for context)
-   - Output Guardrails
-   - Response Formatter
-
+   - Execute nodes: check_clarification → input_guardrails → intent_classifier → ...
+   - Stream events via `astream_events(state, version="v2")`
+   - MCP tool calls via `langchain-mcp-adapters`
 7. **Agent Service** → Session Service:
-
    - Save user message to backend
    - Save assistant response to backend
-
-8. **Agent Service** → Backend (SSE stream)
-9. **Backend** → Frontend (SSE stream)
-10. **Frontend** → User (displays response)
+8. **SSE Stream Chain:**
+   - Agent → Gateway → Backend → Frontend
+   - Events: metadata, status, node_start, node_end, intent, filters, items_found, analysis, chunk, done
+9. **Frontend** → User (displays response)
+   - `useChatApi` hook processes events
+   - Updates UI in real-time
 
 ### Streaming Events
 
-**Event Types:**
+**Event Types (from `state.py` StreamEvent class):**
 
-- `metadata` - Session info, intent classification
-- `status` - Progress updates
-- `agent_start` - Agent begins work
-- `tool_call` - MCP tool being called
-- `item` - Clothing item found
-- `analysis` - Analyzer decision
-- `chunk` - LLM text chunk
-- `done` - Complete
+| Event | Content | Description |
+|-------|---------|-------------|
+| `metadata` | `{session_id, user_id, trace_id}` | Initial connection info |
+| `status` | `{message}` | Human-readable progress |
+| `node_start` | `{node, display_name}` | Workflow node started |
+| `node_end` | `{node}` | Workflow node finished |
+| `intent` | `{intent}` | "general" or "clothing" |
+| `filters` | `{filters, scope}` | Extracted search filters |
+| `items_found` | `{count, sources[]}` | Items retrieved |
+| `analysis` | `{decision, confidence}` | Analyzer decision |
+| `tool_call` | `{tool, input}` | MCP tool invocation |
+| `chunk` | `{content}` | Response text chunk |
+| `done` | `{response, intent, items[], workflow_status, needs_clarification, clarification_question, session_id}` | Final complete response |
+| `error` | `{message}` | Error message |
 
 ## Potential Use Cases
 
@@ -1030,79 +1053,66 @@ Intent Classifier → Query Analyzer → Scope Decision → Recommender → Resu
 ## File Structure
 
 ```
-python_engine/
-├── conversational_agent/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── agents/
-│   │   │   ├── __init__.py
-│   │   │   ├── conversation_agent.py
-│   │   │   ├── clothing_recommender_agent.py
-│   │   │   └── clothing_analyzer_agent.py
-│   │   ├── workflows/
-│   │   │   ├── __init__.py
-│   │   │   ├── main_workflow.py
-│   │   │   ├── state.py
-│   │   │   └── nodes/
-│   │   │       ├── __init__.py
-│   │   │       └── query_analyzer_node.py
-│   │   ├── guardrails/
-│   │   │   ├── __init__.py
-│   │   │   ├── input_guardrails.py
-│   │   │   ├── output_guardrails.py
-│   │   │   └── base.py
-│   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── llm_service.py
-│   │   │   ├── tracing/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── langfuse_service.py
-│   │   │   ├── session/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── session_service.py
-│   │   │   └── backend_client.py
-│   │   ├── mcp/
-│   │   │   ├── __init__.py
-│   │   │   └── client.py
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       └── endpoints/
-│   │   │           └── chat.py
-│   │   └── core/
-│   │       ├── config.py
-│   │       └── logger.py
-│   ├── tests/
-│   │   ├── unit/
-│   │   ├── integration/
-│   │   └── guardrails/
-│   └── requirements.txt
+aesthetiq/
+├── backend/src/agent/              # NestJS Agent Module (NEW)
+│   ├── agent.module.ts
+│   ├── agent.controller.ts         # POST /api/agent/chat, /chat/stream
+│   ├── agent.service.ts            # SSE proxy to Python Gateway
+│   └── dto/chat-request.dto.ts
 │
-├── mcp_servers/
-│   ├── wardrobe_server/
-│   │   ├── server.py
-│   │   ├── tools.py
-│   │   └── tests/
-│   ├── commerce_server/
-│   │   ├── server.py
-│   │   ├── tools.py
-│   │   └── tests/
-│   ├── web_search_server/
-│   │   ├── server.py
-│   │   ├── tools.py
-│   │   └── tests/
-│   ├── user_data_server/
-│   │   ├── server.py
-│   │   ├── tools.py
-│   │   └── tests/
-│   └── style_dna_server/
-│       ├── server.py
-│       ├── tools.py
-│       └── tests/
+├── frontend/
+│   ├── lib/chat-api.ts             # useChatApi hook + SSE client
+│   └── types/chat.ts               # StreamEvent TypeScript interfaces
 │
-└── gateway/
-    └── app/
-        └── routes/
-            └── agent.py  # Updated to route to new service
+└── python_engine/
+    ├── conversational_agent/       # Port 8002
+    │   ├── app/
+    │   │   ├── main.py             # FastAPI + lifespan (MCP init)
+    │   │   ├── agents/
+    │   │   │   ├── conversation_agent.py
+    │   │   │   ├── clothing_recommender_agent.py
+    │   │   │   └── clothing_analyzer_agent.py
+    │   │   ├── workflows/
+    │   │   │   ├── main_workflow.py  # LangGraph + run_workflow_streaming
+    │   │   │   ├── state.py          # ConversationState, StreamEvent
+    │   │   │   └── nodes/
+    │   │   │       ├── intent_classifier.py
+    │   │   │       ├── query_analyzer.py
+    │   │   │       └── response_formatter.py
+    │   │   ├── guardrails/
+    │   │   │   ├── base.py
+    │   │   │   ├── safety_guardrails.py
+    │   │   │   └── providers/guardrails_ai_provider.py
+    │   │   ├── services/
+    │   │   │   ├── llm_service.py
+    │   │   │   ├── backend_client.py
+    │   │   │   ├── session/session_service.py
+    │   │   │   └── tracing/langfuse_service.py
+    │   │   ├── mcp/tools.py          # langchain-mcp-adapters
+    │   │   └── api/v1/endpoints/chat.py
+    │   └── tests/
+    │
+    ├── mcp_servers/                  # Port 8010
+    │   ├── main.py                   # FastAPI + fastapi-mcp
+    │   ├── shared/
+    │   │   ├── mongo.py
+    │   │   └── embeddings_client.py
+    │   ├── wardrobe_server/
+    │   │   ├── router.py, tools.py, schemas.py, db.py
+    │   ├── commerce_server/
+    │   │   ├── router.py, tools.py, schemas.py, db.py, style_ranking.py
+    │   ├── web_search_server/
+    │   │   ├── router.py, tools.py, schemas.py, tavily_client.py
+    │   ├── user_data_server/
+    │   │   ├── router.py, tools.py, schemas.py, db.py
+    │   └── style_dna_server/
+    │       ├── router.py, tools.py, schemas.py, db.py, color_mappings.py
+    │
+    └── gateway/                      # Port 8000
+        └── app/
+            ├── config.py
+            ├── proxy.py
+            └── routes/agent.py
 ```
 
 ## Implementation Issues

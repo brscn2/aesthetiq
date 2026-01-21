@@ -12,23 +12,32 @@ This document describes the new multi-agent conversational system that replaces 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           EXTERNAL LAYER                                     │
 │                                                                               │
-│  ┌──────────────┐                    ┌──────────────┐                      │
-│  │   Frontend   │                    │   Backend     │                      │
-│  │   (React)    │◄──────────────────►│  (NestJS)     │                      │
-│  │              │   SSE Stream       │  Chat API     │                      │
-│  └──────────────┘                    └──────┬───────┘                      │
+│  ┌──────────────┐                                                          │
+│  │   Frontend   │                                                          │
+│  │   (Next.js)  │                                                          │
+│  │              │                                                          │
+│  └──────┬───────┘                                                          │
+│         │ NEXT_PUBLIC_API_URL                                               │
+│         ▼                                                                    │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │   NestJS Backend (Port 3001)                                         │  │
+│  │   - /api/agent/chat, /api/agent/chat/stream                          │  │
+│  │   - Clerk Authentication (JWT validation)                            │  │
+│  │   - Injects user_id from auth token                                  │  │
+│  │   - SSE Stream Proxy to Python Gateway                               │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
 │                                              │                               │
 └──────────────────────────────────────────────┼───────────────────────────────┘
-                                                │
+                                                │ PYTHON_GATEWAY_URL
                                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           GATEWAY LAYER (Port 8000)                          │
 │                                                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  FastAPI Gateway                                                    │   │
-│  │  - Routes: /api/v1/agent/chat/stream                                │   │
-│  │  - Authentication & Rate Limiting                                   │   │
-│  │  - SSE Stream Proxy                                                 │   │
+│  │  - Routes: /api/v1/agent/chat, /api/v1/agent/chat/stream            │   │
+│  │  - Proxies to Conversational Agent (clothing_recommender:8002)       │   │
+│  │  - SSE Stream Proxy with configurable timeout (600s)                │   │
 │  └───────────────────────┬─────────────────────────────────────────────┘   │
 └──────────────────────────┼──────────────────────────────────────────────────┘
                             │
@@ -130,29 +139,56 @@ This document describes the new multi-agent conversational system that replaces 
 
 ## Detailed Component Breakdown
 
-### 1. Gateway Layer
+### 1. NestJS Backend Agent Module (Port 3001)
 
-**Service:** FastAPI Gateway (Port 8000)
+**Service:** NestJS Backend - Agent Module
 
 **Responsibilities:**
-- Authentication (API keys, JWT validation)
-- Rate limiting per user/IP
-- Request routing to conversational agent service
-- SSE stream proxying to backend
-- CORS handling
+- Clerk JWT authentication (validates Bearer token)
+- Extracts user_id from authenticated token
+- Proxies requests to Python Gateway
+- SSE stream proxy with proper headers
+- CORS handling for frontend
 
 **Endpoints:**
-- `POST /api/v1/agent/chat/stream` - Streaming chat endpoint
+- `POST /api/agent/chat` - Non-streaming chat endpoint
+- `POST /api/agent/chat/stream` - Streaming chat endpoint (SSE)
+- `GET /api/agent/health` - Health check
+
+**Implementation Files:**
+- `backend/src/agent/agent.module.ts` - Module definition
+- `backend/src/agent/agent.service.ts` - SSE proxy logic
+- `backend/src/agent/agent.controller.ts` - REST endpoints
+- `backend/src/agent/dto/chat-request.dto.ts` - Request validation
+
+**Environment Variables:**
+- `PYTHON_GATEWAY_URL` - URL of Python Gateway (default: http://localhost:8000)
+- `AGENT_TIMEOUT` - Request timeout in ms (default: 120000)
 
 ---
 
-### 2. Conversational Agent Service
+### 2. Python Gateway Layer (Port 8000)
+
+**Service:** FastAPI Gateway
+
+**Responsibilities:**
+- Request routing to conversational agent service
+- SSE stream proxying
+- Timeout handling (configurable up to 600s for agentic workflows)
+
+**Endpoints:**
+- `POST /api/v1/agent/chat` - Proxied to conversational agent
+- `POST /api/v1/agent/chat/stream` - Streaming endpoint proxy
+
+---
+
+### 3. Conversational Agent Service
 
 **Service:** FastAPI Service (Port 8002)
 
 **Core Technology:** LangGraph
 
-#### 2.1 LangGraph Workflow Structure
+#### 3.1 LangGraph Workflow Structure
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -206,7 +242,7 @@ This document describes the new multi-agent conversational system that replaces 
 - `is_clarification_response`: True when user is responding to a clarification question
 - `pending_clarification_context`: Saves workflow state when clarification is needed, enabling seamless resumption
 
-#### 2.2 Workflow Nodes
+#### 3.2 Workflow Nodes
 
 **Entry Node: Check Clarification**
 - **Purpose:** Determine if this is a fresh request or a response to clarification
@@ -277,9 +313,9 @@ This document describes the new multi-agent conversational system that replaces 
 
 ---
 
-### 3. Agent Definitions
+### 4. Agent Definitions
 
-#### 3.1 Conversation Agent (General Fashion Chat)
+#### 4.1 Conversation Agent (General Fashion Chat)
 
 **Purpose:** Handles general fashion conversations
 
@@ -301,7 +337,7 @@ This document describes the new multi-agent conversational system that replaces 
 
 ---
 
-#### 3.2 Clothing Recommender Agent
+#### 4.2 Clothing Recommender Agent
 
 **Purpose:** Intelligently retrieves clothing items based on user query
 
@@ -344,7 +380,7 @@ This document describes the new multi-agent conversational system that replaces 
 
 ---
 
-#### 3.3 Clothing Analyzer Agent
+#### 4.3 Clothing Analyzer Agent
 
 **Purpose:** Validates and refines retrieved clothing items
 
@@ -387,119 +423,254 @@ Analyze: Retrieved Items + User Query + Style DNA
 
 ---
 
-### 4. MCP Server Layer
+### 5. MCP Server Layer
 
-**MCP (Model Context Protocol)** servers provide tools that agents can call. Each server exposes a set of tools via the MCP protocol.
+**MCP (Model Context Protocol)** servers provide tools that agents can call. The implementation uses:
 
-#### 4.1 Wardrobe MCP Server
+- **`fastapi-mcp`** - Exposes FastAPI endpoints as MCP tools
+- **`langchain-mcp-adapters`** - Enables LangChain agents to call MCP tools
+
+**MCP Server Architecture:**
+```python
+# mcp_servers/main.py
+from fastapi_mcp import FastApiMCP
+
+mcp = FastApiMCP(app, name="Aesthetiq MCP Server", ...)
+mcp.mount_http()  # Mounts streamable HTTP transport at /mcp
+```
+
+**Agent Connection:**
+```python
+# conversational_agent/app/mcp/tools.py
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+config = {
+    "aesthetiq": {
+        "transport": "streamable_http",
+        "url": f"{MCP_SERVERS_URL}/mcp",
+    }
+}
+client = MultiServerMCPClient(config)
+tools = await client.get_tools()  # Returns LangChain BaseTool objects
+```
+
+#### 5.1 Wardrobe MCP Server
 
 **Purpose:** Search user's virtual wardrobe
 
-**Tools:**
-- `search_wardrobe_items(query: str, user_id: str, filters: Dict) -> List[Item]`
-  - Semantic search in user's wardrobe
-  - Uses embeddings + metadata filtering
-  - Requires user_id for user-specific searches
-- `get_wardrobe_item(item_id: str, user_id: str) -> Item`
-  - Get specific item details
-  - Requires user_id for authorization
-- `filter_wardrobe_items(user_id: str, filters: Dict) -> List[Item]`
-  - Filter by category, color, brand, etc.
-  - Requires user_id for user-specific filtering
+**Endpoint Prefix:** `/api/v1/wardrobe`
 
-**Data Source:** MongoDB Wardrobe Collection
+**Tools (exposed via FastAPI routes at `/tools/*`):**
 
-**Metadata Used:**
-- Category, subCategory
-- Color (hex)
-- Brand
-- Size
-- Season
-- AI-generated style explanations
-- User notes
+- `search_wardrobe_items` - Semantic search using CLIP embeddings
+  ```python
+  POST /tools/search_wardrobe_items
+  {
+      "query": str,           # Search query
+      "user_id": str,         # User's clerkId
+      "filters": {            # Optional WardrobeFilters
+          "category": "TOP" | "BOTTOM" | "SHOE" | "ACCESSORY",
+          "subCategory": str,
+          "brand": str,
+          "colors": List[str],
+          "isFavorite": bool
+      },
+      "limit": int = 20
+  }
+  # Returns: List[{item: WardrobeItem, score: float}]
+  ```
+
+- `get_wardrobe_item` - Get single item by ID
+  ```python
+  POST /tools/get_wardrobe_item
+  {"item_id": str, "user_id": str}
+  ```
+
+- `filter_wardrobe_items` - Filter by metadata
+  ```python
+  POST /tools/filter_wardrobe_items
+  {"user_id": str, "filters": WardrobeFilters, "limit": int}
+  ```
+
+**Data Source:** MongoDB `wardrobeitems` collection
+
+**Item Fields:**
+- `_id`, `userId`, `imageUrl`, `processedImageUrl`
+- `category` (TOP, BOTTOM, SHOE, ACCESSORY)
+- `subCategory`, `brand`, `colors[]`, `notes`
+- `isFavorite`, `lastWorn`, `seasonalPaletteScores`
+- `embedding` (CLIP vector for semantic search)
 
 ---
 
-#### 4.2 Commerce MCP Server
+#### 5.2 Commerce MCP Server
 
 **Purpose:** Search commerce/retail clothing items
 
+**Endpoint Prefix:** `/api/v1/commerce`
+
 **Tools:**
-- `search_commerce_items(query: str, style_dna: StyleDNA, filters: Dict) -> List[Item]`
-  - Semantic search in commerce embedding space
-  - Filters by user's style DNA for relevance
-  - Uses style DNA to rank results
-- `get_commerce_item(item_id: str) -> Item`
-  - Get specific commerce item details
-- `filter_commerce_items(filters: Dict) -> List[Item]`
-  - Filter by category, price range, brand, etc.
 
-**Data Source:** MongoDB Commerce Collection (with embeddings)
+- `search_commerce_items` - Semantic search with style DNA ranking
+  ```python
+  POST /tools/search_commerce_items
+  {
+      "query": str,
+      "style_dna": str | None,  # User's color season (e.g., "WARM_AUTUMN")
+      "filters": {              # Optional CommerceFilters
+          "category": "TOP" | "BOTTOM" | "SHOE" | "ACCESSORY",
+          "subCategory": str,
+          "brand": str,
+          "brandId": str,
+          "retailerId": str,
+          "minPrice": float,
+          "maxPrice": float,
+          "inStock": bool
+      },
+      "limit": int = 20,
+      "candidate_pool": int = 200
+  }
+  # Returns: List[{item: CommerceItem, score: float, breakdown: dict}]
+  ```
 
-**Key Feature:** Uses user's style DNA to rank results by relevance
+- `get_commerce_item` - Get single item
+  ```python
+  POST /tools/get_commerce_item
+  {"item_id": str}
+  ```
+
+- `filter_commerce_items` - Filter by metadata
+  ```python
+  POST /tools/filter_commerce_items
+  {"filters": CommerceFilters, "limit": int}
+  ```
+
+**Data Source:** MongoDB `commerceitems` collection
+
+**Ranking Algorithm:**
+- Semantic similarity (CLIP embedding cosine similarity)
+- Style DNA matching (uses `seasonalPaletteScores` for color season matching)
+- Combined score: `combine_scores(semantic_score, season_score)`
 
 ---
 
-#### 4.3 Web Search MCP Server
+#### 5.3 Web Search MCP Server
 
-**Purpose:** Search external sources for clothing items
+**Purpose:** Search external sources for fashion information
+
+**Endpoint Prefix:** `/api/v1/web-search`
 
 **Tools:**
-- `web_search(query: str, max_results: int = 5) -> List[SearchResult]`
-  - Search web for clothing items (Tavily API or similar)
-- `search_trends(topic: str) -> List[Trend]`
-  - Search for fashion trends
-- `search_blogs(query: str) -> List[BlogPost]`
-  - Search fashion blogs/articles
+
+- `web_search` - General web search via Tavily API
+  ```python
+  POST /tools/web_search
+  {"query": str, "max_results": int = 5}
+  # Returns: List[WebSearchResult{title, url, content, score}]
+  ```
+
+- `search_trends` - Fashion trends search
+  ```python
+  POST /tools/search_trends
+  {"topic": str, "max_results": int = 5}
+  # Searches: "fashion trends {topic} 2026"
+  ```
+
+- `search_blogs` - Fashion blog search
+  ```python
+  POST /tools/search_blogs
+  {"query": str, "max_results": int = 5}
+  # Searches: "{query} site:fashion blog OR site:blog"
+  ```
+
+**External API:** Tavily Search API (configured via `TAVILY_API_KEY`)
 
 **Use Cases:**
 - Fallback when commerce/wardrobe don't have items
+- Latest fashion trends research
+- Fashion blog articles and expert advice
 - Finding specific brands/products
-- Latest fashion trends
-- Expert blog articles
-
-**External APIs:**
-- Tavily Search API
-- Google Custom Search (optional)
-- Other web search providers
 
 ---
 
-#### 4.4 User Data MCP Server
+#### 5.4 User Data MCP Server
 
 **Purpose:** Fetch user profile and preferences
 
-**Tools:**
-- `get_user_profile(user_id: str) -> UserProfile`
-  - Get user's profile data
-- `get_user_wardrobe(user_id: str) -> List[Item]`
-  - Get all user's wardrobe items
-- `get_user_preferences(user_id: str) -> Preferences`
-  - Get user preferences (sizes, brands, etc.)
+**Endpoint Prefix:** `/api/v1/user-data`
 
-**Data Source:** MongoDB User Profiles Collection
+**Tools:**
+
+- `get_user_profile` - Get user profile by clerkId
+  ```python
+  POST /tools/get_user_profile
+  {"user_id": str}  # clerkId from Clerk auth
+  # Returns: UserProfile{
+  #   user_id, email, name, avatar_url,
+  #   subscription_status (FREE, PREMIUM, ENTERPRISE),
+  #   role (USER, ADMIN, SUPER_ADMIN),
+  #   settings: UserSettings{units, currency, shoppingRegion, theme, ...}
+  # }
+  ```
+
+**Data Source:** MongoDB `users` collection
+
+**Note:** User preferences for sizes, brands, and budget are stored in StyleProfile (see Style DNA Server)
 
 ---
 
-#### 4.5 Style DNA MCP Server
+#### 5.5 Style DNA MCP Server
 
-**Purpose:** Get user's style DNA information
+**Purpose:** Get user's style DNA from StyleProfile and ColorAnalysis collections
+
+**Endpoint Prefix:** `/api/v1/style-dna`
 
 **Tools:**
-- `get_style_dna(user_id: str) -> StyleDNA`
-  - Get user's style DNA (color season, face shape, archetype)
-- `get_color_season(user_id: str) -> ColorSeason`
-  - Get user's color season analysis
-- `get_style_archetype(user_id: str) -> Archetype`
-  - Get user's style archetype
-- `get_recommended_colors(user_id: str) -> List[Color]`
-  - Get recommended colors based on style DNA
 
-**Data Source:** MongoDB Style Profiles Collection
+- `get_style_dna` - Complete style DNA (combined from both collections)
+  ```python
+  POST /tools/get_style_dna
+  {"user_id": str}
+  # Returns: StyleDNA{
+  #   // From ColorAnalysis
+  #   color_season, contrast_level, undertone, palette[], face_shape,
+  #   // From StyleProfile
+  #   archetype, sliders{}, inspiration_image_urls[],
+  #   negative_constraints[], favorite_brands[],
+  #   sizes{top, bottom, shoe}, fit_preferences{},
+  #   budget_range, max_price_per_item
+  # }
+  ```
+
+- `get_color_season` - Just the color season
+  ```python
+  POST /tools/get_color_season
+  {"user_id": str}
+  # Returns: str | None (e.g., "WARM_AUTUMN")
+  ```
+
+- `get_style_archetype` - Style archetype from profile
+  ```python
+  POST /tools/get_style_archetype
+  {"user_id": str}
+  ```
+
+- `get_recommended_colors` - Palette based on color season
+  ```python
+  POST /tools/get_recommended_colors
+  {"user_id": str}
+  # Returns: List[str] (hex color codes)
+  ```
+
+- Additional tools: `get_contrast_level`, `get_undertone`, `get_style_sliders`, `get_user_palette`
+
+**Data Sources:**
+- MongoDB `styleprofiles` collection
+- MongoDB `coloranalyses` collection
 
 ---
 
-### 5. LangGraph State Management (Agent Communication)
+### 6. LangGraph State Management (Agent Communication)
 
 **Purpose:** Enable agents to communicate and coordinate through shared state
 
@@ -556,7 +727,7 @@ Turn 2: User provides clarification
 
 ---
 
-### 6. Session Management and Chat History
+### 7. Session Management and Chat History
 
 **Purpose:** Manage conversation sessions and maintain chat history for context-aware responses
 
@@ -587,7 +758,7 @@ Turn 2: User provides clarification
 
 ---
 
-### 7. Input and Output Guardrails
+### 8. Input and Output Guardrails
 
 **Purpose:** Ensure user safety, content moderation, and prevent inappropriate content
 
@@ -620,7 +791,7 @@ class GuardrailResult:
 
 ---
 
-### 8. Langfuse Tracing
+### 9. Langfuse Tracing
 
 **Purpose:** Comprehensive tracing of all LLM calls, tool calls, and agent transitions
 
@@ -648,7 +819,7 @@ class GuardrailResult:
 
 ---
 
-### 9. Data Flow Examples
+### 10. Data Flow Examples
 
 #### Example 1: General Fashion Question
 
@@ -805,143 +976,179 @@ Turn 2: User: "A formal dinner party"
 
 ---
 
-### 10. Streaming Architecture
+### 11. Streaming Architecture
 
 **Stream Format (SSE):**
 
 ```javascript
-// Event types
+// Event types (from state.py StreamEvent class)
 {
-  "type": "metadata",      // Session info, route decision
-  "type": "status",        // Progress updates
-  "type": "agent_start",  // Agent begins work
-  "type": "tool_call",     // MCP tool being called
-  "type": "chunk",         // LLM text chunk
-  "type": "item",          // Clothing item found
-  "type": "analysis",      // Analyzer decision
-  "type": "done"           // Complete
+  "type": "metadata",      // Session info: session_id, user_id, trace_id
+  "type": "status",        // Human-readable progress: {message: "..."}
+  "type": "node_start",    // Workflow node started: {node, display_name}
+  "type": "node_end",      // Workflow node finished: {node}
+  "type": "intent",        // Intent classification: {intent: "general"|"clothing"}
+  "type": "filters",       // Query analysis: {filters, scope}
+  "type": "items_found",   // Items retrieved: {count, sources[]}
+  "type": "analysis",      // Analyzer decision: {decision, confidence}
+  "type": "tool_call",     // MCP tool invocation: {tool, input}
+  "type": "chunk",         // Response text streaming: {content}
+  "type": "done",          // Final response with all data
+  "type": "error"          // Error occurred: {message}
 }
 ```
 
 **Stream Flow:**
 ```
-Gateway → Conversational Agent Service → Backend Chat API → Frontend
-         (SSE Stream)                    (SSE Stream)        (SSE Stream)
+Frontend → NestJS Backend → Python Gateway → Conversational Agent
+             (SSE Proxy)      (SSE Proxy)      (LangGraph astream_events)
 ```
 
 **Example Stream:**
 ```
-data: {"type": "metadata", "session_id": "...", "intent": "clothing"}
-data: {"type": "status", "content": "Analyzing your request..."}
-data: {"type": "agent_start", "agent": "clothing_recommender"}
-data: {"type": "tool_call", "tool": "commerce_search", "query": "jackets"}
-data: {"type": "item", "item": {...}, "source": "commerce"}
-data: {"type": "agent_start", "agent": "clothing_analyzer"}
-data: {"type": "analysis", "decision": "approve", "items_count": 3}
-data: {"type": "chunk", "content": "I found 3 jackets..."}
-data: {"type": "done", "message": "Full response..."}
+data: {"type": "metadata", "session_id": "sess_123", "user_id": "user_abc", "trace_id": "trace_xyz"}
+data: {"type": "status", "message": "Understanding your request..."}
+data: {"type": "node_start", "node": "intent_classifier", "display_name": "Understanding your request"}
+data: {"type": "node_end", "node": "intent_classifier"}
+data: {"type": "intent", "intent": "clothing"}
+data: {"type": "node_start", "node": "query_analyzer", "display_name": "Analyzing what you're looking for"}
+data: {"type": "filters", "filters": {"category": "TOP", "occasion": "formal"}, "scope": "commerce"}
+data: {"type": "node_end", "node": "query_analyzer"}
+data: {"type": "node_start", "node": "clothing_recommender", "display_name": "Searching for items"}
+data: {"type": "tool_call", "tool": "search_commerce_items", "input": "formal jacket..."}
+data: {"type": "items_found", "count": 5, "sources": ["commerce"]}
+data: {"type": "node_end", "node": "clothing_recommender"}
+data: {"type": "node_start", "node": "clothing_analyzer", "display_name": "Evaluating recommendations"}
+data: {"type": "analysis", "decision": "approve", "confidence": 0.85}
+data: {"type": "node_end", "node": "clothing_analyzer"}
+data: {"type": "chunk", "content": "I found 5 great jackets..."}
+data: {"type": "done", "response": "Full response...", "intent": "clothing", "items": [...], "workflow_status": "completed", "needs_clarification": false, "session_id": "sess_123"}
 ```
 
 ---
 
-### 11. Technology Stack
+### 12. Technology Stack
 
 | Component | Technology |
 |-----------|-----------|
+| **Frontend** | Next.js with React, TypeScript |
+| **Backend API** | NestJS (TypeScript) with Clerk auth |
+| **Python Gateway** | FastAPI |
 | **Orchestration** | LangGraph |
-| **LLM** | OpenAI GPT-4 / Anthropic Claude |
+| **LLM** | OpenAI GPT-4o (via `langchain-openai`) |
 | **Agent Communication** | LangGraph State Management (shared state) |
-| **Tool Protocol** | MCP (Model Context Protocol) |
-| **Web Search** | Tavily API / Google Custom Search |
-| **Database** | MongoDB (Wardrobe, Commerce, User Profiles) |
-| **Embeddings** | CLIP (via Embedding Service) |
-| **Streaming** | Server-Sent Events (SSE) |
-| **Backend Integration** | HTTP POST to NestJS Chat API |
+| **MCP Server** | `fastapi-mcp` |
+| **MCP Client** | `langchain-mcp-adapters` (MultiServerMCPClient) |
+| **MCP Transport** | Streamable HTTP (`/mcp` endpoint) |
+| **Web Search** | Tavily API |
+| **Database** | MongoDB (wardrobeitems, commerceitems, users, styleprofiles, coloranalyses) |
+| **Embeddings** | CLIP (via Embedding Service port 8004) |
+| **Streaming** | Server-Sent Events (SSE) via LangGraph `astream_events` |
 | **Tracing** | Langfuse |
-| **Guardrails** | Custom input/output validation |
+| **Guardrails** | `guardrails-ai` (GuardrailsAIProvider for prompt injection + toxic content)
 
 ---
 
-### 12. File Structure
+### 13. File Structure
 
 ```
-python_engine/
-├── conversational_agent/          # New service (replaces clothing_recommender)
-│   ├── app/
-│   │   ├── main.py                # FastAPI app
-│   │   ├── agents/
-│   │   │   ├── __init__.py
-│   │   │   ├── conversation_agent.py
-│   │   │   ├── clothing_recommender_agent.py   # Includes refinement filter parsing
-│   │   │   └── clothing_analyzer_agent.py
-│   │   ├── workflows/
-│   │   │   ├── __init__.py
-│   │   │   ├── main_workflow.py   # LangGraph workflow with clarification handling
-│   │   │   ├── state.py           # ConversationState + helper functions
-│   │   │   └── nodes/
-│   │   │       ├── __init__.py
-│   │   │       ├── intent_classifier.py
-│   │   │       ├── query_analyzer.py
-│   │   │       └── response_formatter.py
-│   │   ├── guardrails/
-│   │   │   ├── __init__.py
-│   │   │   ├── base.py
-│   │   │   ├── input_guardrails.py
-│   │   │   └── output_guardrails.py
-│   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── llm_service.py
-│   │   │   ├── tracing/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── langfuse_service.py
-│   │   │   ├── session/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── session_service.py
-│   │   │   └── backend_client.py  # HTTP client for backend chat API
-│   │   ├── mcp/
-│   │   │   ├── __init__.py
-│   │   │   ├── client.py          # MCP client manager
-│   │   │   └── tools.py           # MCP tool initialization
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       └── endpoints/
-│   │   │           ├── chat.py    # Streaming endpoint
-│   │   │           └── health.py  # Health check
-│   │   └── core/
-│   │       ├── config.py
-│   │       └── logger.py
-│   ├── tests/
-│   │   ├── unit/
-│   │   ├── integration/
-│   │   └── guardrails/
-│   └── requirements.txt
+aesthetiq/
+├── backend/                        # NestJS Backend
+│   └── src/
+│       └── agent/                  # Agent proxy module (NEW)
+│           ├── agent.module.ts
+│           ├── agent.controller.ts  # /api/agent/chat, /chat/stream
+│           ├── agent.service.ts     # SSE proxy to Python Gateway
+│           └── dto/
+│               └── chat-request.dto.ts
 │
-├── mcp_servers/                   # MCP server implementations
-│   ├── wardrobe_server/
-│   │   ├── server.py
-│   │   └── tools.py
-│   ├── commerce_server/
-│   │   ├── server.py
-│   │   └── tools.py
-│   ├── web_search_server/
-│   │   ├── server.py
-│   │   └── tools.py
-│   ├── user_data_server/
-│   │   ├── server.py
-│   │   └── tools.py
-│   └── style_dna_server/
-│       ├── server.py
-│       └── tools.py
+├── frontend/                       # Next.js Frontend
+│   ├── lib/
+│   │   └── chat-api.ts            # SSE client + useChatApi hook
+│   └── types/
+│       └── chat.ts                # Stream event TypeScript interfaces
 │
-└── gateway/
-    └── app/
-        └── routes/
-            └── agent.py            # Updated to route to new service
+└── python_engine/
+    ├── conversational_agent/       # Conversational Agent Service (Port 8002)
+    │   ├── app/
+    │   │   ├── main.py             # FastAPI app with lifespan (MCP init)
+    │   │   ├── agents/
+    │   │   │   ├── conversation_agent.py      # General fashion chat
+    │   │   │   ├── clothing_recommender_agent.py  # Item retrieval
+    │   │   │   └── clothing_analyzer_agent.py     # Result evaluation
+    │   │   ├── workflows/
+    │   │   │   ├── main_workflow.py   # LangGraph workflow + streaming
+    │   │   │   ├── state.py           # ConversationState TypedDict
+    │   │   │   └── nodes/
+    │   │   │       ├── intent_classifier.py
+    │   │   │       ├── query_analyzer.py
+    │   │   │       └── response_formatter.py
+    │   │   ├── guardrails/
+    │   │   │   ├── base.py            # GuardrailProvider interface
+    │   │   │   ├── safety_guardrails.py  # Main orchestrator
+    │   │   │   └── providers/
+    │   │   │       ├── base_provider.py
+    │   │   │       └── guardrails_ai_provider.py
+    │   │   ├── services/
+    │   │   │   ├── llm_service.py     # OpenAI wrapper
+    │   │   │   ├── backend_client.py  # NestJS chat API client
+    │   │   │   ├── session/
+    │   │   │   │   └── session_service.py
+    │   │   │   └── tracing/
+    │   │   │       └── langfuse_service.py
+    │   │   ├── mcp/
+    │   │   │   └── tools.py           # langchain-mcp-adapters integration
+    │   │   └── api/v1/endpoints/
+    │   │       └── chat.py            # /chat and /chat/stream
+    │   ├── tests/
+    │   └── requirements.txt
+    │
+    ├── mcp_servers/                # Unified MCP Server (Port 8010)
+    │   ├── main.py                 # FastAPI + fastapi-mcp mounting
+    │   ├── core/
+    │   │   └── config.py
+    │   ├── shared/
+    │   │   ├── mongo.py            # MongoDB connection
+    │   │   └── embeddings_client.py  # CLIP embedding client
+    │   ├── wardrobe_server/
+    │   │   ├── router.py           # /api/v1/wardrobe/tools/*
+    │   │   ├── tools.py
+    │   │   ├── schemas.py
+    │   │   └── db.py
+    │   ├── commerce_server/
+    │   │   ├── router.py
+    │   │   ├── tools.py
+    │   │   ├── schemas.py
+    │   │   ├── db.py
+    │   │   └── style_ranking.py    # Season-based ranking
+    │   ├── web_search_server/
+    │   │   ├── router.py
+    │   │   ├── tools.py
+    │   │   ├── schemas.py
+    │   │   └── tavily_client.py
+    │   ├── user_data_server/
+    │   │   ├── router.py
+    │   │   ├── tools.py
+    │   │   ├── schemas.py
+    │   │   └── db.py
+    │   └── style_dna_server/
+    │       ├── router.py
+    │       ├── tools.py
+    │       ├── schemas.py
+    │       ├── db.py
+    │       └── color_mappings.py
+    │
+    └── gateway/                    # Python Gateway (Port 8000)
+        └── app/
+            ├── config.py
+            ├── proxy.py
+            └── routes/
+                └── agent.py        # Proxy to conversational_agent
 ```
 
 ---
 
-### 13. Implementation Phases
+### 14. Implementation Phases
 
 See `python_engine/docs/issues/` for detailed implementation issues:
 
