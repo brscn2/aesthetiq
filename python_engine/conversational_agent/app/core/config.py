@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_ENABLED: bool = True
     
-    # MongoDB (for MCP servers - will be used in future issues)
+    # MongoDB (for MCP servers)
     MONGODB_URI: Optional[str] = None
     
     # MCP Configuration
@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     # Workflow Configuration
     MAX_REFINEMENT_ITERATIONS: int = 3
     MAX_CONVERSATION_HISTORY: int = 10
+    
+    # Guardrails Configuration
+    GUARDRAIL_PROVIDERS: str = "llm-guard"  # Comma-separated list: "llm-guard", "langkit", or "llm-guard,langkit"
+    GUARDRAIL_MAX_INPUT_LENGTH: int = 10000
+    GUARDRAIL_MAX_OUTPUT_LENGTH: int = 50000
+    
+    # LLM Guard Configuration
+    LLM_GUARD_INPUT_SCANNERS: Optional[str] = None  # Comma-separated: "prompt_injection,toxicity,pii"
+    LLM_GUARD_OUTPUT_SCANNERS: Optional[str] = None  # Comma-separated: "toxicity,relevance,pii"
+    LLM_GUARD_THRESHOLD: float = 0.5  # Risk threshold (0.0 to 1.0)
+    
+    # LangKit Configuration
+    WHYLABS_API_KEY: Optional[str] = None
+    LANGKIT_TOXICITY_THRESHOLD: float = 0.5
+    LANGKIT_PII_ENABLED: str = "true"  # "true" or "false"
     
     # Logging
     LOG_LEVEL: str = "INFO"

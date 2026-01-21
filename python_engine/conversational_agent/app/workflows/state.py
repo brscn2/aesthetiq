@@ -104,7 +104,7 @@ class ClothingItem:
 @dataclass
 class StreamEvent:
     """Streaming event for SSE responses."""
-    type: str  # "metadata", "status", "agent_start", "tool_call", "item", "analysis", "chunk", "done", "error"
+    type: str  # "metadata", "status", "node_start", "node_end", "tool_call", "items_found", "analysis", "chunk", "done", "error"
     content: Any
     timestamp: Optional[str] = None
     
@@ -115,6 +115,111 @@ class StreamEvent:
             "content": self.content,
             "timestamp": self.timestamp,
         }
+    
+    @classmethod
+    def metadata(cls, session_id: str, user_id: str, **kwargs) -> "StreamEvent":
+        """Create a metadata event."""
+        from datetime import datetime
+        return cls(
+            type="metadata",
+            content={"session_id": session_id, "user_id": user_id, **kwargs},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def status(cls, message: str) -> "StreamEvent":
+        """Create a status event with a human-readable message."""
+        from datetime import datetime
+        return cls(
+            type="status",
+            content={"message": message},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def node_start(cls, node: str, display_name: str = None) -> "StreamEvent":
+        """Create a node_start event."""
+        from datetime import datetime
+        return cls(
+            type="node_start",
+            content={"node": node, "display_name": display_name or node},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def node_end(cls, node: str) -> "StreamEvent":
+        """Create a node_end event."""
+        from datetime import datetime
+        return cls(
+            type="node_end",
+            content={"node": node},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def tool_call(cls, tool: str, input_data: Any = None) -> "StreamEvent":
+        """Create a tool_call event."""
+        from datetime import datetime
+        return cls(
+            type="tool_call",
+            content={"tool": tool, "input": str(input_data)[:200] if input_data else None},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def items_found(cls, count: int, sources: List[str] = None) -> "StreamEvent":
+        """Create an items_found event."""
+        from datetime import datetime
+        return cls(
+            type="items_found",
+            content={"count": count, "sources": sources or []},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def analysis(cls, decision: str, confidence: float = None) -> "StreamEvent":
+        """Create an analysis event."""
+        from datetime import datetime
+        return cls(
+            type="analysis",
+            content={"decision": decision, "confidence": confidence},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def chunk(cls, content: str) -> "StreamEvent":
+        """Create a chunk event for streaming response text."""
+        from datetime import datetime
+        return cls(
+            type="chunk",
+            content={"content": content},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def done(cls, response: str, intent: str = None, items: List = None, **kwargs) -> "StreamEvent":
+        """Create a done event with the final response."""
+        from datetime import datetime
+        return cls(
+            type="done",
+            content={
+                "response": response,
+                "intent": intent,
+                "items": items or [],
+                **kwargs,
+            },
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def error(cls, message: str) -> "StreamEvent":
+        """Create an error event."""
+        from datetime import datetime
+        return cls(
+            type="error",
+            content={"message": message},
+            timestamp=datetime.utcnow().isoformat(),
+        )
 
 
 class WorkflowStatus(str, Enum):

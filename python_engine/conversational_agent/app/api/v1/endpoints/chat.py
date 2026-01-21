@@ -8,7 +8,7 @@ import asyncio
 
 from app.core.config import get_settings
 from app.core.logger import get_logger
-from app.workflows.main_workflow import run_workflow, get_workflow
+from app.workflows.main_workflow import run_workflow, run_workflow_streaming, get_workflow
 from app.services.session.session_service import get_session_service
 from app.services.tracing.langfuse_service import get_tracing_service
 
@@ -131,7 +131,22 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """
     Streaming chat endpoint using Server-Sent Events (SSE).
     
-    Streams the response as it's generated.
+    Streams intermediate results as the workflow executes, providing
+    real-time progress updates to the client.
+    
+    Event types:
+    - metadata: Initial connection info (session_id, user_id)
+    - node_start: Workflow node started executing
+    - node_end: Workflow node finished executing
+    - status: Human-readable status message
+    - tool_call: MCP tool being called
+    - intent: Intent classification result
+    - filters: Extracted search filters
+    - items_found: Number of items found
+    - analysis: Analyzer decision
+    - chunk: Response text chunk (during response generation)
+    - done: Final complete response with all data
+    - error: Error occurred
     
     Args:
         request: Chat request with user_id, session_id, and message
@@ -142,9 +157,11 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     logger.info(f"Streaming chat request from user {request.user_id}")
     
     async def generate_stream():
-        """Generate SSE stream."""
+        """Generate SSE stream with real intermediate results."""
         session_service = get_session_service()
-        tracing_service = get_tracing_service()
+        final_response = None
+        final_intent = None
+        session_id = None
         
         try:
             # Load or create session
@@ -152,71 +169,40 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 user_id=request.user_id,
                 session_id=request.session_id,
             )
-            
-            # Send metadata event
-            yield _format_sse_event("metadata", {
-                "session_id": session_data.session_id,
-                "user_id": request.user_id,
-            })
-            
-            # Start trace
-            trace_id = tracing_service.start_trace(
-                user_id=request.user_id,
-                session_id=session_data.session_id,
-                name="chat_stream",
-            )
-            
-            # Send status event
-            yield _format_sse_event("status", {"content": "Processing your request..."})
+            session_id = session_data.session_id
             
             # Format conversation history
             conversation_history = session_service.format_history_for_llm(
                 session_data.messages
             )
             
-            # Run the workflow
-            final_state = await run_workflow(
+            # Stream workflow events
+            async for event in run_workflow_streaming(
                 user_id=request.user_id,
                 session_id=session_data.session_id,
                 message=request.message,
                 conversation_history=conversation_history,
-            )
+            ):
+                # Convert StreamEvent to SSE format
+                yield _format_sse_event(event.type, event.content)
+                
+                # Capture final response for session saving
+                if event.type == "done":
+                    final_response = event.content.get("response", "")
+                    final_intent = event.content.get("intent")
             
-            # Get the response
-            response_text = final_state.get("final_response", "")
-            
-            # Stream the response in chunks (simulated for now)
-            # In Issue 3, this will be real LLM streaming
-            chunk_size = 50
-            for i in range(0, len(response_text), chunk_size):
-                chunk = response_text[i:i + chunk_size]
-                yield _format_sse_event("chunk", {"content": chunk})
-                await asyncio.sleep(0.01)  # Small delay for streaming effect
-            
-            # Save the conversation turn
-            await session_service.save_conversation_turn(
-                session_id=session_data.session_id,
-                user_message=request.message,
-                assistant_message=response_text,
-                user_metadata={"trace_id": trace_id},
-                assistant_metadata={
-                    "trace_id": trace_id,
-                    "intent": final_state.get("intent"),
-                },
-            )
-            
-            # End trace
-            tracing_service.end_trace(
-                trace_id=trace_id,
-                output=response_text[:500],
-            )
-            
-            # Send done event
-            yield _format_sse_event("done", {
-                "message": response_text,
-                "intent": final_state.get("intent"),
-                "session_id": session_data.session_id,
-            })
+            # Save the conversation turn after streaming completes
+            if final_response is not None:
+                await session_service.save_conversation_turn(
+                    session_id=session_data.session_id,
+                    user_message=request.message,
+                    assistant_message=final_response,
+                    user_metadata={},
+                    assistant_metadata={
+                        "intent": final_intent,
+                        "streaming": True,
+                    },
+                )
             
         except Exception as e:
             logger.error(f"Streaming error: {e}")

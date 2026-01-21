@@ -1,13 +1,15 @@
 """Main LangGraph workflow for the conversational agent."""
-from typing import Dict, Any, Literal, Optional
+from typing import Dict, Any, Literal, Optional, AsyncGenerator
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 from app.workflows.state import (
     ConversationState, 
     create_initial_state,
     create_clarification_context,
     merge_clarification_into_filters,
+    StreamEvent,
 )
 from app.workflows.nodes.intent_classifier import intent_classifier_node
 from app.workflows.nodes.query_analyzer import query_analyzer_node
@@ -111,15 +113,40 @@ async def input_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     """
     Input guardrails node - validates and sanitizes user input.
     
-    TODO: Implement in Issue 4 (Safety Guardrails)
+    Uses configured guardrail providers to check user input for safety issues.
     """
-    logger.debug("Input guardrails node (placeholder)")
+    from app.guardrails import get_safety_guardrails
     
-    # Placeholder: mark as safe
+    message = state.get("message", "")
+    logger.debug(f"Running input guardrails on message (length: {len(message)})")
+    
+    # Get safety guardrails instance
+    guardrails = get_safety_guardrails()
+    
+    # Check input
+    result = guardrails.check_input(message)
+    
+    # Update metadata
     metadata = state.get("metadata", {})
-    metadata["input_safe"] = True
+    metadata["input_safe"] = result.is_safe
+    metadata["input_guardrail_provider"] = result.provider
+    metadata["input_risk_score"] = result.risk_score
+    if result.warnings:
+        metadata["input_guardrail_warnings"] = result.warnings
     
-    return {"metadata": metadata}
+    # Log result
+    if result.is_safe:
+        logger.info(f"Input guardrails passed (provider: {result.provider}, risk: {result.risk_score:.2f})")
+        if result.warnings:
+            logger.warning(f"Input guardrail warnings: {result.warnings}")
+    else:
+        logger.warning(f"Input guardrails blocked (provider: {result.provider}, risk: {result.risk_score:.2f}, warnings: {result.warnings})")
+    
+    # Return updated state with sanitized message if it was modified
+    return {
+        "message": result.sanitized_content if result.sanitized_content != message else message,
+        "metadata": metadata,
+    }
 
 
 # intent_classifier_node is imported from app.workflows.nodes.intent_classifier
@@ -296,15 +323,48 @@ async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     """
     Output guardrails node - validates LLM responses.
     
-    TODO: Implement in Issue 4 (Safety Guardrails)
+    Note: Currently not used in the workflow per requirements, but implementation
+    is available for future use.
     """
-    logger.debug("Output guardrails node (placeholder)")
+    from app.guardrails import get_safety_guardrails
     
-    # Placeholder: mark as safe
+    # Get the response to check (could be from conversation_agent or clothing_analyzer)
+    response = state.get("final_response", "")
+    prompt = state.get("message", "")
+    
+    logger.debug(f"Running output guardrails on response (length: {len(response)})")
+    
+    # Get safety guardrails instance
+    guardrails = get_safety_guardrails()
+    
+    # Check output
+    result = guardrails.check_output(prompt, response)
+    
+    # Update metadata
     metadata = state.get("metadata", {})
-    metadata["output_safe"] = True
+    metadata["output_safe"] = result.is_safe
+    metadata["output_guardrail_provider"] = result.provider
+    metadata["output_risk_score"] = result.risk_score
+    if result.warnings:
+        metadata["output_guardrail_warnings"] = result.warnings
     
-    return {"metadata": metadata}
+    # Log result
+    if result.is_safe:
+        logger.info(f"Output guardrails passed (provider: {result.provider}, risk: {result.risk_score:.2f})")
+        if result.warnings:
+            logger.warning(f"Output guardrail warnings: {result.warnings}")
+    else:
+        logger.warning(f"Output guardrails blocked (provider: {result.provider}, risk: {result.risk_score:.2f}, warnings: {result.warnings})")
+    
+    # Note: Per requirements, we don't actually block output even if guardrails fail
+    # The implementation is here for future use, but we always mark as safe for now
+    metadata["output_safe"] = True  # Override to always allow output
+    
+    # Return updated state with filtered response if it was modified
+    return {
+        "final_response": result.sanitized_content if result.sanitized_content != response else response,
+        "metadata": metadata,
+    }
 
 
 async def error_response_node(state: ConversationState) -> Dict[str, Any]:
@@ -566,6 +626,274 @@ async def run_workflow(
         raise
     finally:
         # Ensure traces are flushed
+        tracing_service.flush()
+
+
+# Human-readable node name mapping
+NODE_DISPLAY_NAMES = {
+    "check_clarification": "Checking conversation context",
+    "merge_clarification": "Processing your clarification",
+    "input_guardrails": "Validating input",
+    "intent_classifier": "Understanding your request",
+    "query_analyzer": "Analyzing what you're looking for",
+    "conversation_agent": "Preparing response",
+    "clothing_recommender": "Searching for items",
+    "clothing_analyzer": "Evaluating recommendations",
+    "save_clarification": "Preparing follow-up question",
+    "output_guardrails": "Validating response",
+    "response_formatter": "Formatting your response",
+    "error_response": "Handling error",
+}
+
+
+async def run_workflow_streaming(
+    user_id: str,
+    session_id: str,
+    message: str,
+    conversation_history: Optional[list] = None,
+    pending_context: Optional[Dict[str, Any]] = None,
+) -> AsyncGenerator[StreamEvent, None]:
+    """
+    Run the workflow with streaming intermediate results.
+    
+    Yields StreamEvent objects as each node executes, providing real-time
+    progress updates to the client.
+    
+    Args:
+        user_id: The user's identifier
+        session_id: The session identifier
+        message: The user's message
+        conversation_history: Previous conversation messages
+        pending_context: Saved context from a previous clarification request
+        
+    Yields:
+        StreamEvent objects with progress updates
+    """
+    from app.services.tracing.langfuse_service import get_tracing_service
+    
+    workflow = get_workflow()
+    tracing_service = get_tracing_service()
+    
+    # Determine if this is a clarification response
+    is_clarification = pending_context is not None
+    
+    # Start Langfuse trace
+    trace_id = tracing_service.start_trace(
+        user_id=user_id,
+        session_id=session_id,
+        name="conversation_workflow_streaming",
+        metadata={
+            "message_preview": message[:100],
+            "is_clarification_response": is_clarification,
+            "streaming": True,
+        },
+    )
+    
+    initial_state = create_initial_state(
+        user_id=user_id,
+        session_id=session_id,
+        message=message,
+        conversation_history=conversation_history,
+        pending_context=pending_context,
+    )
+    
+    # Add trace_id to state
+    initial_state["langfuse_trace_id"] = trace_id
+    
+    log_msg = f"Running streaming workflow for user {user_id}, session {session_id}, trace {trace_id}"
+    if is_clarification:
+        log_msg += " (clarification response)"
+    logger.info(log_msg)
+    
+    # Yield initial metadata event
+    yield StreamEvent(
+        type="metadata",
+        content={
+            "session_id": session_id,
+            "user_id": user_id,
+            "trace_id": trace_id,
+        },
+        timestamp=datetime.utcnow().isoformat(),
+    )
+    
+    final_state = None
+    current_node = None
+    
+    try:
+        # Use LangGraph's native streaming with astream_events
+        async for event in workflow.astream_events(initial_state, version="v2"):
+            event_type = event.get("event")
+            event_name = event.get("name", "")
+            
+            # Handle node start events
+            if event_type == "on_chain_start":
+                # Filter for our workflow nodes (not internal LangGraph chains)
+                if event_name in NODE_DISPLAY_NAMES:
+                    current_node = event_name
+                    display_name = NODE_DISPLAY_NAMES.get(event_name, event_name)
+                    
+                    yield StreamEvent(
+                        type="node_start",
+                        content={"node": event_name, "display_name": display_name},
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+                    
+                    # Yield human-readable status
+                    yield StreamEvent(
+                        type="status",
+                        content={"message": f"{display_name}..."},
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+            
+            # Handle node end events
+            elif event_type == "on_chain_end":
+                if event_name in NODE_DISPLAY_NAMES:
+                    # Extract output data for specific nodes
+                    output = event.get("data", {}).get("output", {})
+                    
+                    # Emit specific events based on which node completed
+                    if event_name == "intent_classifier" and output:
+                        intent = output.get("intent")
+                        if intent:
+                            yield StreamEvent(
+                                type="intent",
+                                content={"intent": intent},
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                    
+                    elif event_name == "query_analyzer" and output:
+                        filters = output.get("extracted_filters")
+                        scope = output.get("search_scope")
+                        if filters or scope:
+                            yield StreamEvent(
+                                type="filters",
+                                content={"filters": filters, "scope": scope},
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                    
+                    elif event_name == "clothing_recommender" and output:
+                        items = output.get("retrieved_items", [])
+                        sources = output.get("search_sources_used", [])
+                        if items:
+                            yield StreamEvent(
+                                type="items_found",
+                                content={
+                                    "count": len(items),
+                                    "sources": sources,
+                                },
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                    
+                    elif event_name == "clothing_analyzer" and output:
+                        analysis = output.get("analysis_result")
+                        if analysis:
+                            yield StreamEvent(
+                                type="analysis",
+                                content={
+                                    "decision": analysis.get("decision"),
+                                    "confidence": analysis.get("confidence"),
+                                },
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                    
+                    yield StreamEvent(
+                        type="node_end",
+                        content={"node": event_name},
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+            
+            # Handle tool calls from agents
+            elif event_type == "on_tool_start":
+                tool_name = event_name
+                tool_input = event.get("data", {}).get("input", {})
+                
+                yield StreamEvent(
+                    type="tool_call",
+                    content={
+                        "tool": tool_name,
+                        "input": str(tool_input)[:200],  # Truncate for safety
+                    },
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+            
+            # Handle LLM streaming tokens (for response_formatter)
+            elif event_type == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    # Only stream content tokens during response formatting
+                    if current_node == "response_formatter":
+                        yield StreamEvent(
+                            type="chunk",
+                            content={"content": chunk.content},
+                            timestamp=datetime.utcnow().isoformat(),
+                        )
+            
+            # Capture final state from last chain end
+            if event_type == "on_chain_end" and event.get("data", {}).get("output"):
+                output = event.get("data", {}).get("output")
+                # Check if this looks like a final state (has final_response)
+                if isinstance(output, dict) and "final_response" in output:
+                    final_state = output
+        
+        # If we didn't capture final state, run workflow synchronously to get it
+        if final_state is None:
+            logger.warning("Final state not captured from streaming, running sync fallback")
+            final_state = await workflow.ainvoke(initial_state)
+        
+        # Check workflow status
+        workflow_status = final_state.get("workflow_status", "completed")
+        needs_clarification = final_state.get("needs_clarification", False)
+        
+        # End trace
+        trace_metadata = {
+            "intent": final_state.get("intent"),
+            "items_retrieved": len(final_state.get("retrieved_items", [])),
+            "workflow_status": workflow_status,
+            "needs_clarification": needs_clarification,
+            "streaming": True,
+        }
+        
+        if needs_clarification:
+            trace_metadata["clarification_question"] = final_state.get("clarification_question", "")
+        
+        tracing_service.end_trace(
+            trace_id=trace_id,
+            output=final_state.get("final_response", "")[:500],
+            metadata=trace_metadata,
+        )
+        
+        # Yield final done event
+        yield StreamEvent(
+            type="done",
+            content={
+                "response": final_state.get("final_response", ""),
+                "intent": final_state.get("intent"),
+                "items": final_state.get("retrieved_items", []),
+                "workflow_status": workflow_status,
+                "needs_clarification": needs_clarification,
+                "clarification_question": final_state.get("clarification_question"),
+                "session_id": session_id,
+            },
+            timestamp=datetime.utcnow().isoformat(),
+        )
+        
+        response_len = len(final_state.get('final_response', ''))
+        if workflow_status == "awaiting_clarification":
+            logger.info(f"Streaming workflow paused for clarification ({response_len} chars)")
+        else:
+            logger.info(f"Streaming workflow completed with response length: {response_len}")
+        
+    except Exception as e:
+        logger.error(f"Streaming workflow error: {e}")
+        tracing_service.log_error(trace_id=trace_id, error=e)
+        tracing_service.end_trace(trace_id=trace_id, output=f"Error: {str(e)}")
+        
+        yield StreamEvent(
+            type="error",
+            content={"message": str(e)},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    finally:
         tracing_service.flush()
 
 
