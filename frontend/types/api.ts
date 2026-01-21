@@ -333,6 +333,24 @@ export interface AnalyzeClothingResponse {
   error?: string;
 }
 
+// Brand Types
+export interface Brand {
+  _id: string;
+  name: string;
+  description?: string;
+  logoUrl?: string;
+  website?: string;
+  foundedYear?: number;
+  country?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BrandSearchOptions {
+  search?: string;
+  limit?: number;
+}
+
 // Retailer Types
 export interface Retailer {
   _id: string;

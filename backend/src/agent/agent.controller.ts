@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -55,13 +56,20 @@ export class AgentController {
   async chat(
     @Body() chatRequest: ChatRequestDto,
     @CurrentUser() user: { clerkId: string },
+    @Headers('authorization') authorization: string,
   ) {
     this.logger.log(`Chat request from user ${user.clerkId}`);
+    
+    // Extract the token (remove 'Bearer ' prefix)
+    const authToken = authorization?.startsWith('Bearer ') 
+      ? authorization.substring(7) 
+      : undefined;
     
     return this.agentService.chat({
       user_id: user.clerkId,
       session_id: chatRequest.sessionId,
       message: chatRequest.message,
+      auth_token: authToken,
     });
   }
 
@@ -93,15 +101,22 @@ Returns real-time progress updates as the AI processes your request.
   async chatStream(
     @Body() chatRequest: ChatRequestDto,
     @CurrentUser() user: { clerkId: string },
+    @Headers('authorization') authorization: string,
     @Res() res: Response,
   ) {
     this.logger.log(`Streaming chat request from user ${user.clerkId}`);
+    
+    // Extract the token (remove 'Bearer ' prefix)
+    const authToken = authorization?.startsWith('Bearer ') 
+      ? authorization.substring(7) 
+      : undefined;
     
     await this.agentService.streamChat(
       {
         user_id: user.clerkId,
         session_id: chatRequest.sessionId,
         message: chatRequest.message,
+        auth_token: authToken,
       },
       res,
     );

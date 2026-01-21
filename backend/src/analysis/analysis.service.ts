@@ -46,13 +46,13 @@ export class AnalysisService {
         contentType: file.mimetype || 'image/jpeg',
       });
 
-      this.logger.log(`Calling Python engine at ${this.pythonEngineUrl}/analyze`);
+      this.logger.log(`Calling Python engine at ${this.pythonEngineUrl}/api/v1/ml/analyze-face`);
       
       // Use HttpService (NestJS wrapper around axios) which handles form-data streams correctly
       // HttpService returns Observables, so we use firstValueFrom to convert to Promise
       const response = await firstValueFrom(
         this.httpService.post(
-          `${this.pythonEngineUrl}/analyze`,
+          `${this.pythonEngineUrl}/api/v1/ml/analyze-face`,
           formData,
           {
             headers: {

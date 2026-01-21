@@ -1,5 +1,5 @@
 """Chat endpoints for the conversational agent."""
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.logger import get_logger
 from app.workflows.main_workflow import run_workflow, run_workflow_streaming, get_workflow
 from app.services.session.session_service import get_session_service
+from app.services.backend_client import BackendClient
 from app.services.tracing.langfuse_service import get_tracing_service
 
 router = APIRouter()
@@ -42,7 +43,10 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> ChatResponse:
     """
     Non-streaming chat endpoint.
     
@@ -50,14 +54,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
     
     Args:
         request: Chat request with user_id, session_id, and message
+        x_auth_token: Optional auth token forwarded from NestJS for backend callbacks
         
     Returns:
         ChatResponse with the assistant's response
     """
     logger.info(f"Chat request from user {request.user_id}")
     
+    # Create backend client with auth token if provided
+    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    
     # Get services
-    session_service = get_session_service()
+    session_service = get_session_service(backend_client=backend_client)
     tracing_service = get_tracing_service()
     
     try:
@@ -127,7 +135,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
+async def chat_stream(
+    request: ChatRequest,
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> StreamingResponse:
     """
     Streaming chat endpoint using Server-Sent Events (SSE).
     
@@ -150,15 +161,19 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     
     Args:
         request: Chat request with user_id, session_id, and message
+        x_auth_token: Optional auth token forwarded from NestJS for backend callbacks
         
     Returns:
         StreamingResponse with SSE events
     """
     logger.info(f"Streaming chat request from user {request.user_id}")
     
+    # Create backend client with auth token if provided
+    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    
     async def generate_stream():
         """Generate SSE stream with real intermediate results."""
-        session_service = get_session_service()
+        session_service = get_session_service(backend_client=backend_client)
         final_response = None
         final_intent = None
         session_id = None

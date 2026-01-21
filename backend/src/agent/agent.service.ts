@@ -6,6 +6,7 @@ export interface AgentChatRequest {
   user_id: string;
   session_id?: string;
   message: string;
+  auth_token?: string;
 }
 
 export interface AgentChatResponse {
@@ -35,12 +36,23 @@ export class AgentService {
     
     this.logger.log(`Sending chat request for user ${request.user_id}`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Forward the auth token if provided
+    if (request.auth_token) {
+      headers['X-Auth-Token'] = request.auth_token;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
+      headers,
+      body: JSON.stringify({
+        user_id: request.user_id,
+        session_id: request.session_id,
+        message: request.message,
+      }),
       signal: AbortSignal.timeout(this.timeout),
     });
 
@@ -81,14 +93,26 @@ export class AgentService {
       clearTimeout(timeoutId);
     });
 
+    // Build headers
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    };
+    
+    // Forward the auth token if provided
+    if (request.auth_token) {
+      headers['X-Auth-Token'] = request.auth_token;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify(request),
+        headers,
+        body: JSON.stringify({
+          user_id: request.user_id,
+          session_id: request.session_id,
+          message: request.message,
+        }),
         signal: controller.signal,
       });
 
