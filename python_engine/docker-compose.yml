@@ -90,6 +90,9 @@ services:
       - ./logs:/app/logs:rw
     networks:
       - aesthetiq-network
+    depends_on:
+      mcp_servers:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
       interval: 30s
@@ -154,6 +157,8 @@ services:
     environment:
       - PORT=8010
       - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+      # Override MONGODB_URI to use host.docker.internal for Docker environment
+      - MONGODB_URI=mongodb://host.docker.internal:27017/aesthetiq
     networks:
       - aesthetiq-network
     depends_on:
