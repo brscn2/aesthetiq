@@ -1,4 +1,5 @@
 """Style DNA MCP server router."""
+import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from mcp_servers.style_dna_server import tools
@@ -13,6 +14,7 @@ from mcp_servers.style_dna_server.schemas import (
     GetStyleDNARequest,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -33,9 +35,11 @@ async def get_style_dna(req: GetStyleDNARequest):
 @router.post("/tools/get_color_season", response_model=GetColorSeasonResponse, operation_id="get_color_season")
 async def get_color_season(req: GetColorSeasonRequest):
     """Get color season, contrast level, and undertone from ColorAnalysis."""
+    logger.info(f"get_color_season called with user_id: {req.user_id}")
     season = await tools.get_color_season(req.user_id)
     contrast = await tools.get_contrast_level(req.user_id)
     undertone = await tools.get_undertone(req.user_id)
+    logger.info(f"get_color_season result: season={season}, contrast={contrast}, undertone={undertone}")
     return GetColorSeasonResponse(
         user_id=req.user_id,
         color_season=season,
@@ -59,8 +63,10 @@ async def get_style_archetype(req: GetStyleArchetypeRequest):
 @router.post("/tools/get_recommended_colors", response_model=GetRecommendedColorsResponse, operation_id="get_recommended_colors")
 async def get_recommended_colors(req: GetRecommendedColorsRequest):
     """Get recommended colors based on color season + user's personalized palette."""
+    logger.info(f"get_recommended_colors called with user_id: {req.user_id}")
     colors = await tools.get_recommended_colors(req.user_id)
     palette = await tools.get_user_palette(req.user_id)
+    logger.info(f"get_recommended_colors result: colors={len(colors) if colors else 0}, palette={len(palette) if palette else 0}")
     return GetRecommendedColorsResponse(
         user_id=req.user_id,
         colors=colors,

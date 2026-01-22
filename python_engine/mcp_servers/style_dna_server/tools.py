@@ -1,6 +1,7 @@
 """Style DNA MCP tools - fetches from StyleProfile and ColorAnalysis collections."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -14,6 +15,8 @@ from mcp_servers.style_dna_server.schemas import (
     FitPreferences,
     BudgetRange,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize(doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -167,6 +170,10 @@ async def get_recommended_colors(user_id: str) -> List[str]:
     Returns hex color codes from the seasonal palette.
     """
     season = await get_color_season(user_id)
+    if not season:
+        logger.warning(f"No color season found for user {user_id}, returning empty color list")
+        return []
+    logger.info(f"Found color season '{season}' for user {user_id}, returning recommended colors")
     return recommended_colors_for_season(season)
 
 

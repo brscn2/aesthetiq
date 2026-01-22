@@ -92,6 +92,8 @@ services:
       - ./logs:/app/logs:rw
     networks:
       - aesthetiq-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mcp_servers:
         condition: service_healthy
@@ -159,8 +161,6 @@ services:
     environment:
       - PORT=8010
       - EMBEDDING_SERVICE_URL=http://embedding_service:8004
-      # Override MONGODB_URI to use host.docker.internal for Docker environment
-      - MONGODB_URI=mongodb://host.docker.internal:27017/aesthetiq
     networks:
       - aesthetiq-network
     depends_on:
