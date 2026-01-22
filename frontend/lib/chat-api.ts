@@ -298,10 +298,12 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
   const [progress, setProgress] = useState<StreamingProgress>({
     currentNode: null,
     displayName: null,
+    completedNodes: [],
     intent: null,
     itemsFound: 0,
     sources: [],
     decision: null,
+    toolCalls: [],
   })
 
   // Accumulated response text
@@ -344,10 +346,12 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
       setProgress({
         currentNode: null,
         displayName: null,
+        completedNodes: [],
         intent: null,
         itemsFound: 0,
         sources: [],
         decision: null,
+        toolCalls: [],
       })
 
       setSessionState((prev) => ({
@@ -386,10 +390,21 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
               setProgress((prev) => ({ ...prev, currentNode: node, displayName }))
             },
             onNodeEnd: (node) => {
-              // Keep the display name but clear the node
-              if (node === progress.currentNode) {
-                setProgress((prev) => ({ ...prev, currentNode: null }))
-              }
+              // Add to completed nodes and clear current node
+              setProgress((prev) => {
+                // Only add if we have a display name for this node
+                const completedNode = prev.currentNode === node && prev.displayName
+                  ? { node, displayName: prev.displayName }
+                  : null
+                
+                return {
+                  ...prev,
+                  currentNode: null,
+                  completedNodes: completedNode 
+                    ? [...prev.completedNodes, completedNode]
+                    : prev.completedNodes,
+                }
+              })
             },
             onIntent: (intent) => {
               setProgress((prev) => ({ ...prev, intent }))
@@ -403,8 +418,12 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
             onAnalysis: (decision, _confidence) => {
               setProgress((prev) => ({ ...prev, decision }))
             },
-            onToolCall: (_tool, _input) => {
-              // Could display tool calls if desired
+            onToolCall: (tool, input) => {
+              // Track tool calls for progress display
+              setProgress((prev) => ({
+                ...prev,
+                toolCalls: [...prev.toolCalls, { tool, input }],
+              }))
             },
             onChunk: (content) => {
               setStreamedText((prev) => prev + content)

@@ -2,13 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { Send, Mic, ImageIcon, Sparkles, X, Loader2, ExternalLink, ShoppingBag } from "lucide-react"
+import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Markdown } from "@/components/ui/markdown"
+import { AgentProgress } from "@/components/agent-progress"
 import { toast } from "sonner"
 import { useChatApi, generateMessageId } from "@/lib/chat-api"
 import type { ClothingItem, DoneEvent } from "@/types/chat"
@@ -360,11 +362,21 @@ export function ChatStylist() {
                       : "bg-card text-card-foreground border border-border/50"
                   }`}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.content || (message.isStreaming ? "..." : "")}
-                  </p>
-                  {message.isStreaming && (
-                    <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                  {message.role === "user" ? (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  ) : (
+                    <>
+                      {message.content ? (
+                        <Markdown content={message.content} className="text-sm" />
+                      ) : message.isStreaming ? (
+                        <span className="text-sm text-muted-foreground">...</span>
+                      ) : null}
+                      {message.isStreaming && message.content && (
+                        <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -416,31 +428,18 @@ export function ChatStylist() {
             </div>
           ))}
 
-          {/* Streaming Status Indicator */}
-          {isLoading && !sessionState.isStreaming && (
+          {/* Agent Progress Indicator - shows during loading/streaming when no text yet */}
+          {isLoading && (progress.currentNode || progress.completedNodes.length > 0 || !streamedText) && (
             <div className="flex gap-3 justify-start">
               <Avatar className="h-8 w-8 flex-shrink-0">
                 <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>
               </Avatar>
-              <div className="flex items-center gap-2 rounded-2xl bg-card border border-border/50 px-4 py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">
-                  {sessionState.currentStatus || progress.displayName || "Connecting..."}
-                </span>
+              <div className="flex-1 max-w-[80%]">
+                <AgentProgress 
+                  progress={progress} 
+                  status={sessionState.currentStatus}
+                />
               </div>
-            </div>
-          )}
-
-          {/* Progress Indicator During Streaming */}
-          {sessionState.isStreaming && progress.currentNode && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground px-12">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>{progress.displayName}</span>
-              {progress.itemsFound > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {progress.itemsFound} items
-                </Badge>
-              )}
             </div>
           )}
 

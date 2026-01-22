@@ -257,13 +257,31 @@ export interface ChatMessage {
 }
 
 /**
+ * A completed workflow node.
+ */
+export interface CompletedNode {
+  node: string;
+  displayName: string;
+}
+
+/**
+ * A tool call made during workflow execution.
+ */
+export interface ToolCall {
+  tool: string;
+  input: string;
+}
+
+/**
  * Progress state during streaming.
  */
 export interface StreamingProgress {
   currentNode: string | null;
   displayName: string | null;
+  completedNodes: CompletedNode[];
   intent: string | null;
   itemsFound: number;
   sources: string[];
   decision: string | null;
+  toolCalls: ToolCall[];
 }
