@@ -80,6 +80,14 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         tools = await get_mcp_tools()
         tools_used = []
         
+        # Initialize variables that may be populated by tools
+        # (defined here to avoid UnboundLocalError when tools is empty)
+        tool_call_ids = {}
+        style_dna = None
+        color_season = None
+        recommended_colors = None
+        trends_data = None
+        
         if tools:
             logger.info(f"Conversation agent has {len(tools)} tools available")
             
@@ -107,13 +115,6 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             
             # Invoke agent
             agent_result = await agent.ainvoke({"messages": messages})
-            
-            # Track tool calls and extract results
-            tool_call_ids = {}  # Map tool_call_id to tool_name
-            style_dna = None
-            color_season = None
-            recommended_colors = None
-            trends_data = None
             
             # Process messages to extract tool calls and results
             for msg in agent_result["messages"]:

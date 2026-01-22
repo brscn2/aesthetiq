@@ -125,7 +125,7 @@ class BackendClient:
         Create a new chat session.
         
         Args:
-            user_id: The user's identifier
+            user_id: The user's identifier (used for logging, auth comes from token)
             title: Session title (default: "New Conversation")
             session_id: Optional custom session ID
             
@@ -137,8 +137,9 @@ class BackendClient:
         """
         client = await self._get_client()
         
+        # Note: userId is NOT sent in payload - it's extracted from the auth token
+        # by the NestJS backend. We only send title and optional sessionId.
         payload: Dict[str, Any] = {
-            "userId": user_id,
             "title": title,
         }
         if session_id:

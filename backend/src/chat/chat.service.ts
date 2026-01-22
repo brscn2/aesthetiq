@@ -17,7 +17,7 @@ export class ChatService {
     private chatSessionModel: Model<ChatSessionDocument>,
   ) {}
 
-  async create(createChatSessionDto: CreateChatSessionDto): Promise<ChatSession> {
+  async create(createChatSessionDto: CreateChatSessionDto & { userId: string }): Promise<ChatSession> {
     const createdSession = new this.chatSessionModel(createChatSessionDto);
     return createdSession.save();
   }
