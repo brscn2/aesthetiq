@@ -82,7 +82,7 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
             context = "\n\nRecent conversation:\n"
             for msg in recent_history:
                 role = msg.get("role", "user")
-                content = msg.get("content", "")[:100]
+                content = msg.get("content", "")[:1000]
                 context += f"- {role}: {content}\n"
         
         # Classify intent using structured output
