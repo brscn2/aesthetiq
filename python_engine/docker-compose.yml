@@ -85,6 +85,8 @@ services:
     environment:
       - PORT=8002
       - BACKEND_URL=http://host.docker.internal:3001
+      # Override MCP_SERVERS_URL to use Docker network hostname
+      - MCP_SERVERS_URL=http://mcp_servers:8010
     volumes:
       # Mount logs directory for chat history
       - ./logs:/app/logs:rw

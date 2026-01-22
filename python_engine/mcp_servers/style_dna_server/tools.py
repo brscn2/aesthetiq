@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from bson import ObjectId
+
 from mcp_servers.style_dna_server import db
 from mcp_servers.style_dna_server.color_mappings import recommended_colors_for_season
 from mcp_servers.style_dna_server.schemas import (
@@ -15,14 +17,22 @@ from mcp_servers.style_dna_server.schemas import (
 
 
 def _sanitize(doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Remove/stringify ObjectId for JSON serialization."""
+    """Recursively convert all ObjectId values to strings for JSON serialization."""
     if not doc:
         return {}
-    doc = dict(doc)
-    _id = doc.pop("_id", None)
-    if _id is not None:
-        doc["_id"] = str(_id)
-    return doc
+    return _sanitize_value(doc)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize a value, converting ObjectId to string."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    elif isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    else:
+        return value
 
 
 def _parse_sizes(doc: Dict[str, Any]) -> Optional[Sizes]:
