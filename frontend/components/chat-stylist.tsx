@@ -74,7 +74,21 @@ interface Message {
   }
 }
 
-export function ChatStylist() {
+interface ChatStylistProps {
+  activeSessionId?: string | null
+  initialMessages?: Array<{
+    role: "user" | "assistant"
+    content: string
+    timestamp?: string
+  }>
+  onSessionUpdated?: (sessionId: string, lastMessage: string) => void
+}
+
+export function ChatStylist({
+  activeSessionId = null,
+  initialMessages = [],
+  onSessionUpdated,
+}: ChatStylistProps = {}) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
@@ -83,6 +97,25 @@ export function ChatStylist() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const previousSessionIdRef = useRef<string | null>(null)
+
+  // Initialize messages from props when session changes
+  useEffect(() => {
+    if (activeSessionId !== previousSessionIdRef.current) {
+      previousSessionIdRef.current = activeSessionId
+      if (initialMessages.length > 0) {
+        setMessages(
+          initialMessages.map((msg) => ({
+            id: generateMessageId(),
+            role: msg.role,
+            content: msg.content,
+          }))
+        )
+      } else {
+        setMessages([])
+      }
+    }
+  }, [activeSessionId, initialMessages])
 
   // Use the chat API hook
   const {
@@ -122,6 +155,11 @@ export function ChatStylist() {
           }
           return newMessages
         })
+
+        // Notify parent of session update
+        if (result.session_id && onSessionUpdated) {
+          onSessionUpdated(result.session_id, result.response)
+        }
       }
     },
   })
@@ -217,9 +255,12 @@ export function ChatStylist() {
     setInput("")
     setAttachedImages([])
 
+    // Use activeSessionId from props if provided, otherwise use sessionState.sessionId
+    const sessionIdToUse = activeSessionId ?? sessionState.sessionId ?? null
+
     // Send to the conversational agent API
-    await sendMessage(messageContent, sessionState.sessionId)
-  }, [input, attachedImages, sendMessage, sessionState.sessionId])
+    await sendMessage(messageContent, sessionIdToUse)
+  }, [input, attachedImages, sendMessage, activeSessionId, sessionState.sessionId])
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

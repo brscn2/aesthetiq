@@ -1,17 +1,57 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { ChatStylist } from "@/components/chat-stylist"
+import { ChatSidebar } from "@/components/chat-sidebar"
 import { StyleDnaSummary } from "@/components/style-dna-summary"
 import { StyleDnaPanel } from "@/components/style-dna-panel"
 import { TrendsSidebar } from "@/components/trends-sidebar"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, X, Palette } from "lucide-react"
+import { TrendingUp, X, Palette, Menu } from "lucide-react"
+import { useChatSessionsApi, type ChatSessionDetail } from "@/lib/chat-sessions"
 
 export default function DashboardPage() {
   const [showTrends, setShowTrends] = useState(false)
   const [showStyleDna, setShowStyleDna] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(true)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [activeSessionMessages, setActiveSessionMessages] = useState<
+    Array<{ role: "user" | "assistant"; content: string; timestamp?: string }>
+  >([])
+  const sessionsApi = useChatSessionsApi()
+
+  const handleSelectSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const session: ChatSessionDetail = await sessionsApi.getChatSession(sessionId)
+        setActiveSessionId(sessionId)
+        setActiveSessionMessages(
+          session.messages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp,
+          }))
+        )
+      } catch (error) {
+        console.error("Failed to load session:", error)
+      }
+    },
+    [sessionsApi]
+  )
+
+  const handleNewChat = useCallback(() => {
+    setActiveSessionId(null)
+    setActiveSessionMessages([])
+  }, [])
+
+  const handleSessionUpdated = useCallback(
+    (sessionId: string, lastMessage: string) => {
+      // Session was updated, sidebar will refresh on next load
+      // For now, we can trigger a refresh if needed
+    },
+    []
+  )
 
   return (
     <DashboardLayout>
@@ -52,6 +92,40 @@ export default function DashboardPage() {
 
         {/* Main Content */}
         <div className="flex flex-1 overflow-hidden min-h-0">
+          {/* Chat Sidebar */}
+          {showSidebar && (
+            <>
+              {/* Mobile: Slide-over drawer */}
+              <div className="lg:hidden fixed inset-0 z-50 bg-background">
+                <div className="flex h-full">
+                  <div className="w-full sm:w-80 md:w-96 border-r border-border">
+                    <ChatSidebar
+                      activeSessionId={activeSessionId}
+                      onSelectSession={(id) => {
+                        handleSelectSession(id)
+                        setShowSidebar(false)
+                      }}
+                      onNewChat={() => {
+                        handleNewChat()
+                        setShowSidebar(false)
+                      }}
+                      onClose={() => setShowSidebar(false)}
+                    />
+                  </div>
+                  <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={() => setShowSidebar(false)} />
+                </div>
+              </div>
+              {/* Desktop: Persistent sidebar */}
+              <div className="hidden lg:block flex-shrink-0">
+                <ChatSidebar
+                  activeSessionId={activeSessionId}
+                  onSelectSession={handleSelectSession}
+                  onNewChat={handleNewChat}
+                />
+              </div>
+            </>
+          )}
+
           {/* Style DNA Panel - Toggle */}
           {showStyleDna && (
             <>
@@ -100,7 +174,24 @@ export default function DashboardPage() {
               showStyleDna ? "lg:w-3/5" : showTrends ? "lg:w-2/3" : "w-full"
             }`}
           >
-            <ChatStylist />
+            {/* Mobile sidebar toggle button */}
+            {!showSidebar && (
+              <div className="lg:hidden absolute top-4 left-4 z-10">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => setShowSidebar(true)}
+                  className="bg-background/80 backdrop-blur-sm"
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <ChatStylist
+              activeSessionId={activeSessionId}
+              initialMessages={activeSessionMessages}
+              onSessionUpdated={handleSessionUpdated}
+            />
           </div>
 
           {/* Trends Sidebar - Toggle */}

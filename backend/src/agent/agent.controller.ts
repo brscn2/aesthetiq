@@ -3,25 +3,33 @@ import {
   Post,
   Get,
   Body,
+  Patch,
+  Delete,
+  Param,
   UseGuards,
   Res,
   HttpCode,
   HttpStatus,
   Logger,
   Headers,
+  NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
   ApiProduces,
+  ApiParam,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AgentService } from './agent.service';
 import { ChatRequestDto } from './dto/chat-request.dto';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ChatService } from '../chat/chat.service';
+import { UpdateChatSessionDto } from '../chat/dto/update-chat-session.dto';
 
 @ApiTags('agent')
 @Controller('agent')
@@ -30,7 +38,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 export class AgentController {
   private readonly logger = new Logger(AgentController.name);
 
-  constructor(private readonly agentService: AgentService) {}
+  constructor(
+    private readonly agentService: AgentService,
+    private readonly chatService: ChatService,
+  ) {}
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
@@ -137,5 +148,106 @@ Returns real-time progress updates as the AI processes your request.
   })
   async health() {
     return this.agentService.healthCheck();
+  }
+
+  @Get('sessions')
+  @ApiOperation({ summary: 'List all chat sessions for the authenticated user' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of chat sessions',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          _id: { type: 'string' },
+          userId: { type: 'string' },
+          sessionId: { type: 'string' },
+          title: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          messages: { type: 'array' },
+        },
+      },
+    },
+  })
+  async listSessions(@CurrentUser() user: { clerkId: string }) {
+    const sessions = await this.chatService.findAllByUserId(user.clerkId);
+    // Transform to include last message preview
+    return sessions.map((session) => {
+      const lastMessage = session.messages && session.messages.length > 0
+        ? session.messages[session.messages.length - 1]
+        : null;
+      return {
+        ...(session as any).toObject(),
+        lastMessagePreview: lastMessage?.content?.substring(0, 120) || null,
+      };
+    });
+  }
+
+  @Get('sessions/:sessionId')
+  @ApiOperation({ summary: 'Get a chat session by session ID' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Chat session found',
+  })
+  @ApiResponse({ status: 404, description: 'Chat session not found' })
+  async getSession(@Param('sessionId') sessionId: string) {
+    const session = await this.chatService.findBySessionId(sessionId);
+    if (!session) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    return session;
+  }
+
+  @Post('sessions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new chat session' })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Chat session created',
+  })
+  async createSession(
+    @Body() body: { title?: string; sessionId?: string },
+    @CurrentUser() user: { clerkId: string },
+  ) {
+    const sessionId = body.sessionId || `session_${randomUUID().replace(/-/g, '').substring(0, 16)}`;
+    const title = body.title || 'New Conversation';
+    
+    return this.chatService.create({
+      sessionId,
+      title,
+      userId: user.clerkId,
+      messages: [],
+    });
+  }
+
+  @Patch('sessions/:sessionId')
+  @ApiOperation({ summary: 'Update a chat session (e.g., rename)' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Chat session updated',
+  })
+  @ApiResponse({ status: 404, description: 'Chat session not found' })
+  async updateSession(
+    @Param('sessionId') sessionId: string,
+    @Body() updateDto: UpdateChatSessionDto,
+  ) {
+    return this.chatService.updateBySessionId(sessionId, updateDto);
+  }
+
+  @Delete('sessions/:sessionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a chat session' })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ 
+    status: 204, 
+    description: 'Chat session deleted',
+  })
+  @ApiResponse({ status: 404, description: 'Chat session not found' })
+  async deleteSession(@Param('sessionId') sessionId: string) {
+    await this.chatService.removeBySessionId(sessionId);
   }
 }
