@@ -225,6 +225,8 @@ async def _format_items(
     fallback_used: bool,
 ) -> str:
     """Format a response with clothing items."""
+    from app.utils.color_utils import get_color_name, get_color_name_from_hex_list
+    
     # Build items summary - handle both structured items and agent response format
     items_text = ""
     for i, item in enumerate(retrieved_items[:5], 1):
@@ -234,7 +236,36 @@ async def _format_items(
                 name = item.get("name", "Unknown Item")
                 brand = item.get("brand", "")
                 price = item.get("price")
-                color = item.get("color") or item.get("raw", {}).get("color", "")
+                
+                # Get color - prefer descriptive name, fallback to hex conversion
+                color = item.get("color")  # This should already be set by normalization
+                if not color:
+                    # Fallback: try to get from colorHex or colors array
+                    color_hex = item.get("colorHex")
+                    if color_hex:
+                        try:
+                            color = get_color_name(color_hex)
+                        except Exception:
+                            color = color_hex
+                    else:
+                        # Try colors array
+                        colors = item.get("colors", [])
+                        if colors and isinstance(colors, list) and len(colors) > 0:
+                            try:
+                                color = get_color_name_from_hex_list(colors)
+                            except Exception:
+                                color = colors[0] if colors else ""
+                        else:
+                            # Last resort: check raw item
+                            raw = item.get("raw", {})
+                            if isinstance(raw, dict):
+                                raw_colors = raw.get("colors", [])
+                                if raw_colors and isinstance(raw_colors, list) and len(raw_colors) > 0:
+                                    try:
+                                        color = get_color_name_from_hex_list(raw_colors)
+                                    except Exception:
+                                        color = raw_colors[0] if raw_colors else ""
+                
                 category = item.get("category", "")
                 source = item.get("source", "")
                 

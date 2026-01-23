@@ -1,7 +1,10 @@
 """User Data MCP tools - fetches user profile from users collection."""
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
+
+from bson import ObjectId
 
 from mcp_servers.user_data_server import db
 from mcp_servers.user_data_server.schemas import (
@@ -11,16 +14,26 @@ from mcp_servers.user_data_server.schemas import (
     UserRole,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _sanitize(doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Remove/stringify ObjectId for JSON serialization."""
+    """Recursively convert all ObjectId values to strings for JSON serialization."""
     if not doc:
         return {}
-    doc = dict(doc)
-    _id = doc.pop("_id", None)
-    if _id is not None:
-        doc["_id"] = str(_id)
-    return doc
+    return _sanitize_value(doc)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize a value, converting ObjectId to string."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    elif isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    else:
+        return value
 
 
 def _parse_settings(doc: Dict[str, Any]) -> UserSettings:
@@ -67,18 +80,40 @@ async def get_user_profile(user_id: str) -> Optional[UserProfile]:
     
     Returns:
         UserProfile with user data, or None if user not found
-    """
-    doc = await db.get_user_by_clerk_id(user_id)
-    if not doc:
-        return None
     
-    return UserProfile(
-        user_id=doc.get("clerkId", user_id),
-        email=doc.get("email", ""),
-        name=doc.get("name", ""),
-        avatar_url=doc.get("avatarUrl"),
-        subscription_status=_parse_subscription_status(doc),
-        role=_parse_role(doc),
-        settings=_parse_settings(doc),
-        raw=_sanitize(doc),
-    )
+    Raises:
+        Exception: If there's an error fetching or parsing the user data
+    """
+    try:
+        logger.debug(f"Fetching user profile from database for user_id: {user_id}")
+        doc = await db.get_user_by_clerk_id(user_id)
+        if not doc:
+            logger.debug(f"No user document found for user_id: {user_id}")
+            return None
+        
+        logger.debug(f"Found user document for user_id: {user_id}, parsing profile")
+        
+        # Parse and create UserProfile with error handling
+        try:
+            profile = UserProfile(
+                user_id=doc.get("clerkId", user_id),
+                email=doc.get("email", ""),
+                name=doc.get("name", ""),
+                avatar_url=doc.get("avatarUrl"),
+                subscription_status=_parse_subscription_status(doc),
+                role=_parse_role(doc),
+                settings=_parse_settings(doc),
+                raw=_sanitize(doc),
+            )
+            logger.debug(f"Successfully parsed user profile for user_id: {user_id}")
+            return profile
+        except Exception as parse_error:
+            logger.error(
+                f"Error parsing user profile for user_id={user_id}: {parse_error}. "
+                f"Document keys: {list(doc.keys()) if doc else 'None'}",
+                exc_info=True
+            )
+            raise
+    except Exception as e:
+        logger.error(f"Error in get_user_profile for user_id={user_id}: {e}", exc_info=True)
+        raise
