@@ -11,12 +11,6 @@ from app.workflows.state import (
     merge_clarification_into_filters,
     StreamEvent,
 )
-from app.workflows.nodes.intent_classifier import intent_classifier_node
-from app.workflows.nodes.query_analyzer import query_analyzer_node
-from app.workflows.nodes.response_formatter import response_formatter_node
-from app.agents.conversation_agent import conversation_agent_node
-from app.agents.clothing_recommender_agent import clothing_recommender_node
-from app.agents.clothing_analyzer_agent import clothing_analyzer_node
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
@@ -367,9 +361,27 @@ async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     }
 
 
+async def simple_response_node(state: ConversationState) -> Dict[str, Any]:
+    """
+    Simple response node for guardrail testing - no LLM or tool calls.
+    
+    Just echoes back a confirmation that the input passed guardrails.
+    """
+    message = state.get("message", "")
+    logger.info(f"Simple response node - input passed guardrails: {message[:50]}...")
+    
+    return {
+        "final_response": f"Input passed guardrails successfully.\n\nYour message: {message}",
+        "metadata": {
+            **state.get("metadata", {}),
+            "node_used": "simple_response",
+        },
+    }
+
+
 async def error_response_node(state: ConversationState) -> Dict[str, Any]:
     """
-    Error response node - handles errors gracefully.
+    Error response node - handles errors gracefully with detailed guardrail information.
     """
     logger.debug("Error response node")
     
@@ -377,7 +389,41 @@ async def error_response_node(state: ConversationState) -> Dict[str, Any]:
     metadata = state.get("metadata", {})
     
     if not metadata.get("input_safe", True):
-        response = "I'm sorry, but I can't process that request. Please try rephrasing your question."
+        # Build detailed error message for guardrail violations
+        warnings = metadata.get("input_guardrail_warnings", [])
+        risk_score = metadata.get("input_risk_score", 0.0)
+        provider = metadata.get("input_guardrail_provider", "unknown")
+        
+        # Determine what was detected
+        detection_type = "safety violation"
+        if warnings:
+            warning_text = " ".join(warnings).lower()
+            if "prompt injection" in warning_text or "jailbreak" in warning_text:
+                detection_type = "prompt injection attempt (jailbreak)"
+            elif "toxic" in warning_text or "harmful" in warning_text:
+                detection_type = "toxic or harmful content"
+            elif "inappropriate" in warning_text:
+                detection_type = "inappropriate content"
+        
+        # Build informative error message
+        response_parts = [
+            "I'm sorry, but I can't process that request.",
+            "",
+            f"Guardrails detected: {detection_type}",
+            f"Risk Score: {risk_score:.2f}",
+            f"Provider: {provider}",
+        ]
+        
+        if warnings:
+            response_parts.append("Details:")
+            for warning in warnings:
+                response_parts.append(f"  - {warning}")
+        
+        response_parts.append("")
+        response_parts.append("Please try rephrasing your question.")
+        
+        response = "\n".join(response_parts)
+        
     elif not metadata.get("output_safe", True):
         response = "I apologize, but I encountered an issue generating a response. Please try again."
     elif state.get("iteration", 0) >= get_settings().MAX_REFINEMENT_ITERATIONS:
@@ -395,115 +441,45 @@ async def error_response_node(state: ConversationState) -> Dict[str, Any]:
 
 def create_workflow() -> StateGraph:
     """
-    Create the main conversational agent workflow.
+    Create a simplified workflow for guardrail testing.
     
-    The workflow supports multi-turn conversations with clarification handling:
+    The workflow tests input guardrails with a simple response node (no LLM/tools):
     
-    1. Entry: check_clarification - determines if resuming from clarification
-    2. If resuming: merge_clarification -> clothing_recommender
-    3. If fresh: input_guardrails -> intent_classifier -> ...
-    4. If clarify needed: save_clarification -> response_formatter -> END
+    1. Entry: input_guardrails - validates user input
+    2. If safe: simple_response -> END (echoes back the message)
+    3. If unsafe: error_response -> END (with detailed guardrail info)
     
     Returns:
         Compiled LangGraph StateGraph
     """
-    logger.info("Creating conversational agent workflow")
+    logger.info("Creating simplified guardrail testing workflow")
     
     # Create the state graph
     workflow = StateGraph(ConversationState)
     
-    # Add all nodes
-    # Entry and clarification handling
-    workflow.add_node("check_clarification", check_clarification_node)
-    workflow.add_node("merge_clarification", merge_clarification_context_node)
-    workflow.add_node("save_clarification", save_clarification_context_node)
-    
-    # Core workflow nodes
+    # Add only the nodes we need for guardrail testing (no LLM or tool calls)
     workflow.add_node("input_guardrails", input_guardrails_node)
-    workflow.add_node("intent_classifier", intent_classifier_node)
-    workflow.add_node("query_analyzer", query_analyzer_node)
-    workflow.add_node("conversation_agent", conversation_agent_node)
-    workflow.add_node("clothing_recommender", clothing_recommender_node)
-    workflow.add_node("clothing_analyzer", clothing_analyzer_node)
-    workflow.add_node("output_guardrails", output_guardrails_node)
-    workflow.add_node("response_formatter", response_formatter_node)
+    workflow.add_node("simple_response", simple_response_node)
     workflow.add_node("error_response", error_response_node)
     
-    # Set entry point - always check for pending clarification first
-    workflow.set_entry_point("check_clarification")
-    
-    # Route after clarification check
-    workflow.add_conditional_edges(
-        "check_clarification",
-        route_after_clarification_check,
-        {
-            "resume": "merge_clarification",  # Resume from clarification
-            "fresh": "input_guardrails",      # Start fresh workflow
-        }
-    )
-    
-    # Merge clarification leads directly to recommender (skip intent/query analysis)
-    workflow.add_edge("merge_clarification", "clothing_recommender")
+    # Set entry point to input guardrails
+    workflow.set_entry_point("input_guardrails")
     
     # Add conditional edges from input guardrails
     workflow.add_conditional_edges(
         "input_guardrails",
         route_after_input_guardrails,
         {
-            "safe": "intent_classifier",
+            "safe": "simple_response",
             "unsafe": "error_response",
         }
     )
     
-    # Add conditional edges from intent classifier
-    workflow.add_conditional_edges(
-        "intent_classifier",
-        route_after_intent,
-        {
-            "general": "conversation_agent",
-            "clothing": "query_analyzer",
-        }
-    )
-    
-    # Query analyzer leads to clothing recommender
-    workflow.add_edge("query_analyzer", "clothing_recommender")
-    
-    # Clothing recommender leads to clothing analyzer
-    workflow.add_edge("clothing_recommender", "clothing_analyzer")
-    
-    # Add conditional edges from clothing analyzer
-    workflow.add_conditional_edges(
-        "clothing_analyzer",
-        route_after_analysis,
-        {
-            "approve": "output_guardrails",
-            "refine": "clothing_recommender",  # Loop back for refinement
-            "clarify": "save_clarification",   # Save context before sending question
-            "error": "error_response",
-        }
-    )
-    
-    # Save clarification context then send the question to user
-    workflow.add_edge("save_clarification", "output_guardrails")
-    
-    # Conversation agent leads to output guardrails
-    workflow.add_edge("conversation_agent", "output_guardrails")
-    
-    # Add conditional edges from output guardrails
-    workflow.add_conditional_edges(
-        "output_guardrails",
-        route_after_output_guardrails,
-        {
-            "safe": "response_formatter",
-            "unsafe": "error_response",
-        }
-    )
-    
-    # Response formatter and error response lead to END
-    workflow.add_edge("response_formatter", END)
+    # Both nodes lead to END
+    workflow.add_edge("simple_response", END)
     workflow.add_edge("error_response", END)
     
-    logger.info("Workflow created successfully")
+    logger.info("Simplified workflow created successfully")
     
     return workflow.compile()
 
@@ -631,17 +607,8 @@ async def run_workflow(
 
 # Human-readable node name mapping
 NODE_DISPLAY_NAMES = {
-    "check_clarification": "Checking conversation context",
-    "merge_clarification": "Processing your clarification",
     "input_guardrails": "Validating input",
-    "intent_classifier": "Understanding your request",
-    "query_analyzer": "Analyzing what you're looking for",
-    "conversation_agent": "Preparing response",
-    "clothing_recommender": "Searching for items",
-    "clothing_analyzer": "Evaluating recommendations",
-    "save_clarification": "Preparing follow-up question",
-    "output_guardrails": "Validating response",
-    "response_formatter": "Formatting your response",
+    "simple_response": "Processing response",
     "error_response": "Handling error",
 }
 
@@ -752,49 +719,7 @@ async def run_workflow_streaming(
                     output = event.get("data", {}).get("output", {})
                     
                     # Emit specific events based on which node completed
-                    if event_name == "intent_classifier" and output:
-                        intent = output.get("intent")
-                        if intent:
-                            yield StreamEvent(
-                                type="intent",
-                                content={"intent": intent},
-                                timestamp=datetime.utcnow().isoformat(),
-                            )
-                    
-                    elif event_name == "query_analyzer" and output:
-                        filters = output.get("extracted_filters")
-                        scope = output.get("search_scope")
-                        if filters or scope:
-                            yield StreamEvent(
-                                type="filters",
-                                content={"filters": filters, "scope": scope},
-                                timestamp=datetime.utcnow().isoformat(),
-                            )
-                    
-                    elif event_name == "clothing_recommender" and output:
-                        items = output.get("retrieved_items", [])
-                        sources = output.get("search_sources_used", [])
-                        if items:
-                            yield StreamEvent(
-                                type="items_found",
-                                content={
-                                    "count": len(items),
-                                    "sources": sources,
-                                },
-                                timestamp=datetime.utcnow().isoformat(),
-                            )
-                    
-                    elif event_name == "clothing_analyzer" and output:
-                        analysis = output.get("analysis_result")
-                        if analysis:
-                            yield StreamEvent(
-                                type="analysis",
-                                content={
-                                    "decision": analysis.get("decision"),
-                                    "confidence": analysis.get("confidence"),
-                                },
-                                timestamp=datetime.utcnow().isoformat(),
-                            )
+                    # (Simplified workflow only has basic nodes, no special events needed)
                     
                     yield StreamEvent(
                         type="node_end",
