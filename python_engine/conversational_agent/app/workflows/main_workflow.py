@@ -144,7 +144,7 @@ async def input_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     
     # Return updated state with sanitized message if it was modified
     return {
-        "message": result.sanitized_content if result.sanitized_content != message else message,
+        "message": message,
         "metadata": metadata,
     }
 
