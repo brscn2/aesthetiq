@@ -114,8 +114,13 @@ export function ChatStylist({
       } else {
         setMessages([])
       }
+      
+      // Clear pending clarification context when starting new chat (activeSessionId is null)
+      if (activeSessionId === null) {
+        setPendingClarification(null)
+      }
     }
-  }, [activeSessionId, initialMessages])
+  }, [activeSessionId, initialMessages, setPendingClarification])
 
   // Use the chat API hook
   const {
@@ -126,6 +131,7 @@ export function ChatStylist({
     sendMessage,
     cancelRequest,
     clearError,
+    setPendingClarification,
   } = useChatApi({
     onStreamStart: () => {
       // Add a placeholder message for streaming

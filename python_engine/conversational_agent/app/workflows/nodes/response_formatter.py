@@ -83,6 +83,31 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
     llm_service = get_llm_service()
     tracing_service = get_tracing_service()
     
+    # Check for errors in metadata first
+    metadata = state.get("metadata", {})
+    if metadata.get("error"):
+        error_type = metadata.get("error_type", "unknown")
+        error_info = metadata.get("error", "")
+        logger.warning(f"Response formatter detected error in metadata: {error_type}")
+        
+        # Generate error response based on error type
+        error_str = str(error_info).lower() if error_info else ""
+        if "timeout" in error_str or "time" in error_str:
+            error_response = "I apologize, but the request took too long to process. Please try again with a simpler question."
+        elif "network" in error_str or "connection" in error_str:
+            error_response = "I apologize, but I'm having trouble connecting to my services. Please try again in a moment."
+        else:
+            error_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
+        
+        return {
+            "final_response": error_response,
+            "workflow_status": "completed",
+            "metadata": {
+                **metadata,
+                "error_handled": True,
+            },
+        }
+    
     try:
         # Handle clarification case - workflow will pause waiting for user response
         if needs_clarification and clarification_question:
@@ -142,6 +167,17 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 },
             )
         
+        # Validate response is not empty
+        if not response or not response.strip():
+            logger.warning("Response formatter generated empty response, using fallback")
+            if retrieved_items:
+                response = (
+                    "I found some options for you! Here's what I discovered:\n\n"
+                    + _simple_format_items(retrieved_items)
+                )
+            else:
+                response = "I apologize, but I'm having trouble generating a response. Please try rephrasing your question."
+        
         logger.info(f"Formatted response: {len(response)} chars")
         
         return {
@@ -150,25 +186,35 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"Response formatting failed: {e}")
+        logger.error(f"Response formatting failed: {e}", exc_info=True)
         
         # Log error
         if trace_id:
             tracing_service.log_error(trace_id=trace_id, error=e)
         
-        # Fallback response
+        # Fallback response - ensure it's never empty
         if retrieved_items:
             response = (
                 "I found some options for you! Here's what I discovered:\n\n"
                 + _simple_format_items(retrieved_items)
             )
         else:
-            response = (
-                "I'm having trouble formatting my response, but I'm here to help! "
-                "Could you please try rephrasing your request?"
-            )
+            response = "I apologize, but I encountered an issue formatting the response. Please try again or rephrase your question."
         
-        return {"final_response": response}
+        # Ensure response is never empty
+        if not response or not response.strip():
+            response = "I apologize, but I'm having trouble generating a response. Please try again or rephrase your question."
+        
+        return {
+            "final_response": response,
+            "workflow_status": "completed",
+            "metadata": {
+                **metadata,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "error_handled": True,
+            },
+        }
 
 
 async def _format_clarification(

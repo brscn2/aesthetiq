@@ -6,6 +6,14 @@ export interface AgentChatRequest {
   user_id: string;
   session_id?: string;
   message: string;
+  pending_context?: {
+    original_message: string;
+    clarification_question: string;
+    extracted_filters?: Record<string, any>;
+    search_scope?: string;
+    retrieved_items?: any[];
+    iteration?: number;
+  };
   auth_token?: string;
 }
 
@@ -45,14 +53,21 @@ export class AgentService {
       headers['X-Auth-Token'] = request.auth_token;
     }
 
+    const body: any = {
+      user_id: request.user_id,
+      session_id: request.session_id,
+      message: request.message,
+    };
+    
+    // Forward pending_context if provided (map camelCase to snake_case for Python)
+    if (request.pending_context) {
+      body.pending_context = request.pending_context;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        user_id: request.user_id,
-        session_id: request.session_id,
-        message: request.message,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(this.timeout),
     });
 
@@ -105,14 +120,21 @@ export class AgentService {
     }
 
     try {
+      const body: any = {
+        user_id: request.user_id,
+        session_id: request.session_id,
+        message: request.message,
+      };
+      
+      // Forward pending_context if provided (map camelCase to snake_case for Python)
+      if (request.pending_context) {
+        body.pending_context = request.pending_context;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          user_id: request.user_id,
-          session_id: request.session_id,
-          message: request.message,
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 

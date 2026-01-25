@@ -95,5 +95,34 @@ export class ChatService {
       throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
     }
   }
+
+  async updateMetadata(
+    sessionId: string,
+    metadata: Record<string, any>,
+  ): Promise<ChatSession> {
+    const updatedSession = await this.chatSessionModel
+      .findOneAndUpdate(
+        { sessionId },
+        { $set: { metadata } },
+        { new: true },
+      )
+      .exec();
+    if (!updatedSession) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    return updatedSession;
+  }
+
+  async mergeMetadata(
+    sessionId: string,
+    metadata: Record<string, any>,
+  ): Promise<ChatSession> {
+    const session = await this.findBySessionId(sessionId);
+    if (!session) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    const mergedMetadata = { ...(session.metadata || {}), ...metadata };
+    return this.updateMetadata(sessionId, mergedMetadata);
+  }
 }
 

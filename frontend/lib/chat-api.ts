@@ -372,6 +372,8 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
         const request: ChatRequest = {
           message,
           sessionId: sessionId || sessionState.sessionId || undefined,
+          // Include pending clarification context if available
+          pendingContext: sessionState.pendingClarification || undefined,
         }
 
         // Stream the response
@@ -445,6 +447,8 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
                   },
                 }))
               } else {
+                // Clear pending clarification if workflow completed
+                // (context was consumed or workflow finished)
                 setSessionState((prev) => ({ ...prev, pendingClarification: null }))
               }
             },

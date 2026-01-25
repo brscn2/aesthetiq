@@ -589,6 +589,16 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     iteration = state.get("iteration", 0)
     trace_id = state.get("langfuse_trace_id")
     
+    # Verify state reading in refinement loops
+    previous_items = state.get("retrieved_items", [])
+    previous_analysis = state.get("analysis_result")
+    logger.info(
+        f"[RECOMMENDER] State verification - iteration={iteration}, "
+        f"previous_items_count={len(previous_items) if isinstance(previous_items, list) else 0}, "
+        f"has_refinement_notes={len(refinement_notes) > 0}, "
+        f"has_previous_analysis={previous_analysis is not None}"
+    )
+    
     # Convert filter keys to camelCase for MCP server compatibility
     mcp_filters = convert_filters_to_mcp_format(extracted_filters)
     logger.info(f"Clothing recommender processing: scope={search_scope}, filters={mcp_filters}, iteration={iteration}")
@@ -645,7 +655,15 @@ Filters: {filter_str}{refinement_context}"""
         tools_used = []
         search_sources_used = []
         fallback_used = False
-        retrieved_items = []
+        # Initialize retrieved_items - preserve from previous iteration if in refinement loop
+        previous_items = state.get("retrieved_items", [])
+        if previous_items and isinstance(previous_items, list) and iteration > 0:
+            # In refinement, we might want to keep some previous items
+            # But for now, start fresh and let agent find new items
+            retrieved_items = []
+            logger.info(f"[RECOMMENDER] Starting fresh search for iteration {iteration + 1} (previous had {len(previous_items)} items)")
+        else:
+            retrieved_items = []
         user_profile = None
         style_dna = None
         tool_call_ids = {}
@@ -768,6 +786,25 @@ Filters: {filter_str}{refinement_context}"""
                 retrieved_items = [{"type": "agent_response", "content": final_message, "sources": search_sources_used}]
                 logger.info(f"[RECOMMENDER] Added agent response as fallback item")
         
+        # Ensure retrieved_items is always a list (never None)
+        if retrieved_items is None:
+            logger.warning("[RECOMMENDER] retrieved_items is None, initializing as empty list")
+            retrieved_items = []
+        
+        # Validate items are properly formatted
+        validated_items = []
+        for item in retrieved_items:
+            if isinstance(item, dict):
+                # Ensure item has at least a name or content
+                if item.get("name") or item.get("content") or item.get("type"):
+                    validated_items.append(item)
+                else:
+                    logger.warning(f"[RECOMMENDER] Skipping invalid item: {item}")
+            else:
+                logger.warning(f"[RECOMMENDER] Skipping non-dict item: {type(item)}")
+        
+        retrieved_items = validated_items
+        
         logger.info(f"[RECOMMENDER] Final retrieved_items count: {len(retrieved_items)}")
         if retrieved_items:
             # Log details about retrieved items
@@ -776,6 +813,8 @@ Filters: {filter_str}{refinement_context}"""
                     logger.debug(f"[RECOMMENDER] Item {i}: id={item.get('id', 'N/A')}, name={item.get('name', 'N/A')}, source={item.get('source', 'N/A')}, imageUrl={'present' if item.get('imageUrl') else 'missing'}, type={item.get('type', 'clothing_item')}")
                 else:
                     logger.debug(f"[RECOMMENDER] Item {i}: type={type(item)}")
+        else:
+            logger.warning("[RECOMMENDER] No items retrieved after validation - this may cause issues downstream")
         
         if trace_id:
             tracing_service.log_llm_call(
@@ -789,7 +828,7 @@ Filters: {filter_str}{refinement_context}"""
         logger.info(f"Clothing recommender found {len(retrieved_items)} items from {search_sources_used}")
         
         return {
-            "retrieved_items": retrieved_items,
+            "retrieved_items": retrieved_items,  # Always a list, never None
             "user_profile": user_profile,
             "style_dna": style_dna,
             "search_sources_used": search_sources_used,
@@ -797,15 +836,31 @@ Filters: {filter_str}{refinement_context}"""
         }
         
     except Exception as e:
-        logger.error(f"Clothing recommender failed: {e}")
+        logger.error(f"Clothing recommender failed: {e}", exc_info=True)
         if trace_id:
             tracing_service.log_error(trace_id=trace_id, error=e)
         
+        # Try to extract any partial results from state if available
+        partial_items = []
+        try:
+            # Check if we have any items from previous iteration
+            previous_items = state.get("retrieved_items", [])
+            if previous_items and isinstance(previous_items, list):
+                partial_items = previous_items[:5]  # Keep some previous items as fallback
+                logger.info(f"[RECOMMENDER] Using {len(partial_items)} items from previous iteration as fallback")
+        except Exception:
+            pass
+        
+        # Always return a list, never None
         return {
-            "retrieved_items": [],
+            "retrieved_items": partial_items,  # Always a list
             "user_profile": None,
             "style_dna": None,
             "search_sources_used": ["error"],
             "fallback_used": True,
-            "metadata": {**state.get("metadata", {}), "recommender_error": str(e)},
+            "metadata": {
+                **state.get("metadata", {}),
+                "recommender_error": str(e),
+                "error_type": type(e).__name__,
+            },
         }

@@ -33,6 +33,7 @@ export interface ChatSessionDetail {
     timestamp: string
     metadata?: Record<string, any>
   }>
+  metadata?: Record<string, any>
   createdAt: string
   updatedAt: string
 }

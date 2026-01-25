@@ -193,6 +193,7 @@ export interface ClothingItem {
 export interface ChatRequest {
   sessionId?: string;
   message: string;
+  pendingContext?: ClarificationContext;
 }
 
 /**

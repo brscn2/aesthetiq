@@ -375,7 +375,10 @@ async def error_response_node(state: ConversationState) -> Dict[str, Any]:
     
     # Check what type of error occurred
     metadata = state.get("metadata", {})
+    error_info = metadata.get("error")
+    error_type = metadata.get("error_type", "unknown")
     
+    # Generate specific error messages based on error type
     if not metadata.get("input_safe", True):
         response = "I'm sorry, but I can't process that request. Please try rephrasing your question."
     elif not metadata.get("output_safe", True):
@@ -383,10 +386,30 @@ async def error_response_node(state: ConversationState) -> Dict[str, Any]:
     elif state.get("iteration", 0) >= get_settings().MAX_REFINEMENT_ITERATIONS:
         response = "I'm having trouble finding exactly what you're looking for. " \
                    "Could you please provide more details about what you need?"
+    elif error_info:
+        # Use error information from metadata if available
+        error_str = str(error_info) if error_info else "unknown error"
+        if "timeout" in error_str.lower() or "time" in error_str.lower():
+            response = "I apologize, but the request took too long to process. Please try again with a simpler question."
+        elif "network" in error_str.lower() or "connection" in error_str.lower():
+            response = "I apologize, but I'm having trouble connecting to my services. Please try again in a moment."
+        elif "rate limit" in error_str.lower() or "quota" in error_str.lower():
+            response = "I apologize, but I'm currently experiencing high demand. Please try again in a moment."
+        else:
+            response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
     else:
         response = "I'm sorry, something went wrong. Please try again."
     
-    return {"final_response": response}
+    # Always set workflow_status to completed so message gets saved
+    return {
+        "final_response": response,
+        "workflow_status": "completed",
+        "metadata": {
+            **metadata,
+            "error_handled": True,
+            "error_type": error_type,
+        },
+    }
 
 
 # =============================================================================
@@ -620,10 +643,40 @@ async def run_workflow(
         return final_state
         
     except Exception as e:
-        # Log error and end trace
+        # Log error details
+        logger.error(f"Workflow error: {e}", exc_info=True)
         tracing_service.log_error(trace_id=trace_id, error=e)
-        tracing_service.end_trace(trace_id=trace_id, output=f"Error: {str(e)}")
-        raise
+        
+        # Generate user-friendly error response
+        error_message = str(e).lower()
+        if "timeout" in error_message or "time" in error_message:
+            user_response = "I apologize, but the request took too long to process. Please try again with a simpler question."
+        elif "network" in error_message or "connection" in error_message:
+            user_response = "I apologize, but I'm having trouble connecting to my services. Please try again in a moment."
+        elif "rate limit" in error_message or "quota" in error_message:
+            user_response = "I apologize, but I'm currently experiencing high demand. Please try again in a moment."
+        else:
+            user_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
+        
+        # Return error state instead of raising
+        error_state = {
+            "final_response": user_response,
+            "workflow_status": "completed",
+            "metadata": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "error_handled": True,
+            },
+        }
+        
+        tracing_service.end_trace(
+            trace_id=trace_id,
+            output=user_response[:500],
+            metadata={"error": str(e), "error_type": type(e).__name__},
+        )
+        tracing_service.flush()
+        
+        return error_state
     finally:
         # Ensure traces are flushed
         tracing_service.flush()
@@ -829,20 +882,53 @@ async def run_workflow_streaming(
                         )
             
             # Capture final state from last chain end
+            # Accumulate state across all events to ensure we capture the final state
             if event_type == "on_chain_end" and event.get("data", {}).get("output"):
                 output = event.get("data", {}).get("output")
                 # Check if this looks like a final state (has final_response)
-                if isinstance(output, dict) and "final_response" in output:
-                    final_state = output
+                if isinstance(output, dict):
+                    # Merge with existing final_state to accumulate all state
+                    if final_state is None:
+                        final_state = {}
+                    # Update final_state with any new fields from output
+                    for key, value in output.items():
+                        if value is not None:  # Only update non-None values
+                            final_state[key] = value
+                    # If this output has final_response, it's likely the final node
+                    if "final_response" in output:
+                        logger.debug(f"Captured final state with response from node: {event_name}")
         
         # If we didn't capture final state, run workflow synchronously to get it
-        if final_state is None:
-            logger.warning("Final state not captured from streaming, running sync fallback")
-            final_state = await workflow.ainvoke(initial_state)
+        if final_state is None or not final_state.get("final_response"):
+            logger.warning("Final state not captured from streaming or missing final_response, running sync fallback")
+            try:
+                fallback_state = await workflow.ainvoke(initial_state)
+                # Merge fallback state with any state we did capture
+                if final_state:
+                    final_state = {**final_state, **fallback_state}
+                else:
+                    final_state = fallback_state
+            except Exception as fallback_error:
+                logger.error(f"Fallback workflow invocation also failed: {fallback_error}")
+                # Generate minimal error state
+                final_state = {
+                    "final_response": "I apologize, but I encountered an issue processing your request. Please try again.",
+                    "workflow_status": "completed",
+                    "intent": None,
+                    "retrieved_items": [],
+                }
+        
+        # Ensure final_state has final_response
+        if not final_state or not final_state.get("final_response"):
+            logger.warning("Final state missing final_response, generating fallback")
+            final_state = final_state or {}
+            final_state["final_response"] = "I apologize, but I encountered an issue generating a response. Please try again."
+            final_state["workflow_status"] = "completed"
         
         # Check workflow status
         workflow_status = final_state.get("workflow_status", "completed")
         needs_clarification = final_state.get("needs_clarification", False)
+        final_response = final_state.get("final_response", "")
         
         # End trace
         trace_metadata = {
@@ -858,15 +944,15 @@ async def run_workflow_streaming(
         
         tracing_service.end_trace(
             trace_id=trace_id,
-            output=final_state.get("final_response", "")[:500],
+            output=final_response[:500] if final_response else "[empty response]",
             metadata=trace_metadata,
         )
         
-        # Yield final done event
+        # Yield final done event - always yield even if response is empty
         yield StreamEvent(
             type="done",
             content={
-                "response": final_state.get("final_response", ""),
+                "response": final_response,
                 "intent": final_state.get("intent"),
                 "items": final_state.get("retrieved_items", []),
                 "workflow_status": workflow_status,
@@ -884,14 +970,47 @@ async def run_workflow_streaming(
             logger.info(f"Streaming workflow completed with response length: {response_len}")
         
     except Exception as e:
-        logger.error(f"Streaming workflow error: {e}")
+        logger.error(f"Streaming workflow error: {e}", exc_info=True)
         tracing_service.log_error(trace_id=trace_id, error=e)
-        tracing_service.end_trace(trace_id=trace_id, output=f"Error: {str(e)}")
         
+        # Generate user-friendly error response
+        error_message = str(e).lower()
+        if "timeout" in error_message or "time" in error_message:
+            user_response = "I apologize, but the request took too long to process. Please try again with a simpler question."
+        elif "network" in error_message or "connection" in error_message:
+            user_response = "I apologize, but I'm having trouble connecting to my services. Please try again in a moment."
+        elif "rate limit" in error_message or "quota" in error_message:
+            user_response = "I apologize, but I'm currently experiencing high demand. Please try again in a moment."
+        else:
+            user_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
+        
+        # Always yield done event even on errors (so response gets saved)
+        yield StreamEvent(
+            type="done",
+            content={
+                "response": user_response,
+                "intent": None,
+                "items": [],
+                "workflow_status": "completed",
+                "needs_clarification": False,
+                "clarification_question": None,
+                "session_id": session_id,
+                "error": True,
+            },
+            timestamp=datetime.utcnow().isoformat(),
+        )
+        
+        # Also yield error event for UI
         yield StreamEvent(
             type="error",
-            content={"message": str(e)},
+            content={"message": user_response},
             timestamp=datetime.utcnow().isoformat(),
+        )
+        
+        tracing_service.end_trace(
+            trace_id=trace_id,
+            output=user_response[:500],
+            metadata={"error": str(e), "error_type": type(e).__name__},
         )
     finally:
         tracing_service.flush()

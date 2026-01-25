@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const handleNewChat = useCallback(() => {
     setActiveSessionId(null)
     setActiveSessionMessages([])
+    // Note: pendingClarification will be cleared in ChatStylist when activeSessionId changes to null
   }, [])
 
   const handleSessionUpdated = useCallback(

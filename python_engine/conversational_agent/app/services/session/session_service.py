@@ -189,6 +189,93 @@ class SessionService:
         
         return formatted
     
+    def get_pending_context(self, session_data: SessionData) -> Optional[Dict[str, Any]]:
+        """
+        Extract pending clarification context from session metadata.
+        
+        Args:
+            session_data: Session data from load_session()
+            
+        Returns:
+            Pending clarification context if present, None otherwise
+        """
+        metadata = session_data.metadata or {}
+        pending_context = metadata.get("pendingClarificationContext")
+        if pending_context:
+            logger.info(f"Found pending clarification context in session {session_data.session_id}")
+        return pending_context
+    
+    async def save_pending_context(
+        self,
+        session_id: str,
+        context: Dict[str, Any],
+    ) -> None:
+        """
+        Save pending clarification context to session metadata.
+        
+        Args:
+            session_id: The session identifier
+            context: Clarification context to save
+        """
+        try:
+            await self.backend_client.update_session_metadata(
+                session_id=session_id,
+                metadata={"pendingClarificationContext": context},
+            )
+            logger.info(f"Saved pending clarification context to session {session_id}")
+        except BackendClientError as e:
+            logger.error(f"Failed to save pending context: {e}")
+            # Don't raise - this is not critical for workflow execution
+            logger.warning("Continuing without saving pending context")
+    
+    def get_workflow_context(self, session_data: SessionData) -> Optional[Dict[str, Any]]:
+        """
+        Extract completed workflow context from session metadata.
+        
+        Args:
+            session_data: Session data from load_session()
+            
+        Returns:
+            Completed workflow context if present, None otherwise
+        """
+        metadata = session_data.metadata or {}
+        workflow_context = metadata.get("workflowContext")
+        if workflow_context:
+            logger.debug(f"Found workflow context in session {session_data.session_id}")
+        return workflow_context
+    
+    async def save_workflow_context(
+        self,
+        session_id: str,
+        context: Dict[str, Any],
+    ) -> None:
+        """
+        Save completed workflow context to session metadata.
+        
+        Only saves if context contains retrieved_items (clothing recommendations).
+        This allows follow-up messages to reference specific items.
+        
+        Args:
+            session_id: The session identifier
+            context: Workflow context to save (should include retrieved_items, filters, etc.)
+        """
+        # Only save if we have items (clothing recommendations)
+        retrieved_items = context.get("retrieved_items", [])
+        if not retrieved_items:
+            logger.debug(f"Skipping workflow context save - no items in context")
+            return
+        
+        try:
+            await self.backend_client.update_session_metadata(
+                session_id=session_id,
+                metadata={"workflowContext": context},
+            )
+            logger.info(f"Saved workflow context to session {session_id} ({len(retrieved_items)} items)")
+        except BackendClientError as e:
+            logger.error(f"Failed to save workflow context: {e}")
+            # Don't raise - this is not critical for workflow execution
+            logger.warning("Continuing without saving workflow context")
+    
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         return f"session_{uuid.uuid4().hex[:16]}"

@@ -245,6 +245,48 @@ class BackendClient:
             logger.error(f"Network error getting user sessions: {e}")
             raise BackendClientError(f"Network error: {e}")
     
+    async def update_session_metadata(
+        self,
+        session_id: str,
+        metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update session metadata by merging with existing metadata.
+        
+        Args:
+            session_id: The session identifier
+            metadata: Metadata to merge with existing metadata
+            
+        Returns:
+            Updated session data
+            
+        Raises:
+            BackendClientError: If update fails
+        """
+        client = await self._get_client()
+        
+        # First get current session to merge metadata
+        try:
+            current_session = await self.get_session(session_id)
+            current_metadata = current_session.get("metadata", {})
+            merged_metadata = {**current_metadata, **metadata}
+        except BackendClientError:
+            # If session doesn't exist, just use new metadata
+            merged_metadata = metadata
+        
+        # Use PATCH endpoint via agent API (which uses sessionId, not MongoDB _id)
+        payload = {"metadata": merged_metadata}
+        
+        logger.debug(f"Updating metadata for session {session_id}")
+        
+        try:
+            # Use agent API endpoint which accepts sessionId directly
+            response = await client.patch(f"/api/agent/sessions/{session_id}", json=payload)
+            return await self._handle_response(response)
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating session metadata: {e}")
+            raise BackendClientError(f"Network error: {e}")
+    
     async def health_check(self) -> bool:
         """
         Check if the backend is healthy.

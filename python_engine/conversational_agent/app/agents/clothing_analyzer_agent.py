@@ -117,6 +117,16 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
     user_profile = state.get("user_profile")
     extracted_filters = state.get("extracted_filters", {})
     iteration = state.get("iteration", 0)
+    
+    # Verify state reading in refinement loops
+    previous_analysis = state.get("analysis_result")
+    previous_refinement_notes = state.get("refinement_notes", [])
+    logger.info(
+        f"[ANALYZER] State verification - iteration={iteration}, "
+        f"items_count={len(retrieved_items) if isinstance(retrieved_items, list) else 0}, "
+        f"has_previous_analysis={previous_analysis is not None}, "
+        f"previous_refinement_notes_count={len(previous_refinement_notes)}"
+    )
     trace_id = state.get("langfuse_trace_id")
     
     logger.info(f"Clothing analyzer evaluating {len(retrieved_items)} items (iteration {iteration})")

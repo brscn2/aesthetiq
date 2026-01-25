@@ -80,6 +80,7 @@ export class AgentController {
       user_id: user.clerkId,
       session_id: chatRequest.sessionId,
       message: chatRequest.message,
+      pending_context: chatRequest.pendingContext,
       auth_token: authToken,
     });
   }
@@ -127,6 +128,7 @@ Returns real-time progress updates as the AI processes your request.
         user_id: user.clerkId,
         session_id: chatRequest.sessionId,
         message: chatRequest.message,
+        pending_context: chatRequest.pendingContext,
         auth_token: authToken,
       },
       res,
