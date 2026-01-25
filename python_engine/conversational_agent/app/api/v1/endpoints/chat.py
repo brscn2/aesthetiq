@@ -1,5 +1,5 @@
 """Chat endpoints for the conversational agent."""
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -8,8 +8,9 @@ import asyncio
 
 from app.core.config import get_settings
 from app.core.logger import get_logger
-from app.workflows.main_workflow import run_workflow, get_workflow
+from app.workflows.main_workflow import run_workflow, run_workflow_streaming, get_workflow
 from app.services.session.session_service import get_session_service
+from app.services.backend_client import BackendClient
 from app.services.tracing.langfuse_service import get_tracing_service
 
 router = APIRouter()
@@ -17,11 +18,65 @@ settings = get_settings()
 logger = get_logger(__name__)
 
 
+async def save_workflow_context_to_session(
+    session_service,
+    session_id: str,
+    final_state: Dict[str, Any],
+    request_message: Optional[str] = None,
+) -> None:
+    """
+    Save workflow context (pending clarification or completed workflow) to session metadata.
+    
+    This helper centralizes the context saving logic used by both chat() and chat_stream().
+    
+    Args:
+        session_service: SessionService instance
+        session_id: The session identifier
+        final_state: Final state from workflow execution
+        request_message: Optional original user message (for streaming endpoint limitations)
+    """
+    workflow_status = final_state.get("workflow_status", "completed")
+    
+    if workflow_status == "awaiting_clarification":
+        try:
+            from app.workflows.state import create_clarification_context
+            clarification_context = create_clarification_context(final_state)
+            await session_service.save_pending_context(
+                session_id=session_id,
+                context=clarification_context,
+            )
+        except Exception as context_error:
+            logger.error(f"Failed to save pending context: {context_error}")
+            # Don't fail the request if context save fails
+    
+    elif workflow_status == "completed":
+        try:
+            # Use 'or []' to handle case where retrieved_items is explicitly None
+            retrieved_items = final_state.get("retrieved_items") or []
+            if retrieved_items:
+                workflow_context = {
+                    "intent": final_state.get("intent"),
+                    "extracted_filters": final_state.get("extracted_filters"),
+                    "retrieved_items": retrieved_items,
+                    "style_dna": final_state.get("style_dna"),
+                    "user_profile": final_state.get("user_profile"),
+                    "search_scope": final_state.get("search_scope"),
+                }
+                await session_service.save_workflow_context(
+                    session_id=session_id,
+                    context=workflow_context,
+                )
+        except Exception as context_error:
+            logger.error(f"Failed to save workflow context: {context_error}")
+            # Don't fail the request if context save fails
+
+
 class ChatRequest(BaseModel):
     """Request body for chat endpoints."""
     user_id: str = Field(..., description="User identifier")
     session_id: Optional[str] = Field(None, description="Session identifier (creates new if not provided)")
     message: str = Field(..., description="User message", min_length=1, max_length=10000)
+    pending_context: Optional[Dict[str, Any]] = Field(None, description="Pending clarification context for follow-up messages")
     
     class Config:
         json_schema_extra = {
@@ -42,7 +97,10 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> ChatResponse:
     """
     Non-streaming chat endpoint.
     
@@ -50,14 +108,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
     
     Args:
         request: Chat request with user_id, session_id, and message
+        x_auth_token: Optional auth token forwarded from NestJS for backend callbacks
         
     Returns:
         ChatResponse with the assistant's response
     """
     logger.info(f"Chat request from user {request.user_id}")
     
+    # Create backend client with auth token if provided
+    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    
     # Get services
-    session_service = get_session_service()
+    session_service = get_session_service(backend_client=backend_client)
     tracing_service = get_tracing_service()
     
     try:
@@ -67,12 +129,20 @@ async def chat(request: ChatRequest) -> ChatResponse:
             session_id=request.session_id,
         )
         
+        # Determine pending context: use from request if provided, else check session metadata
+        pending_context = request.pending_context
+        if not pending_context:
+            pending_context = session_service.get_pending_context(session_data)
+        
         # Start trace
         trace_id = tracing_service.start_trace(
             user_id=request.user_id,
             session_id=session_data.session_id,
             name="chat",
-            metadata={"message_length": len(request.message)},
+            metadata={
+                "message_length": len(request.message),
+                "has_pending_context": pending_context is not None,
+            },
         )
         
         # Format conversation history
@@ -86,65 +156,149 @@ async def chat(request: ChatRequest) -> ChatResponse:
             session_id=session_data.session_id,
             message=request.message,
             conversation_history=conversation_history,
+            pending_context=pending_context,
         )
         
         # Get the response
         response_text = final_state.get("final_response", "")
+        workflow_status = final_state.get("workflow_status", "completed")
         
-        # Save the conversation turn
-        await session_service.save_conversation_turn(
-            session_id=session_data.session_id,
-            user_message=request.message,
-            assistant_message=response_text,
-            user_metadata={"trace_id": trace_id},
-            assistant_metadata={
-                "trace_id": trace_id,
-                "intent": final_state.get("intent"),
-                "iteration": final_state.get("iteration", 0),
-            },
+        # Always save the conversation turn, even if response is empty or error
+        try:
+            await session_service.save_conversation_turn(
+                session_id=session_data.session_id,
+                user_message=request.message,
+                assistant_message=response_text or "I apologize, but I encountered an issue processing your request. Please try again.",
+                user_metadata={"trace_id": trace_id},
+                assistant_metadata={
+                    "trace_id": trace_id,
+                    "intent": final_state.get("intent"),
+                    "iteration": final_state.get("iteration", 0),
+                    "workflow_status": workflow_status,
+                },
+            )
+        except Exception as save_error:
+            logger.error(f"Failed to save conversation turn: {save_error}")
+            # Don't fail the request if save fails, but log it
+        
+        # Update title if still default (smart naming)
+        # Only update on first message (check message count before saving)
+        try:
+            logger.debug(f"Non-streaming: Checking title update for session {session_data.session_id}, current title: '{session_data.title}'")
+            # Check message count to determine if this is the first user message
+            messages = session_data.messages or []
+            user_message_count = len([m for m in messages if m.get("role") == "user"])
+            logger.debug(f"Non-streaming: Session {session_data.session_id} - user messages: {user_message_count}")
+            
+            # Only update title if this is the first user message (user_message_count == 0 before saving)
+            # After saving, it will be 1, so we check before
+            if user_message_count == 0:
+                await session_service.update_title_if_default(
+                    session_id=session_data.session_id,
+                    user_message=request.message,
+                    current_title=session_data.title,
+                )
+            else:
+                logger.debug(f"Non-streaming: Skipping title update - not first message (user_message_count: {user_message_count})")
+        except Exception as title_error:
+            logger.warning(f"Failed to update session title: {title_error}", exc_info=True)
+            # Non-critical, continue
+        
+        # Save workflow context (pending clarification or completed workflow)
+        await save_workflow_context_to_session(
+            session_service,
+            session_data.session_id,
+            final_state,
+            request.message,
         )
         
         # End trace
         tracing_service.end_trace(
             trace_id=trace_id,
-            output=response_text[:500],  # Truncate for trace
-            metadata={"intent": final_state.get("intent")},
+            output=response_text[:500] if response_text else "[empty response]",
+            metadata={
+                "intent": final_state.get("intent"),
+                "workflow_status": workflow_status,
+            },
         )
         
         return ChatResponse(
             session_id=session_data.session_id,
-            response=response_text,
+            response=response_text or "I apologize, but I encountered an issue processing your request. Please try again.",
             intent=final_state.get("intent"),
             metadata={
                 "iteration": final_state.get("iteration", 0),
                 "search_sources": final_state.get("search_sources_used", []),
+                "workflow_status": workflow_status,
             },
         )
         
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Chat error: {e}", exc_info=True)
+        # Generate user-friendly error response
+        error_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
+        
+        # Try to save error message to session if we have session_id
+        if request.session_id:
+            try:
+                backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+                session_service = get_session_service(backend_client=backend_client)
+                await session_service.save_conversation_turn(
+                    session_id=request.session_id,
+                    user_message=request.message,
+                    assistant_message=error_response,
+                    assistant_metadata={"error": str(e), "error_type": type(e).__name__},
+                )
+            except Exception as save_error:
+                logger.error(f"Failed to save error message: {save_error}")
+        
+        raise HTTPException(status_code=500, detail=error_response)
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
+async def chat_stream(
+    request: ChatRequest,
+    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+) -> StreamingResponse:
     """
     Streaming chat endpoint using Server-Sent Events (SSE).
     
-    Streams the response as it's generated.
+    Streams intermediate results as the workflow executes, providing
+    real-time progress updates to the client.
+    
+    Event types:
+    - metadata: Initial connection info (session_id, user_id)
+    - node_start: Workflow node started executing
+    - node_end: Workflow node finished executing
+    - status: Human-readable status message
+    - tool_call: MCP tool being called
+    - intent: Intent classification result
+    - filters: Extracted search filters
+    - items_found: Number of items found
+    - analysis: Analyzer decision
+    - chunk: Response text chunk (during response generation)
+    - done: Final complete response with all data
+    - error: Error occurred
     
     Args:
         request: Chat request with user_id, session_id, and message
+        x_auth_token: Optional auth token forwarded from NestJS for backend callbacks
         
     Returns:
         StreamingResponse with SSE events
     """
     logger.info(f"Streaming chat request from user {request.user_id}")
     
+    # Create backend client with auth token if provided
+    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    
     async def generate_stream():
-        """Generate SSE stream."""
-        session_service = get_session_service()
-        tracing_service = get_tracing_service()
+        """Generate SSE stream with real intermediate results."""
+        session_service = get_session_service(backend_client=backend_client)
+        final_response = None
+        final_intent = None
+        final_state = None
+        session_id = None
         
         try:
             # Load or create session
@@ -152,75 +306,144 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 user_id=request.user_id,
                 session_id=request.session_id,
             )
+            session_id = session_data.session_id
             
-            # Send metadata event
-            yield _format_sse_event("metadata", {
-                "session_id": session_data.session_id,
-                "user_id": request.user_id,
-            })
-            
-            # Start trace
-            trace_id = tracing_service.start_trace(
-                user_id=request.user_id,
-                session_id=session_data.session_id,
-                name="chat_stream",
-            )
-            
-            # Send status event
-            yield _format_sse_event("status", {"content": "Processing your request..."})
+            # Determine pending context: use from request if provided, else check session metadata
+            pending_context = request.pending_context
+            if not pending_context:
+                pending_context = session_service.get_pending_context(session_data)
             
             # Format conversation history
             conversation_history = session_service.format_history_for_llm(
                 session_data.messages
             )
             
-            # Run the workflow
-            final_state = await run_workflow(
+            # Stream workflow events
+            async for event in run_workflow_streaming(
                 user_id=request.user_id,
                 session_id=session_data.session_id,
                 message=request.message,
                 conversation_history=conversation_history,
-            )
+                pending_context=pending_context,
+            ):
+                # Convert StreamEvent to SSE format
+                yield _format_sse_event(event.type, event.content)
+                
+                # Capture final response and state for session saving
+                if event.type == "done":
+                    final_response = event.content.get("response", "")
+                    final_intent = event.content.get("intent")
+                    final_state = {
+                        "workflow_status": event.content.get("workflow_status", "completed"),
+                        "intent": final_intent,
+                        "retrieved_items": event.content.get("items", []),
+                        "extracted_filters": None,  # Not in done event, would need to track
+                        "style_dna": None,  # Not in done event, would need to track
+                        "user_profile": None,  # Not in done event, would need to track
+                        "search_scope": None,  # Not in done event, would need to track
+                    }
             
-            # Get the response
-            response_text = final_state.get("final_response", "")
+            # Always save the conversation turn, even if response is empty
+            try:
+                logger.info(f"Streaming: Saving conversation turn for session {session_data.session_id}")
+                response_to_save = final_response or "I apologize, but I encountered an issue processing your request. Please try again."
+                await session_service.save_conversation_turn(
+                    session_id=session_data.session_id,
+                    user_message=request.message,
+                    assistant_message=response_to_save,
+                    user_metadata={},
+                    assistant_metadata={
+                        "intent": final_intent,
+                        "streaming": True,
+                        "workflow_status": final_state.get("workflow_status", "completed") if final_state else "completed",
+                    },
+                )
+                logger.info(f"Streaming: Successfully saved conversation turn for session {session_data.session_id}")
+            except Exception as save_error:
+                logger.error(f"Failed to save conversation turn: {save_error}")
+                # Don't fail the stream if save fails
             
-            # Stream the response in chunks (simulated for now)
-            # In Issue 3, this will be real LLM streaming
-            chunk_size = 50
-            for i in range(0, len(response_text), chunk_size):
-                chunk = response_text[i:i + chunk_size]
-                yield _format_sse_event("chunk", {"content": chunk})
-                await asyncio.sleep(0.01)  # Small delay for streaming effect
+            # Update title if still default (smart naming)
+            # Only update on first message (check message count before saving)
+            try:
+                logger.info(f"Streaming: Starting title update check for session {session_data.session_id}")
+                # Need to reload session to get current title and message count
+                updated_session = await session_service.backend_client.get_session(session_data.session_id)
+                current_title = updated_session.get("title", "New Conversation")
+                messages = updated_session.get("messages") or []
+                # Count user messages (excluding the one we just saved)
+                user_message_count = len([m for m in messages if m.get("role") == "user"])
+                logger.info(f"Streaming: Session {session_data.session_id} - title: '{current_title}', user messages: {user_message_count}")
+                
+                # Only update title if this is the first user message (user_message_count <= 1)
+                # This ensures we only update on the very first message
+                if user_message_count <= 1:
+                    logger.info(f"Streaming: Updating title for first message in session {session_data.session_id}")
+                    await session_service.update_title_if_default(
+                        session_id=session_data.session_id,
+                        user_message=request.message,
+                        current_title=current_title,
+                    )
+                else:
+                    logger.info(f"Streaming: Skipping title update - not first message (user_message_count: {user_message_count})")
+                logger.info(f"Streaming: Completed title update check for session {session_data.session_id}")
+            except Exception as title_error:
+                logger.warning(f"Failed to update session title: {title_error}", exc_info=True)
+                # Non-critical, continue
             
-            # Save the conversation turn
-            await session_service.save_conversation_turn(
-                session_id=session_data.session_id,
-                user_message=request.message,
-                assistant_message=response_text,
-                user_metadata={"trace_id": trace_id},
-                assistant_metadata={
-                    "trace_id": trace_id,
-                    "intent": final_state.get("intent"),
-                },
-            )
-            
-            # End trace
-            tracing_service.end_trace(
-                trace_id=trace_id,
-                output=response_text[:500],
-            )
-            
-            # Send done event
-            yield _format_sse_event("done", {
-                "message": response_text,
-                "intent": final_state.get("intent"),
-                "session_id": session_data.session_id,
-            })
+            # Save workflow context (pending clarification or completed workflow)
+            # Note: Streaming endpoint has incomplete state (limitation of done event),
+            # but helper function will save what's available
+            if final_state:
+                await save_workflow_context_to_session(
+                    session_service,
+                    session_data.session_id,
+                    final_state,
+                    request.message,
+                )
             
         except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            yield _format_sse_event("error", {"message": str(e)})
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            error_message = "I apologize, but I encountered an issue processing your request. Please try again."
+            yield _format_sse_event("error", {"message": error_message})
+            
+            # Try to save error message to session
+            if session_id:
+                try:
+                    error_response = error_message
+                    await session_service.save_conversation_turn(
+                        session_id=session_id,
+                        user_message=request.message,
+                        assistant_message=error_response,
+                        assistant_metadata={
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "streaming": True,
+                        },
+                    )
+                    
+                    # Update title if still default (smart naming) - even on error
+                    try:
+                        logger.info(f"Streaming (error path): Starting title update check for session {session_id}")
+                        updated_session = await session_service.backend_client.get_session(session_id)
+                        current_title = updated_session.get("title", "New Conversation")
+                        messages = updated_session.get("messages") or []
+                        user_message_count = len([m for m in messages if m.get("role") == "user"])
+                        logger.info(f"Streaming (error path): Session {session_id} - title: '{current_title}', user messages: {user_message_count}")
+                        
+                        if user_message_count <= 1:
+                            logger.info(f"Streaming (error path): Updating title for first message in session {session_id}")
+                            await session_service.update_title_if_default(
+                                session_id=session_id,
+                                user_message=request.message,
+                                current_title=current_title,
+                            )
+                        else:
+                            logger.info(f"Streaming (error path): Skipping title update - not first message (user_message_count: {user_message_count})")
+                    except Exception as title_error:
+                        logger.warning(f"Failed to update session title in error handler: {title_error}", exc_info=True)
+                except Exception as save_error:
+                    logger.error(f"Failed to save error message: {save_error}")
     
     return StreamingResponse(
         generate_stream(),

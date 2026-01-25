@@ -29,8 +29,7 @@ class ChatMessageDto {
 }
 
 export class CreateChatSessionDto {
-  // userId is now injected from authentication, not from DTO
-  userId?: string;
+  // Note: userId is injected from authentication in the controller, not from DTO
 
   @ApiProperty({ example: 'session-123' })
   @IsString()

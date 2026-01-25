@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from bson import ObjectId
 
 from mcp_servers.shared.embeddings_client import embed_text
 from mcp_servers.commerce_server import db
@@ -20,17 +21,22 @@ from mcp_servers.commerce_server.style_ranking import (
 
 
 def _sanitize_mongo_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove/stringify ObjectId for JSON serialization."""
-    doc = dict(doc)
-    _id = doc.pop("_id", None)
-    if _id is not None:
-        doc["_id"] = str(_id)
-    # Also handle brandId and retailerId if they're ObjectIds
-    if "brandId" in doc and doc["brandId"] is not None:
-        doc["brandId"] = str(doc["brandId"])
-    if "retailerId" in doc and doc["retailerId"] is not None:
-        doc["retailerId"] = str(doc["retailerId"])
-    return doc
+    """Recursively convert all ObjectId values to strings for JSON serialization."""
+    if not doc:
+        return {}
+    return _sanitize_value(doc)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize a value, converting ObjectId to string."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    elif isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    else:
+        return value
 
 
 def _parse_category(doc: Dict[str, Any]) -> Category:

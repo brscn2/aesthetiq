@@ -104,7 +104,7 @@ class ClothingItem:
 @dataclass
 class StreamEvent:
     """Streaming event for SSE responses."""
-    type: str  # "metadata", "status", "agent_start", "tool_call", "item", "analysis", "chunk", "done", "error"
+    type: str  # "metadata", "status", "node_start", "node_end", "tool_call", "items_found", "analysis", "chunk", "done", "error"
     content: Any
     timestamp: Optional[str] = None
     
@@ -115,6 +115,118 @@ class StreamEvent:
             "content": self.content,
             "timestamp": self.timestamp,
         }
+    
+    @classmethod
+    def metadata(cls, session_id: str, user_id: str, **kwargs) -> "StreamEvent":
+        """Create a metadata event."""
+        from datetime import datetime
+        return cls(
+            type="metadata",
+            content={"session_id": session_id, "user_id": user_id, **kwargs},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def status(cls, message: str) -> "StreamEvent":
+        """Create a status event with a human-readable message."""
+        from datetime import datetime
+        return cls(
+            type="status",
+            content={"message": message},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def node_start(cls, node: str, display_name: str = None) -> "StreamEvent":
+        """Create a node_start event."""
+        from datetime import datetime
+        return cls(
+            type="node_start",
+            content={"node": node, "display_name": display_name or node},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def node_end(cls, node: str) -> "StreamEvent":
+        """Create a node_end event."""
+        from datetime import datetime
+        return cls(
+            type="node_end",
+            content={"node": node},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def tool_call(cls, tool: str, input_data: Any = None) -> "StreamEvent":
+        """Create a tool_call event."""
+        from datetime import datetime
+        return cls(
+            type="tool_call",
+            content={"tool": tool, "input": str(input_data)[:200] if input_data else None},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def items_found(cls, count: int, sources: List[str] = None) -> "StreamEvent":
+        """Create an items_found event."""
+        from datetime import datetime
+        return cls(
+            type="items_found",
+            content={"count": count, "sources": sources or []},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def analysis(cls, decision: str, confidence: float = None) -> "StreamEvent":
+        """Create an analysis event."""
+        from datetime import datetime
+        return cls(
+            type="analysis",
+            content={"decision": decision, "confidence": confidence},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def chunk(cls, content: str) -> "StreamEvent":
+        """Create a chunk event for streaming response text."""
+        from datetime import datetime
+        return cls(
+            type="chunk",
+            content={"content": content},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def done(cls, response: str, intent: str = None, items: List = None, **kwargs) -> "StreamEvent":
+        """Create a done event with the final response."""
+        from datetime import datetime
+        return cls(
+            type="done",
+            content={
+                "response": response,
+                "intent": intent,
+                "items": items or [],
+                **kwargs,
+            },
+            timestamp=datetime.utcnow().isoformat(),
+        )
+    
+    @classmethod
+    def error(cls, message: str) -> "StreamEvent":
+        """Create an error event."""
+        from datetime import datetime
+        return cls(
+            type="error",
+            content={"message": message},
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+
+class WorkflowStatus(str, Enum):
+    """Status of the workflow execution."""
+    ACTIVE = "active"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    COMPLETED = "completed"
 
 
 class ConversationState(TypedDict, total=False):
@@ -132,6 +244,22 @@ class ConversationState(TypedDict, total=False):
     session_id: str
     message: str
     conversation_history: List[Dict[str, str]]
+    
+    # =========================================================================
+    # Workflow Control (for multi-turn conversations)
+    # =========================================================================
+    workflow_status: Literal["active", "awaiting_clarification", "completed"]
+    is_clarification_response: bool  # True if this message is a response to a clarification
+    pending_clarification_context: Optional[Dict[str, Any]]
+    # Stores context when awaiting clarification:
+    # {
+    #     "original_message": str,
+    #     "clarification_question": str,
+    #     "extracted_filters": Dict,
+    #     "search_scope": str,
+    #     "retrieved_items": List,
+    #     "iteration": int,
+    # }
     
     # =========================================================================
     # Intent Classification (Intent Classifier Node)
@@ -225,6 +353,7 @@ def create_initial_state(
     session_id: str,
     message: str,
     conversation_history: Optional[List[Dict[str, str]]] = None,
+    pending_context: Optional[Dict[str, Any]] = None,
 ) -> ConversationState:
     """
     Create an initial conversation state for a new workflow execution.
@@ -234,33 +363,108 @@ def create_initial_state(
         session_id: The chat session identifier
         message: The user's current message
         conversation_history: Previous messages in the conversation
+        pending_context: Previous workflow context if this is a clarification response
         
     Returns:
         Initial ConversationState with default values
     """
-    return ConversationState(
+    # Check if this is a response to a pending clarification
+    is_clarification = pending_context is not None
+    
+    state = ConversationState(
         user_id=user_id,
         session_id=session_id,
         message=message,
         conversation_history=conversation_history or [],
+        # Workflow control
+        workflow_status="active",
+        is_clarification_response=is_clarification,
+        pending_clarification_context=pending_context,
+        # Intent and query analysis
         intent=None,
         search_scope=None,
         extracted_filters=None,
         user_profile=None,
         style_dna=None,
+        # Clothing workflow
         retrieved_items=[],
         search_sources_used=[],
         fallback_used=False,
+        # Analysis
         analysis_result=None,
         refinement_notes=None,
         needs_clarification=False,
         clarification_question=None,
+        # Output
         final_response="",
         streaming_events=[],
         metadata={},
         langfuse_trace_id=None,
         iteration=0,
     )
+    
+    # If resuming from clarification, restore previous context
+    if pending_context:
+        state["extracted_filters"] = pending_context.get("extracted_filters")
+        state["search_scope"] = pending_context.get("search_scope")
+        state["retrieved_items"] = pending_context.get("retrieved_items", [])
+        state["iteration"] = pending_context.get("iteration", 0)
+        state["intent"] = "clothing"  # Clarification is always in clothing context
+        # Restore style_dna and user_profile to avoid re-fetching
+        state["style_dna"] = pending_context.get("style_dna")
+        state["user_profile"] = pending_context.get("user_profile")
+    
+    return state
+
+
+def create_clarification_context(state: ConversationState) -> Dict[str, Any]:
+    """
+    Create a context snapshot when clarification is needed.
+    
+    This context will be stored and used to resume the workflow
+    when the user provides their clarification response.
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        Context dictionary to be stored
+    """
+    return {
+        "original_message": state.get("message", ""),
+        "clarification_question": state.get("clarification_question", ""),
+        "extracted_filters": state.get("extracted_filters"),
+        "search_scope": state.get("search_scope"),
+        "retrieved_items": state.get("retrieved_items", []),
+        "iteration": state.get("iteration", 0),
+        "style_dna": state.get("style_dna"),
+        "user_profile": state.get("user_profile"),
+        "intent": state.get("intent"),
+    }
+
+
+def merge_clarification_into_filters(
+    existing_filters: Optional[Dict[str, Any]],
+    clarification_response: str,
+    clarification_question: str,
+) -> Dict[str, Any]:
+    """
+    Minimal fallback for merging clarification response into filters.
+    
+    Primary extraction happens via LLM in merge_clarification_context_node.
+    This is only called if LLM extraction fails - just preserves existing filters.
+    
+    Args:
+        existing_filters: Previously extracted filters
+        clarification_response: User's response (logged for debugging)
+        clarification_question: The question asked (logged for debugging)
+        
+    Returns:
+        Existing filters (unchanged)
+    """
+    # LLM extraction in main_workflow.py handles the heavy lifting
+    # This fallback just preserves existing filters
+    return existing_filters.copy() if existing_filters else {}
 
 
 def validate_state(state: ConversationState) -> List[str]:

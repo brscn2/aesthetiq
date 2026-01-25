@@ -125,7 +125,7 @@ class BackendClient:
         Create a new chat session.
         
         Args:
-            user_id: The user's identifier
+            user_id: The user's identifier (used for logging, auth comes from token)
             title: Session title (default: "New Conversation")
             session_id: Optional custom session ID
             
@@ -137,8 +137,9 @@ class BackendClient:
         """
         client = await self._get_client()
         
+        # Note: userId is NOT sent in payload - it's extracted from the auth token
+        # by the NestJS backend. We only send title and optional sessionId.
         payload: Dict[str, Any] = {
-            "userId": user_id,
             "title": title,
         }
         if session_id:
@@ -242,6 +243,71 @@ class BackendClient:
             return await self._handle_response(response)
         except httpx.RequestError as e:
             logger.error(f"Network error getting user sessions: {e}")
+            raise BackendClientError(f"Network error: {e}")
+    
+    async def update_session_metadata(
+        self,
+        session_id: str,
+        metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update session metadata by merging with existing metadata (atomic).
+        
+        Backend handles the merge atomically using MongoDB $set with nested paths,
+        preventing race conditions in concurrent update scenarios.
+        
+        Args:
+            session_id: The session identifier
+            metadata: Metadata to merge with existing metadata
+            
+        Returns:
+            Updated session data
+            
+        Raises:
+            BackendClientError: If update fails
+        """
+        client = await self._get_client()
+        payload = {"metadata": metadata}  # Backend will merge atomically
+        
+        logger.debug(f"Updating metadata for session {session_id}")
+        
+        try:
+            # Use agent API endpoint which accepts sessionId directly
+            # Backend's mergeMetadata() handles atomic merge using MongoDB $set
+            response = await client.patch(f"/api/agent/sessions/{session_id}", json=payload)
+            return await self._handle_response(response)
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating session metadata: {e}")
+            raise BackendClientError(f"Network error: {e}")
+    
+    async def update_session_title(
+        self,
+        session_id: str,
+        title: str,
+    ) -> Dict[str, Any]:
+        """
+        Update session title.
+        
+        Args:
+            session_id: The session identifier
+            title: New title for the session
+            
+        Returns:
+            Updated session data
+            
+        Raises:
+            BackendClientError: If update fails
+        """
+        client = await self._get_client()
+        payload = {"title": title}
+        
+        logger.debug(f"Updating title for session {session_id}")
+        
+        try:
+            response = await client.patch(f"/api/agent/sessions/{session_id}", json=payload)
+            return await self._handle_response(response)
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating session title: {e}")
             raise BackendClientError(f"Network error: {e}")
     
     async def health_check(self) -> bool:

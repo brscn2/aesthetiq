@@ -4,237 +4,316 @@
 
 ```mermaid
 graph TB
-    subgraph "External Layer"
-        FE[Frontend React]
-        BE[Backend NestJS<br/>Chat API]
+    subgraph external [External Layer]
+        FE[Frontend Next.js]
     end
     
-    subgraph "Gateway Layer"
-        GW[FastAPI Gateway<br/>Port 8000<br/>Auth + Rate Limiting]
+    subgraph backend_layer [Backend Layer]
+        BE[NestJS Backend<br/>Port 3001<br/>Clerk Auth]
     end
     
-    subgraph "Conversational Agent Service"
-        CAS[LangGraph Workflow Engine<br/>Port 8002]
+    subgraph gateway_layer [Gateway Layer]
+        GW[Python Gateway<br/>Port 8000<br/>SSE Proxy]
+    end
+    
+    subgraph agent_service [Conversational Agent Service]
+        CAS[LangGraph Workflow<br/>Port 8002]
         
-        subgraph "Workflow Nodes"
-            IC[Intent Classifier]
-            GCA[General Conversation Agent]
-            CWF[Clothing Workflow]
-            RF[Response Formatter]
+        subgraph workflow_nodes [Workflow Nodes]
+            CheckClarify[check_clarification]
+            IG[input_guardrails]
+            IC[intent_classifier]
+            QA[query_analyzer]
+            GCA[conversation_agent]
+            CRA[clothing_recommender]
+            CAA[clothing_analyzer]
+            OG[output_guardrails]
+            RF[response_formatter]
         end
     end
     
-    subgraph "MCP Servers"
-        WS[Wardrobe MCP Server]
-        CS[Commerce MCP Server]
-        WSS[Web Search MCP Server<br/>Tavily]
-        UDS[User Data MCP Server]
-        SDS[Style DNA MCP Server]
+    subgraph mcp_layer [MCP Servers - Port 8010]
+        MCP[fastapi-mcp<br/>at /mcp]
+        WS[Wardrobe Server]
+        CS[Commerce Server]
+        WSS[Web Search Server]
+        UDS[User Data Server]
+        SDS[Style DNA Server]
     end
     
-    subgraph "Data Layer"
-        MW[(MongoDB<br/>Wardrobe)]
-        MC[(MongoDB<br/>Commerce)]
-        MP[(MongoDB<br/>User Profiles)]
-        EXT[External APIs<br/>Tavily]
+    subgraph data_layer [Data Layer]
+        MW[(wardrobeitems)]
+        MC[(commerceitems)]
+        MU[(users)]
+        MSP[(styleprofiles)]
+        MCA[(coloranalyses)]
+        EXT[Tavily API]
     end
     
-    FE -->|SSE Stream| BE
-    BE -->|HTTP Request| GW
-    GW -->|Route| CAS
+    FE -->|NEXT_PUBLIC_API_URL| BE
+    BE -->|PYTHON_GATEWAY_URL| GW
+    GW --> CAS
     
-    CAS --> IC
+    CAS --> CheckClarify
+    CheckClarify --> IG
+    IG --> IC
     IC -->|general| GCA
-    IC -->|clothing| CWF
-    GCA --> RF
-    CWF --> RF
-    RF -->|SSE Stream| BE
+    IC -->|clothing| QA
+    QA --> CRA
+    CRA --> CAA
+    CAA --> OG
+    GCA --> OG
+    OG --> RF
+    RF --> CAS
     
-    GCA -.->|Tool Calls| WSS
-    GCA -.->|Tool Calls| SDS
+    CAS -->|SSE| GW
+    GW -->|SSE| BE
+    BE -->|SSE| FE
     
-    CWF -.->|Tool Calls| WS
-    CWF -.->|Tool Calls| CS
-    CWF -.->|Tool Calls| WSS
-    CWF -.->|Tool Calls| UDS
-    CWF -.->|Tool Calls| SDS
+    CRA -.->|langchain-mcp-adapters| MCP
+    GCA -.->|langchain-mcp-adapters| MCP
+    
+    MCP --> WS
+    MCP --> CS
+    MCP --> WSS
+    MCP --> UDS
+    MCP --> SDS
     
     WS --> MW
     CS --> MC
-    UDS --> MP
-    SDS --> MP
+    UDS --> MU
+    SDS --> MSP
+    SDS --> MCA
     WSS --> EXT
-    
-    style FE fill:#e1f5ff
-    style BE fill:#e1f5ff
-    style GW fill:#fff4e1
-    style CAS fill:#e8f5e9
-    style IC fill:#f3e5f5
-    style GCA fill:#f3e5f5
-    style CWF fill:#f3e5f5
-    style RF fill:#f3e5f5
-    style WS fill:#fff9c4
-    style CS fill:#fff9c4
-    style WSS fill:#fff9c4
-    style UDS fill:#fff9c4
-    style SDS fill:#fff9c4
 ```
 
 ## Clothing Recommendation Workflow (Detailed)
 
 ```mermaid
 graph TB
-    Start([User Query:<br/>Clothing Request]) --> QA[Query Analyzer Node]
+    Start([User Message]) --> CheckClarify[check_clarification]
     
-    QA -->|Determine Scope| Scope{Search Scope?}
+    CheckClarify -->|fresh| IG[input_guardrails]
+    CheckClarify -->|resume| Merge[merge_clarification]
     
-    Scope -->|Commerce Only| CRA1[Clothing Recommender Agent]
-    Scope -->|Wardrobe Only| CRA2[Clothing Recommender Agent]
-    Scope -->|Both| CRA3[Clothing Recommender Agent]
+    IG -->|safe| IC[intent_classifier]
+    IG -->|unsafe| Error[error_response]
     
-    CRA1 -->|Fetch Context| UD[User Data MCP<br/>Get Profile]
-    CRA1 -->|Fetch Context| SD[Style DNA MCP<br/>Get Style DNA]
-    CRA1 -->|Search| CS[Commerce MCP<br/>Search Items]
+    IC -->|clothing| QA[query_analyzer]
+    IC -->|general| GCA[conversation_agent]
     
-    CRA2 -->|Fetch Context| UD
-    CRA2 -->|Fetch Context| SD
-    CRA2 -->|Search| WS[Wardrobe MCP<br/>Search Items]
+    QA --> CRA[clothing_recommender]
+    Merge --> CRA
     
-    CRA3 -->|Fetch Context| UD
-    CRA3 -->|Fetch Context| SD
-    CRA3 -->|Search| WS
-    CRA3 -->|Search| CS
+    subgraph recommender [Clothing Recommender Agent]
+        CRA -->|1| FetchProfile[get_user_profile MCP]
+        CRA -->|2| FetchDNA[get_style_dna MCP]
+        CRA -->|3| Search{search_scope?}
+        Search -->|commerce| SearchComm[search_commerce_items]
+        Search -->|wardrobe| SearchWard[search_wardrobe_items]
+        Search -->|both| SearchBoth[Search Both]
+    end
     
-    CS -->|Items Found?| Check1{Results?}
-    WS -->|Items Found?| Check1
+    SearchComm --> CheckResults{Results?}
+    SearchWard --> CheckResults
+    SearchBoth --> CheckResults
     
-    Check1 -->|No Results| WSS[Web Search MCP<br/>Fallback Search]
-    Check1 -->|Has Results| CAA[Clothing Analyzer Agent]
-    WSS --> CAA
+    CheckResults -->|none| Fallback[web_search MCP]
+    CheckResults -->|found| CAA[clothing_analyzer]
+    Fallback --> CAA
     
-    CAA -->|Analyze| Analysis{Analysis Result}
+    CAA --> Analysis{decision?}
     
-    Analysis -->|APPROVE| RF[Response Formatter]
-    Analysis -->|REFINE| Notes[Add Refinement Notes]
-    Analysis -->|CLARIFY| Ask[Ask User for Info]
+    Analysis -->|approve| OG[output_guardrails]
+    Analysis -->|refine| CRA
+    Analysis -->|clarify| SaveCtx[save_clarification]
     
-    Notes -->|Retry| CRA1
-    Notes -->|Retry| CRA2
-    Notes -->|Retry| CRA3
+    SaveCtx --> OG
+    GCA --> OG
     
-    Ask -->|User Response| QA
+    OG -->|safe| RF[response_formatter]
+    OG -->|unsafe| Error
     
-    RF -->|Stream| Backend[Backend Chat API]
-    Backend -->|SSE| Frontend[Frontend]
+    RF --> EndNode([END])
+    Error --> EndNode
+```
+
+## Multi-Turn Clarification Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Workflow
+    participant Analyzer
+    participant SaveCtx as Save Context
+    participant Formatter
+    participant Merge as Merge Context
+    participant Recommender
     
-    End([Response Delivered])
-    RF --> End
+    Note over User,Recommender: Turn 1: Vague Request
+    User->>Workflow: "I need something nice"
+    Workflow->>Analyzer: Analyze items
+    Analyzer->>Analyzer: Query too vague
+    Analyzer->>Workflow: decision: CLARIFY
+    Workflow->>SaveCtx: Save workflow state
+    SaveCtx->>SaveCtx: Store filters, items, iteration
+    SaveCtx->>Formatter: Send clarification question
+    Formatter->>User: "What occasion is this for?"
+    Note over User: workflow_status = awaiting_clarification
     
-    style Start fill:#e3f2fd
-    style QA fill:#fff3e0
-    style CRA1 fill:#e8f5e9
-    style CRA2 fill:#e8f5e9
-    style CRA3 fill:#e8f5e9
-    style CAA fill:#f3e5f5
-    style RF fill:#e1bee7
-    style Analysis fill:#fff9c4
-    style Notes fill:#ffccbc
-    style Ask fill:#ffccbc
+    Note over User,Recommender: Turn 2: Clarification Response
+    User->>Workflow: "A formal dinner party"
+    Workflow->>Workflow: Detect pending clarification
+    Workflow->>Merge: Merge user response
+    Merge->>Merge: Extract: occasion=party
+    Merge->>Merge: Merge with saved filters
+    Merge->>Recommender: Resume with updated filters
+    Recommender->>Analyzer: Updated items
+    Analyzer->>Workflow: decision: APPROVE
+    Workflow->>Formatter: Format response
+    Formatter->>User: "Here are formal party options..."
+    Note over User: workflow_status = completed
 ```
 
 ## Agent Communication (LangGraph State Management)
 
-**Note:** The following diagram shows the conceptual flow of agent communication. In the actual implementation, agents communicate through shared LangGraph state rather than explicit A2A protocol messages. State updates trigger workflow transitions automatically.
+**Note:** Agents communicate through shared `ConversationState` TypedDict. State updates trigger workflow transitions automatically via conditional routing functions.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Backend as NestJS Backend
+    participant Gateway as Python Gateway
+    participant Agent as Conversational Agent
+    participant LG as LangGraph Workflow
+    participant Recommender as clothing_recommender node
+    participant Analyzer as clothing_analyzer node
+    participant MCP as MCP Servers
+    
+    User->>Backend: POST /api/agent/chat/stream
+    Note over Backend: Validate Clerk JWT<br/>Extract user_id
+    Backend->>Gateway: POST /api/v1/agent/chat/stream
+    Gateway->>Agent: Forward request
+    Agent->>LG: run_workflow_streaming()
+    
+    LG->>LG: check_clarification node
+    LG->>LG: input_guardrails node
+    LG->>LG: intent_classifier node
+    LG->>LG: query_analyzer node
+    
+    LG->>Recommender: Execute clothing_recommender
+    
+    Recommender->>MCP: get_user_profile via langchain-mcp-adapters
+    MCP-->>Recommender: UserProfile
+    Recommender->>Recommender: Write state.user_profile
+    
+    Recommender->>MCP: get_style_dna
+    MCP-->>Recommender: StyleDNA
+    Recommender->>Recommender: Write state.style_dna
+    
+    Recommender->>MCP: search_commerce_items
+    MCP-->>Recommender: Items
+    Recommender->>Recommender: Write state.retrieved_items
+    
+    LG->>Analyzer: Execute clothing_analyzer
+    Note over Analyzer: Read state.retrieved_items<br/>Read state.style_dna<br/>Analyze relevance
+    
+    alt decision = approve
+        Analyzer->>Analyzer: Write state.analysis_result
+        LG->>LG: route_after_analysis returns "approve"
+        LG->>LG: output_guardrails node
+        LG->>LG: response_formatter node
+        Agent->>Gateway: SSE done event
+    else decision = refine
+        Analyzer->>Analyzer: Write state.refinement_notes
+        LG->>LG: route_after_analysis returns "refine"
+        LG->>Recommender: Re-execute with updated filters
+    else decision = clarify
+        Analyzer->>Analyzer: Write state.needs_clarification = true
+        LG->>LG: save_clarification node
+        LG->>LG: Set workflow_status = awaiting_clarification
+        Agent->>Gateway: SSE done with clarification_question
+        Gateway->>Backend: SSE
+        Backend->>User: Display question
+    end
+```
+
+## Multi-Turn Clarification Resume Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Gateway
     participant Workflow
-    participant Recommender as Clothing Recommender Agent
-    participant Analyzer as Clothing Analyzer Agent
-    participant MCP as MCP Servers
+    participant CheckNode as Check Clarification
+    participant MergeNode as Merge Context
+    participant Recommender
+    participant Analyzer
     
-    User->>Gateway: POST /api/v1/agent/chat/stream
-    Gateway->>Workflow: Route request
-    Workflow->>Recommender: Start recommendation
+    Note over User,Analyzer: Turn 2: User responds to clarification
+    User->>Gateway: "A formal dinner party"
+    Gateway->>Workflow: run_workflow(pending_context)
     
-    Recommender->>MCP: get_user_profile(user_id)
-    MCP-->>Recommender: UserProfile
+    Workflow->>CheckNode: Entry point
+    CheckNode->>CheckNode: Detect pending clarification
+    CheckNode->>MergeNode: Route to merge
     
-    Recommender->>MCP: get_style_dna(user_id)
-    MCP-->>Recommender: StyleDNA
+    MergeNode->>MergeNode: Parse response:<br/>"formal dinner party"<br/>→ {occasion: "party"}
+    MergeNode->>MergeNode: Merge with saved filters
+    MergeNode->>MergeNode: Restore iteration count
     
-    Recommender->>MCP: search_commerce_items(query, style_dna)
-    MCP-->>Recommender: List[Items]
+    MergeNode->>Recommender: Resume with updated filters
+    Note over Recommender: Skipped Intent Classifier<br/>and Query Analyzer
     
-    Recommender->>Workflow: Update state: retrieved_items
-    
-    Workflow->>Analyzer: State transition (retrieved_items updated)
-    Note over Analyzer: State-based communication:<br/>Analyzer reads retrieved_items<br/>from shared state
-    
-    Analyzer->>Analyzer: Analyze items vs query + style_dna
-    
-    alt Items Approved
-        Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
-        Workflow->>Gateway: Stream: items + response
-    else Items Need Refinement
-        Analyzer->>Workflow: Update state: refinement_notes, iteration++
-        Note over Workflow: Conditional routing based on<br/>analysis_result.decision == "refine"
-        Workflow->>Recommender: Retry (reads refinement_notes from state)
-        Recommender->>MCP: search_commerce_items(query + refinement_notes)
-        MCP-->>Recommender: List[Items]
-        Recommender->>Workflow: Update state: retrieved_items
-        Workflow->>Analyzer: State transition (retrieved_items updated)
-        Analyzer->>Workflow: Update state: analysis_result.decision = "approve"
-    else Query Unclear
-        Analyzer->>Workflow: Update state: needs_clarification = True
-        Note over Workflow: Conditional routing based on<br/>needs_clarification == True
-        Workflow->>Gateway: Stream: ask user
-        Gateway->>User: "What occasion is this for?"
-        User->>Gateway: Response
-        Gateway->>Workflow: Updated query
-        Workflow->>Recommender: Retry with clarification
-    end
-    
-    Gateway->>User: SSE Stream: Final response
+    Recommender->>Recommender: Search with merged filters
+    Recommender->>Analyzer: Updated items
+    Analyzer->>Analyzer: Analyze items
+    Analyzer->>Workflow: decision = "approve"
+    Workflow->>Workflow: Set workflow_status = "completed"
+    Workflow->>Gateway: Stream response
+    Gateway->>User: "Here are formal party options..."
 ```
 
 ## MCP Server Tool Call Flow
 
 ```mermaid
 graph LR
-    subgraph "Agent"
-        A[Clothing Recommender Agent]
+    subgraph agent [LangGraph Agent Node]
+        ReactAgent[create_react_agent]
+        ToolCall[Tool Call Decision]
     end
     
-    subgraph "MCP Client"
-        MC[MCP Client Library]
+    subgraph mcp_client [MCP Client]
+        MCPAdapter[langchain-mcp-adapters<br/>MultiServerMCPClient]
+        BaseTool[LangChain BaseTool]
     end
     
-    subgraph "MCP Server"
-        MS[MCP Server<br/>Commerce/Wardrobe/etc]
-        T[Tool Handler]
+    subgraph mcp_server [MCP Server Port 8010]
+        MCPEndpoint[/mcp endpoint<br/>streamable_http]
+        FastAPIRoute[FastAPI Route<br/>/tools/*]
+        ToolFunc[Tool Function]
     end
     
-    subgraph "Data Source"
-        DS[(MongoDB<br/>or External API)]
+    subgraph data [Data Layer]
+        MongoDB[(MongoDB)]
+        External[External API]
     end
     
-    A -->|1. Call Tool| MC
-    MC -->|2. MCP Protocol<br/>JSON-RPC| MS
-    MS -->|3. Route| T
-    T -->|4. Query| DS
-    DS -->|5. Results| T
-    T -->|6. Format| MS
-    MS -->|7. MCP Response| MC
-    MC -->|8. Return| A
-    
-    style A fill:#e8f5e9
-    style MC fill:#fff3e0
-    style MS fill:#fff9c4
-    style T fill:#e1bee7
-    style DS fill:#b3e5fc
+    ReactAgent -->|1 Decide tool| ToolCall
+    ToolCall -->|2 Invoke| BaseTool
+    BaseTool -->|3 Call| MCPAdapter
+    MCPAdapter -->|4 HTTP POST| MCPEndpoint
+    MCPEndpoint -->|5 Route| FastAPIRoute
+    FastAPIRoute -->|6 Execute| ToolFunc
+    ToolFunc -->|7 Query| MongoDB
+    ToolFunc -->|7 Query| External
+    MongoDB -->|8 Results| ToolFunc
+    External -->|8 Results| ToolFunc
+    ToolFunc -->|9 Response| FastAPIRoute
+    FastAPIRoute -->|10 JSON| MCPEndpoint
+    MCPEndpoint -->|11 MCP Response| MCPAdapter
+    MCPAdapter -->|12 Return| BaseTool
+    BaseTool -->|13 Tool Result| ReactAgent
 ```
 
 ## Streaming Architecture
@@ -242,32 +321,43 @@ graph LR
 ```mermaid
 sequenceDiagram
     participant User
-    participant Frontend
-    participant Backend
-    participant Gateway
-    participant AgentService
-    participant LangGraph
+    participant Frontend as Frontend Next.js
+    participant Backend as NestJS Backend
+    participant Gateway as Python Gateway
+    participant Agent as Conversational Agent
+    participant LG as LangGraph
+    participant MCP as MCP Servers
     
     User->>Frontend: Type message
-    Frontend->>Backend: POST /chat/:sessionId/message
-    Backend->>Gateway: POST /api/v1/agent/chat/stream<br/>(SSE)
+    Frontend->>Backend: POST /api/agent/chat/stream<br/>with Clerk JWT
     
-    Gateway->>AgentService: Forward request
-    AgentService->>LangGraph: Execute workflow
+    Note over Backend: Validate Clerk token<br/>Extract user_id
     
-    loop Workflow Execution
-        LangGraph->>AgentService: Stream event
-        AgentService->>Gateway: SSE: event
+    Backend->>Gateway: POST /api/v1/agent/chat/stream<br/>SSE Accept headers
+    Gateway->>Agent: Forward with timeout 600s
+    Agent->>Agent: Load session via BackendClient
+    Agent->>LG: run_workflow_streaming()
+    
+    loop LangGraph astream_events
+        LG->>LG: Execute node
+        LG->>Agent: Stream event
+        
+        alt Tool Call
+            LG->>MCP: MCP tool via langchain-mcp-adapters
+            MCP-->>LG: Tool result
+        end
+        
+        Agent->>Gateway: SSE: event
         Gateway->>Backend: SSE: event
         Backend->>Frontend: SSE: event
         Frontend->>User: Display update
     end
     
-    LangGraph->>AgentService: Done event
-    AgentService->>Gateway: SSE: done
+    LG->>Agent: Workflow complete
+    Agent->>Agent: Save messages via BackendClient
+    Agent->>Gateway: SSE: done event
     Gateway->>Backend: SSE: done
     Backend->>Frontend: SSE: done
-    Backend->>Backend: Save to DB
     Frontend->>User: Complete response
 ```
 
@@ -275,102 +365,104 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    Start([User: 'Find me jackets']) --> IC[Intent Classifier]
-    IC -->|clothing| QA[Query Analyzer]
+    Start([User: Find me jackets]) --> CC[check_clarification<br/>fresh request]
+    CC --> IG[input_guardrails<br/>safe]
+    IG --> IC[intent_classifier<br/>clothing]
+    IC --> QA[query_analyzer]
     
-    QA -->|Extract| Extract[Extract:<br/>- Type: jackets<br/>- Category: TOP<br/>- Scope: commerce]
+    QA -->|Extract| Extract[extracted_filters:<br/>category: TOP<br/>subCategory: Jacket<br/>search_scope: commerce]
     
-    Extract --> CRA[Clothing Recommender Agent]
+    Extract --> CRA[clothing_recommender]
     
-    CRA -->|1| UD[User Data MCP:<br/>get_user_profile]
-    CRA -->|2| SD[Style DNA MCP:<br/>get_style_dna]
-    CRA -->|3| CS[Commerce MCP:<br/>search_items<br/>query='jackets'<br/>style_dna=warm_autumn]
+    subgraph recommender [clothing_recommender node]
+        CRA -->|MCP| UD[get_user_profile]
+        CRA -->|MCP| SD[get_style_dna<br/>returns: WARM_AUTUMN]
+        CRA -->|MCP| CS[search_commerce_items<br/>query=jackets<br/>style_dna=WARM_AUTUMN]
+        CS -->|5 items| Items[state.retrieved_items]
+    end
     
-    UD -->|Profile| CRA
-    SD -->|Style DNA| CRA
-    CS -->|5 jackets| CRA
+    Items --> CAA[clothing_analyzer]
     
-    CRA -->|Items| CAA[Clothing Analyzer Agent]
+    subgraph analyzer [clothing_analyzer node]
+        CAA --> Analysis{Analyze:<br/>items vs style_dna}
+        Analysis -->|2/5 match colors| Refine[decision: refine<br/>refinement_notes]
+        Analysis -->|3/3 match| Approve[decision: approve]
+    end
     
-    CAA -->|Analyze| Check{Match Style DNA?}
+    Refine -->|iteration++ < 3| CRA2[clothing_recommender<br/>retry with notes]
+    CRA2 -->|3 better items| CAA
     
-    Check -->|No - 2/5 match| Refine[Add Notes:<br/>'Need warm autumn colors'<br/>'More formal options']
-    Refine -->|Retry| CS2[Commerce MCP:<br/>search_items<br/>+ refinement notes]
-    CS2 -->|3 jackets| CAA
+    Approve --> OG[output_guardrails]
+    OG --> RF[response_formatter]
     
-    Check -->|Yes - 3/3 match| Approve[APPROVE]
-    
-    Approve --> RF[Response Formatter]
-    RF -->|Format| Format[Format Response:<br/>- List jackets<br/>- Add styling tips<br/>- Explain choices]
-    
-    Format -->|SSE Stream| Backend[Backend Chat API]
-    Backend -->|SSE| Frontend[Frontend]
-    Frontend -->|Display| User[User sees jackets]
-    
-    style Start fill:#e3f2fd
-    style CRA fill:#e8f5e9
-    style CAA fill:#f3e5f5
-    style Approve fill:#c8e6c9
-    style Refine fill:#ffccbc
-    style RF fill:#e1bee7
+    RF --> Done[SSE done event:<br/>response, items, intent]
+    Done --> Backend[NestJS Backend]
+    Backend --> Frontend[Frontend Next.js]
+    Frontend --> User[User sees jackets]
 ```
 
 ## MCP Server Architecture
 
 ```mermaid
 graph TB
-    subgraph "MCP Protocol Layer"
-        MCPClient[MCP Client<br/>in Agent Service]
-        MCPServer[MCP Server<br/>Standalone Process]
+    subgraph agent [Conversational Agent]
+        MCPClient[MultiServerMCPClient<br/>langchain-mcp-adapters]
+        Tools[LangChain BaseTool objects]
+        ReactAgent[create_react_agent]
     end
     
-    subgraph "Tool Handlers"
-        TH1[Wardrobe Tools]
-        TH2[Commerce Tools]
-        TH3[Web Search Tools]
-        TH4[User Data Tools]
-        TH5[Style DNA Tools]
+    subgraph mcp_server [MCP Servers - Port 8010]
+        FastAPI[FastAPI App]
+        FastApiMCP[FastApiMCP<br/>fastapi-mcp]
+        MCPEndpoint[/mcp endpoint<br/>streamable_http transport]
+        
+        subgraph routers [FastAPI Routers]
+            WR[/api/v1/wardrobe/tools/*]
+            CR[/api/v1/commerce/tools/*]
+            WSR[/api/v1/web-search/tools/*]
+            UDR[/api/v1/user-data/tools/*]
+            SDR[/api/v1/style-dna/tools/*]
+        end
     end
     
-    subgraph "Data Access"
-        DA1[MongoDB Driver]
-        DA2[HTTP Client<br/>Tavily API]
-        DA3[Embedding Service]
+    subgraph shared [Shared Services]
+        Mongo[MongoDB Client<br/>shared/mongo.py]
+        Embed[Embedding Client<br/>shared/embeddings_client.py]
     end
     
-    subgraph "Data Sources"
-        DS1[(MongoDB<br/>Wardrobe)]
-        DS2[(MongoDB<br/>Commerce)]
-        DS3[(MongoDB<br/>User Profiles)]
-        DS4[External API<br/>Tavily]
-        DS5[Embedding Service<br/>Port 8004]
+    subgraph data [Data Sources]
+        WI[(wardrobeitems)]
+        CI[(commerceitems)]
+        U[(users)]
+        SP[(styleprofiles)]
+        CA[(coloranalyses)]
+        Tavily[Tavily API]
+        EmbedSvc[Embedding Service<br/>Port 8004]
     end
     
-    MCPClient <-->|JSON-RPC<br/>over stdio/HTTP| MCPServer
-    MCPServer --> TH1
-    MCPServer --> TH2
-    MCPServer --> TH3
-    MCPServer --> TH4
-    MCPServer --> TH5
+    MCPClient -->|get_tools| Tools
+    Tools --> ReactAgent
+    MCPClient <-->|streamable_http| MCPEndpoint
     
-    TH1 --> DA1
-    TH2 --> DA1
-    TH2 --> DA3
-    TH3 --> DA2
-    TH4 --> DA1
-    TH5 --> DA1
+    FastAPI --> FastApiMCP
+    FastApiMCP --> MCPEndpoint
+    FastAPI --> WR
+    FastAPI --> CR
+    FastAPI --> WSR
+    FastAPI --> UDR
+    FastAPI --> SDR
     
-    DA1 --> DS1
-    DA1 --> DS2
-    DA1 --> DS3
-    DA2 --> DS4
-    DA3 --> DS5
+    WR --> Mongo
+    CR --> Mongo
+    CR --> Embed
+    UDR --> Mongo
+    SDR --> Mongo
+    WSR --> Tavily
     
-    style MCPClient fill:#e8f5e9
-    style MCPServer fill:#fff9c4
-    style TH1 fill:#e1bee7
-    style TH2 fill:#e1bee7
-    style TH3 fill:#e1bee7
-    style TH4 fill:#e1bee7
-    style TH5 fill:#e1bee7
+    Mongo --> WI
+    Mongo --> CI
+    Mongo --> U
+    Mongo --> SP
+    Mongo --> CA
+    Embed --> EmbedSvc
 ```
