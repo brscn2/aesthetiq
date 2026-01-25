@@ -59,7 +59,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s  # Longer start period for model loading
+      start_period: 120s  # Longer start period for model loading (takes ~90s to initialize)
     restart: unless-stopped
     # Resource limits for ML service
     deploy:
