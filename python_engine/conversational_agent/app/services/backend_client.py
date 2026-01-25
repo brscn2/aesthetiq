@@ -280,6 +280,36 @@ class BackendClient:
             logger.error(f"Network error updating session metadata: {e}")
             raise BackendClientError(f"Network error: {e}")
     
+    async def update_session_title(
+        self,
+        session_id: str,
+        title: str,
+    ) -> Dict[str, Any]:
+        """
+        Update session title.
+        
+        Args:
+            session_id: The session identifier
+            title: New title for the session
+            
+        Returns:
+            Updated session data
+            
+        Raises:
+            BackendClientError: If update fails
+        """
+        client = await self._get_client()
+        payload = {"title": title}
+        
+        logger.debug(f"Updating title for session {session_id}")
+        
+        try:
+            response = await client.patch(f"/api/agent/sessions/{session_id}", json=payload)
+            return await self._handle_response(response)
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating session title: {e}")
+            raise BackendClientError(f"Network error: {e}")
+    
     async def health_check(self) -> bool:
         """
         Check if the backend is healthy.

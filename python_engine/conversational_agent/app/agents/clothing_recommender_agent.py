@@ -214,7 +214,7 @@ def _normalize_item_to_clothing_item(item: Dict[str, Any], source: str) -> Dict[
         normalized["brand"] = item["brand"]
     
     # Map colors to colorHex (first color if array) and convert to color name
-    colors = item.get("colors", [])
+    colors = item.get("colors") or []
     color_hex = None
     if colors and isinstance(colors, list) and len(colors) > 0:
         color_hex = colors[0]
@@ -296,9 +296,9 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
     if isinstance(tool_result, dict):
         logger.debug(f"[EXTRACT] tool_result keys: {list(tool_result.keys())}")
         if "results" in tool_result:
-            logger.debug(f"[EXTRACT] Found 'results' key with {len(tool_result.get('results', []))} entries")
+            logger.debug(f"[EXTRACT] Found 'results' key with {len(tool_result.get('results') or [])} entries")
         if "items" in tool_result:
-            logger.debug(f"[EXTRACT] Found 'items' key with {len(tool_result.get('items', []))} entries")
+            logger.debug(f"[EXTRACT] Found 'items' key with {len(tool_result.get('items') or [])} entries")
     elif isinstance(tool_result, list):
         logger.debug(f"[EXTRACT] tool_result is a list with {len(tool_result)} entries")
     else:
@@ -333,7 +333,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
     if isinstance(tool_result, dict):
         # Handle {results: [{item: {...}, score: ...}]} format (from SearchWardrobeItemsResponse)
         if "results" in tool_result:
-            results_list = tool_result.get("results", [])
+            results_list = tool_result.get("results") or []
             logger.info(f"[EXTRACT] Processing {len(results_list)} results from 'results' key")
             for i, r in enumerate(results_list):
                 r_dict = _convert_to_dict(r)
@@ -352,7 +352,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
                     logger.warning(f"[EXTRACT] Could not convert result {i} to dict")
         # Handle {items: [...]} format (from FilterWardrobeItemsResponse)
         elif "items" in tool_result:
-            items_list = tool_result.get("items", [])
+            items_list = tool_result.get("items") or []
             logger.info(f"[EXTRACT] Processing {len(items_list)} items from 'items' key (FilterWardrobeItemsResponse)")
             for i, item in enumerate(items_list):
                 item_dict = _convert_to_dict(item)
@@ -417,7 +417,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
                                 if isinstance(text_content, dict):
                                     # Check if this is a response structure with 'results' or 'items'
                                     if 'results' in text_content:
-                                        logger.info(f"[EXTRACT] Found 'results' in parsed text for item {i} with {len(text_content.get('results', []))} entries")
+                                        logger.info(f"[EXTRACT] Found 'results' in parsed text for item {i} with {len(text_content.get('results') or [])} entries")
                                         # Recursively process the results structure
                                         # This handles SearchCommerceItemsResponse, SearchWardrobeItemsResponse, etc.
                                         nested_items = _extract_items_from_result(text_content, source)
@@ -425,7 +425,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
                                         logger.info(f"[EXTRACT] Extracted {len(nested_items)} items from 'results' in text field")
                                         continue
                                     elif 'items' in text_content:
-                                        logger.info(f"[EXTRACT] Found 'items' in parsed text for item {i} with {len(text_content.get('items', []))} entries")
+                                        logger.info(f"[EXTRACT] Found 'items' in parsed text for item {i} with {len(text_content.get('items') or [])} entries")
                                         # Recursively process the items structure
                                         # This handles FilterCommerceItemsResponse, FilterWardrobeItemsResponse, etc.
                                         nested_items = _extract_items_from_result(text_content, source)
@@ -469,7 +469,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
             logger.debug(f"[EXTRACT] Converted tool_result to dict, keys: {list(result_dict.keys())}")
             # Try to extract items from the dict
             if "results" in result_dict:
-                results_list = result_dict.get("results", [])
+                results_list = result_dict.get("results") or []
                 logger.info(f"[EXTRACT] Found 'results' in converted dict with {len(results_list)} entries")
                 for i, r in enumerate(results_list):
                     r_dict = _convert_to_dict(r)
@@ -480,7 +480,7 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
                             logger.debug(f"[EXTRACT] Extracted item {i} from converted result: has id={('id' in item_dict or '_id' in item_dict)}, has imageUrl={'imageUrl' in item_dict}")
                             items.append(item_dict)
             elif "items" in result_dict:
-                items_list = result_dict.get("items", [])
+                items_list = result_dict.get("items") or []
                 logger.info(f"[EXTRACT] Found 'items' in converted dict with {len(items_list)} entries")
                 for i, item in enumerate(items_list):
                     item_dict = _convert_to_dict(item)
@@ -590,7 +590,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     trace_id = state.get("langfuse_trace_id")
     
     # Verify state reading in refinement loops
-    previous_items = state.get("retrieved_items", [])
+    previous_items = state.get("retrieved_items") or []
     previous_analysis = state.get("analysis_result")
     logger.info(
         f"[RECOMMENDER] State verification - iteration={iteration}, "
@@ -656,7 +656,7 @@ Filters: {filter_str}{refinement_context}"""
         search_sources_used = []
         fallback_used = False
         # Initialize retrieved_items - preserve from previous iteration if in refinement loop
-        previous_items = state.get("retrieved_items", [])
+        previous_items = state.get("retrieved_items") or []
         if previous_items and isinstance(previous_items, list) and iteration > 0:
             # In refinement, we might want to keep some previous items
             # But for now, start fresh and let agent find new items
@@ -714,7 +714,7 @@ Filters: {filter_str}{refinement_context}"""
                     logger.debug(f"[RECOMMENDER] tool_result dict keys: {list(tool_result.keys())}")
                     # Check if it's FilterWardrobeItemsResponse structure
                     if "items" in tool_result:
-                        items_list = tool_result.get("items", [])
+                        items_list = tool_result.get("items") or []
                         logger.debug(f"[RECOMMENDER] Found 'items' key with {len(items_list)} items")
                         if items_list and isinstance(items_list[0], dict):
                             logger.debug(f"[RECOMMENDER] First item in 'items' has keys: {list(items_list[0].keys())}")
@@ -743,7 +743,7 @@ Filters: {filter_str}{refinement_context}"""
                     if isinstance(tool_result, dict):
                         logger.debug(f"[RECOMMENDER] tool_result keys: {list(tool_result.keys())}")
                         if "results" in tool_result:
-                            logger.debug(f"[RECOMMENDER] 'results' has {len(tool_result.get('results', []))} entries")
+                            logger.debug(f"[RECOMMENDER] 'results' has {len(tool_result.get('results') or [])} entries")
                             if source == "commerce" and tool_result.get('results'):
                                 first_result = tool_result['results'][0]
                                 if isinstance(first_result, dict):
@@ -752,7 +752,7 @@ Filters: {filter_str}{refinement_context}"""
                                         item_keys = list(first_result['item'].keys()) if isinstance(first_result['item'], dict) else 'not a dict'
                                         logger.debug(f"[RECOMMENDER] [COMMERCE] First result item keys: {item_keys}")
                         if "items" in tool_result:
-                            logger.debug(f"[RECOMMENDER] 'items' has {len(tool_result.get('items', []))} entries")
+                            logger.debug(f"[RECOMMENDER] 'items' has {len(tool_result.get('items') or [])} entries")
                             if source == "commerce" and tool_result.get('items'):
                                 first_item = tool_result['items'][0]
                                 item_keys = list(first_item.keys()) if isinstance(first_item, dict) else 'not a dict'
@@ -844,7 +844,7 @@ Filters: {filter_str}{refinement_context}"""
         partial_items = []
         try:
             # Check if we have any items from previous iteration
-            previous_items = state.get("retrieved_items", [])
+            previous_items = state.get("retrieved_items") or []
             if previous_items and isinstance(previous_items, list):
                 partial_items = previous_items[:5]  # Keep some previous items as fallback
                 logger.info(f"[RECOMMENDER] Using {len(partial_items)} items from previous iteration as fallback")

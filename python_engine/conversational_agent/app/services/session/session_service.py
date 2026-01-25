@@ -26,8 +26,8 @@ class SessionData:
             session_id=data.get("sessionId", ""),
             user_id=data.get("userId", ""),
             title=data.get("title", ""),
-            messages=data.get("messages", []),
-            metadata=data.get("metadata", {}),
+            messages=data.get("messages") or [],
+            metadata=data.get("metadata") or {},
         )
 
 
@@ -172,6 +172,9 @@ class SessionService:
         """
         max_msgs = max_messages or self.settings.MAX_CONVERSATION_HISTORY
         
+        # Ensure messages is a list (handle None case)
+        messages = messages or []
+        
         # Get the most recent messages
         recent_messages = messages[-max_msgs:] if len(messages) > max_msgs else messages
         
@@ -260,7 +263,8 @@ class SessionService:
             context: Workflow context to save (should include retrieved_items, filters, etc.)
         """
         # Only save if we have items (clothing recommendations)
-        retrieved_items = context.get("retrieved_items", [])
+        # Use 'or []' to handle case where retrieved_items is explicitly None
+        retrieved_items = context.get("retrieved_items") or []
         if not retrieved_items:
             logger.debug(f"Skipping workflow context save - no items in context")
             return
@@ -276,9 +280,75 @@ class SessionService:
             # Don't raise - this is not critical for workflow execution
             logger.warning("Continuing without saving workflow context")
     
+    async def update_title_if_default(
+        self,
+        session_id: str,
+        user_message: str,
+        current_title: str = "New Conversation",
+    ) -> None:
+        """
+        Update session title from user message if it's still the default.
+        
+        Only updates if current_title matches the default to preserve manual renames.
+        
+        Args:
+            session_id: The session identifier
+            user_message: First user message to generate title from
+            current_title: Current session title (default: "New Conversation")
+        """
+        logger.debug(f"Title update check for session {session_id}: current_title='{current_title}', message_length={len(user_message)}")
+        
+        # Only update if still using default title
+        if current_title != "New Conversation":
+            logger.debug(f"Skipping title update - session {session_id} already has custom title: '{current_title}'")
+            return
+        
+        try:
+            smart_title = self._generate_smart_title(user_message)
+            logger.info(f"Updating session {session_id} title from '{current_title}' to '{smart_title}'")
+            result = await self.backend_client.update_session_title(
+                session_id=session_id,
+                title=smart_title,
+            )
+            logger.info(f"Successfully updated session {session_id} title to: '{smart_title}' (backend returned: {result.get('title', 'N/A')})")
+        except BackendClientError as e:
+            logger.error(f"Failed to update session title for {session_id}: {e} (status_code: {e.status_code})", exc_info=True)
+            # Don't raise - title update is non-critical
+        except Exception as e:
+            logger.error(f"Unexpected error updating session title for {session_id}: {e}", exc_info=True)
+            # Don't raise - title update is non-critical
+    
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
         return f"session_{uuid.uuid4().hex[:16]}"
+    
+    @staticmethod
+    def _generate_smart_title(user_message: str) -> str:
+        """
+        Generate a smart title from user message.
+        
+        Args:
+            user_message: The user's message to generate title from
+            
+        Returns:
+            Generated title (max 60 chars, truncated at word boundary)
+        """
+        if not user_message or not user_message.strip():
+            return "New Conversation"
+        
+        # Remove extra whitespace and get first part
+        cleaned = ' '.join(user_message.split())
+        
+        # Truncate to ~60 chars at word boundary
+        if len(cleaned) <= 60:
+            title = cleaned
+        else:
+            title = cleaned[:60].rsplit(' ', 1)[0]
+        
+        # Capitalize first letter
+        if title:
+            return title[0].upper() + title[1:]
+        return "New Conversation"
     
     async def close(self) -> None:
         """Close the underlying backend client."""

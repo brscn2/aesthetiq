@@ -112,7 +112,7 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
         - state["iteration"]: Incremented iteration count
     """
     message = state.get("message", "")
-    retrieved_items = state.get("retrieved_items", [])
+    retrieved_items = state.get("retrieved_items") or []
     style_dna = state.get("style_dna")
     user_profile = state.get("user_profile")
     extracted_filters = state.get("extracted_filters", {})
@@ -120,7 +120,7 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
     
     # Verify state reading in refinement loops
     previous_analysis = state.get("analysis_result")
-    previous_refinement_notes = state.get("refinement_notes", [])
+    previous_refinement_notes = state.get("refinement_notes") or []
     logger.info(
         f"[ANALYZER] State verification - iteration={iteration}, "
         f"items_count={len(retrieved_items) if isinstance(retrieved_items, list) else 0}, "

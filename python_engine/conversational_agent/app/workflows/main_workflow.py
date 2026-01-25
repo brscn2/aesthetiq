@@ -620,7 +620,7 @@ async def run_workflow(
         # End trace with appropriate metadata
         trace_metadata = {
             "intent": final_state.get("intent"),
-            "items_retrieved": len(final_state.get("retrieved_items", [])),
+            "items_retrieved": len(final_state.get("retrieved_items") or []),
             "workflow_status": workflow_status,
             "needs_clarification": needs_clarification,
         }
@@ -933,7 +933,7 @@ async def run_workflow_streaming(
         # End trace
         trace_metadata = {
             "intent": final_state.get("intent"),
-            "items_retrieved": len(final_state.get("retrieved_items", [])),
+            "items_retrieved": len(final_state.get("retrieved_items") or []),
             "workflow_status": workflow_status,
             "needs_clarification": needs_clarification,
             "streaming": True,

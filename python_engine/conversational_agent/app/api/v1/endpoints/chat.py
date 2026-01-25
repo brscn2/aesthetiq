@@ -51,7 +51,8 @@ async def save_workflow_context_to_session(
     
     elif workflow_status == "completed":
         try:
-            retrieved_items = final_state.get("retrieved_items", [])
+            # Use 'or []' to handle case where retrieved_items is explicitly None
+            retrieved_items = final_state.get("retrieved_items") or []
             if retrieved_items:
                 workflow_context = {
                     "intent": final_state.get("intent"),
@@ -179,6 +180,29 @@ async def chat(
         except Exception as save_error:
             logger.error(f"Failed to save conversation turn: {save_error}")
             # Don't fail the request if save fails, but log it
+        
+        # Update title if still default (smart naming)
+        # Only update on first message (check message count before saving)
+        try:
+            logger.debug(f"Non-streaming: Checking title update for session {session_data.session_id}, current title: '{session_data.title}'")
+            # Check message count to determine if this is the first user message
+            messages = session_data.messages or []
+            user_message_count = len([m for m in messages if m.get("role") == "user"])
+            logger.debug(f"Non-streaming: Session {session_data.session_id} - user messages: {user_message_count}")
+            
+            # Only update title if this is the first user message (user_message_count == 0 before saving)
+            # After saving, it will be 1, so we check before
+            if user_message_count == 0:
+                await session_service.update_title_if_default(
+                    session_id=session_data.session_id,
+                    user_message=request.message,
+                    current_title=session_data.title,
+                )
+            else:
+                logger.debug(f"Non-streaming: Skipping title update - not first message (user_message_count: {user_message_count})")
+        except Exception as title_error:
+            logger.warning(f"Failed to update session title: {title_error}", exc_info=True)
+            # Non-critical, continue
         
         # Save workflow context (pending clarification or completed workflow)
         await save_workflow_context_to_session(
@@ -321,6 +345,7 @@ async def chat_stream(
             
             # Always save the conversation turn, even if response is empty
             try:
+                logger.info(f"Streaming: Saving conversation turn for session {session_data.session_id}")
                 response_to_save = final_response or "I apologize, but I encountered an issue processing your request. Please try again."
                 await session_service.save_conversation_turn(
                     session_id=session_data.session_id,
@@ -333,9 +358,38 @@ async def chat_stream(
                         "workflow_status": final_state.get("workflow_status", "completed") if final_state else "completed",
                     },
                 )
+                logger.info(f"Streaming: Successfully saved conversation turn for session {session_data.session_id}")
             except Exception as save_error:
                 logger.error(f"Failed to save conversation turn: {save_error}")
                 # Don't fail the stream if save fails
+            
+            # Update title if still default (smart naming)
+            # Only update on first message (check message count before saving)
+            try:
+                logger.info(f"Streaming: Starting title update check for session {session_data.session_id}")
+                # Need to reload session to get current title and message count
+                updated_session = await session_service.backend_client.get_session(session_data.session_id)
+                current_title = updated_session.get("title", "New Conversation")
+                messages = updated_session.get("messages") or []
+                # Count user messages (excluding the one we just saved)
+                user_message_count = len([m for m in messages if m.get("role") == "user"])
+                logger.info(f"Streaming: Session {session_data.session_id} - title: '{current_title}', user messages: {user_message_count}")
+                
+                # Only update title if this is the first user message (user_message_count <= 1)
+                # This ensures we only update on the very first message
+                if user_message_count <= 1:
+                    logger.info(f"Streaming: Updating title for first message in session {session_data.session_id}")
+                    await session_service.update_title_if_default(
+                        session_id=session_data.session_id,
+                        user_message=request.message,
+                        current_title=current_title,
+                    )
+                else:
+                    logger.info(f"Streaming: Skipping title update - not first message (user_message_count: {user_message_count})")
+                logger.info(f"Streaming: Completed title update check for session {session_data.session_id}")
+            except Exception as title_error:
+                logger.warning(f"Failed to update session title: {title_error}", exc_info=True)
+                # Non-critical, continue
             
             # Save workflow context (pending clarification or completed workflow)
             # Note: Streaming endpoint has incomplete state (limitation of done event),
@@ -367,6 +421,27 @@ async def chat_stream(
                             "streaming": True,
                         },
                     )
+                    
+                    # Update title if still default (smart naming) - even on error
+                    try:
+                        logger.info(f"Streaming (error path): Starting title update check for session {session_id}")
+                        updated_session = await session_service.backend_client.get_session(session_id)
+                        current_title = updated_session.get("title", "New Conversation")
+                        messages = updated_session.get("messages") or []
+                        user_message_count = len([m for m in messages if m.get("role") == "user"])
+                        logger.info(f"Streaming (error path): Session {session_id} - title: '{current_title}', user messages: {user_message_count}")
+                        
+                        if user_message_count <= 1:
+                            logger.info(f"Streaming (error path): Updating title for first message in session {session_id}")
+                            await session_service.update_title_if_default(
+                                session_id=session_id,
+                                user_message=request.message,
+                                current_title=current_title,
+                            )
+                        else:
+                            logger.info(f"Streaming (error path): Skipping title update - not first message (user_message_count: {user_message_count})")
+                    except Exception as title_error:
+                        logger.warning(f"Failed to update session title in error handler: {title_error}", exc_info=True)
                 except Exception as save_error:
                     logger.error(f"Failed to save error message: {save_error}")
     

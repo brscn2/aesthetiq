@@ -82,12 +82,14 @@ interface ChatStylistProps {
     timestamp?: string
   }>
   onSessionUpdated?: (sessionId: string, lastMessage: string) => void
+  resetTrigger?: number // Increment this to force a reset
 }
 
 export function ChatStylist({
   activeSessionId = null,
   initialMessages = [],
   onSessionUpdated,
+  resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -98,31 +100,9 @@ export function ChatStylist({
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previousSessionIdRef = useRef<string | null>(null)
+  const previousResetTriggerRef = useRef<number>(0)
 
-  // Initialize messages from props when session changes
-  useEffect(() => {
-    if (activeSessionId !== previousSessionIdRef.current) {
-      previousSessionIdRef.current = activeSessionId
-      if (initialMessages.length > 0) {
-        setMessages(
-          initialMessages.map((msg) => ({
-            id: generateMessageId(),
-            role: msg.role,
-            content: msg.content,
-          }))
-        )
-      } else {
-        setMessages([])
-      }
-      
-      // Clear pending clarification context when starting new chat (activeSessionId is null)
-      if (activeSessionId === null) {
-        setPendingClarification(null)
-      }
-    }
-  }, [activeSessionId, initialMessages, setPendingClarification])
-
-  // Use the chat API hook
+  // Use the chat API hook (must be called before useEffect that uses setPendingClarification)
   const {
     sessionState,
     progress,
@@ -132,25 +112,23 @@ export function ChatStylist({
     cancelRequest,
     clearError,
     setPendingClarification,
+    resetSession,
   } = useChatApi({
     onStreamStart: () => {
-      // Add a placeholder message for streaming
-      const streamingMessage: Message = {
-        id: generateMessageId(),
-        role: "assistant",
-        content: "",
-        isStreaming: true,
-      }
-      setMessages((prev) => [...prev, streamingMessage])
+      // Don't create empty message - wait for content to arrive via streamedText
+      // This prevents empty message bubbles from appearing
     },
     onStreamEnd: (result: DoneEvent | null) => {
       if (result) {
-        // Update the streaming message with final content
+        // Use functional update to always work with latest state
         setMessages((prev) => {
           const newMessages = [...prev]
           const lastMessage = newMessages[newMessages.length - 1]
+          
+          // Check if we already have a streaming message
           if (lastMessage?.isStreaming) {
-            lastMessage.content = result.response
+            // Update existing streaming message
+            lastMessage.content = result.response || lastMessage.content
             lastMessage.items = result.items
             lastMessage.isStreaming = false
             lastMessage.metadata = {
@@ -158,7 +136,37 @@ export function ChatStylist({
               sources: result.items?.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
               needsClarification: result.needs_clarification,
             }
+            return newMessages
+          } 
+          
+          // Only create new message if:
+          // 1. No streaming message exists AND
+          // 2. We have response content AND
+          // 3. The last message is not already an assistant message with the same content
+          if (result.response && result.response.trim().length > 0) {
+            const lastAssistantMessage = newMessages
+              .slice()
+              .reverse()
+              .find(msg => msg.role === "assistant")
+            
+            // Prevent duplicate: don't create if last assistant message has same content
+            if (!lastAssistantMessage || lastAssistantMessage.content !== result.response) {
+              const finalMessage: Message = {
+                id: generateMessageId(),
+                role: "assistant",
+                content: result.response,
+                items: result.items,
+                isStreaming: false,
+                metadata: {
+                  intent: result.intent || undefined,
+                  sources: result.items?.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
+                  needsClarification: result.needs_clarification,
+                },
+              }
+              return [...newMessages, finalMessage]
+            }
           }
+          
           return newMessages
         })
 
@@ -170,16 +178,71 @@ export function ChatStylist({
     },
   })
 
-  // Update streaming message content in real-time
+  // Initialize messages from props when session changes or reset is triggered
   useEffect(() => {
-    if (streamedText && sessionState.isStreaming) {
+    const sessionChanged = activeSessionId !== previousSessionIdRef.current
+    const resetTriggered = resetTrigger !== previousResetTriggerRef.current
+    
+    if (sessionChanged) {
+      previousSessionIdRef.current = activeSessionId
+    }
+    
+    if (resetTriggered) {
+      previousResetTriggerRef.current = resetTrigger
+    }
+    
+    // If reset is triggered or session changed to null, perform full reset
+    if (resetTriggered || (sessionChanged && activeSessionId === null)) {
+      setMessages([])
+      setPendingClarification(null)
+      resetSession()
+    } else if (sessionChanged && initialMessages.length > 0) {
+      // Load messages for existing session
+      setMessages(
+        initialMessages.map((msg) => ({
+          id: generateMessageId(),
+          role: msg.role,
+          content: msg.content,
+        }))
+      )
+    } else if (sessionChanged && initialMessages.length === 0) {
+      // Session changed but no messages, clear messages
+      setMessages([])
+    }
+  }, [activeSessionId, initialMessages, resetTrigger, setPendingClarification, resetSession])
+
+  // Create or update streaming message when content arrives
+  useEffect(() => {
+    if (streamedText && sessionState.isStreaming && streamedText.trim().length > 0) {
       setMessages((prev) => {
         const newMessages = [...prev]
         const lastMessage = newMessages[newMessages.length - 1]
+        
+        // If there's already a streaming message, update it
         if (lastMessage?.isStreaming) {
           lastMessage.content = streamedText
+          return [...newMessages]
+        } 
+        
+        // Only create new streaming message if:
+        // 1. No streaming message exists AND
+        // 2. Last message is not already an assistant message (to prevent duplicates)
+        const lastAssistantMessage = newMessages
+          .slice()
+          .reverse()
+          .find(msg => msg.role === "assistant")
+        
+        if (!lastAssistantMessage || lastAssistantMessage.isStreaming !== false) {
+          const streamingMessage: Message = {
+            id: generateMessageId(),
+            role: "assistant",
+            content: streamedText,
+            isStreaming: true,
+          }
+          return [...newMessages, streamingMessage]
         }
-        return [...newMessages]
+        
+        return newMessages
       })
     }
   }, [streamedText, sessionState.isStreaming])
@@ -416,13 +479,13 @@ export function ChatStylist({
                   ) : (
                     <>
                       {message.content ? (
-                        <Markdown content={message.content} className="text-sm" />
-                      ) : message.isStreaming ? (
-                        <span className="text-sm text-muted-foreground">...</span>
+                        <>
+                          <Markdown content={message.content} className="text-sm" />
+                          {message.isStreaming && (
+                            <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                          )}
+                        </>
                       ) : null}
-                      {message.isStreaming && message.content && (
-                        <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
-                      )}
                     </>
                   )}
                 </div>
@@ -439,31 +502,37 @@ export function ChatStylist({
                 )}
 
                 {/* Clothing Items Display */}
-                {message.items && message.items.length > 0 && (
-                  <div className="w-full mt-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ShoppingBag className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">
-                        {message.items.length} item{message.items.length !== 1 ? "s" : ""} found
-                      </span>
-                      {message.metadata?.sources && message.metadata.sources.length > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          from {message.metadata.sources.join(", ")}
+                {message.items && message.items.length > 0 && (() => {
+                  // Filter out items without an id - don't display incomplete items
+                  const validItems = message.items.filter(item => item.id)
+                  if (validItems.length === 0) return null
+                  
+                  return (
+                    <div className="w-full mt-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ShoppingBag className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium text-foreground">
+                          {validItems.length} item{validItems.length !== 1 ? "s" : ""} found
                         </span>
+                        {message.metadata?.sources && message.metadata.sources.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            from {message.metadata.sources.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {validItems.slice(0, 4).map((item) => (
+                          <ClothingItemCard key={item.id} item={item} />
+                        ))}
+                      </div>
+                      {validItems.length > 4 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          + {validItems.length - 4} more items
+                        </p>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {message.items.slice(0, 4).map((item) => (
-                        <ClothingItemCard key={item.id} item={item} />
-                      ))}
-                    </div>
-                    {message.items.length > 4 && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        + {message.items.length - 4} more items
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )
+                })()}
               </div>
 
               {message.role === "user" && (
@@ -475,8 +544,11 @@ export function ChatStylist({
             </div>
           ))}
 
-          {/* Agent Progress Indicator - shows during loading/streaming when no text yet */}
-          {isLoading && (progress.currentNode || progress.completedNodes.length > 0 || !streamedText) && (
+          {/* Agent Progress Indicator - shows during loading/streaming when no message content yet */}
+          {/* Show when: loading/streaming AND no visible streaming message exists yet */}
+          {(isLoading || sessionState.isStreaming) && 
+           !messages.some(msg => msg.isStreaming && msg.content && msg.content.trim().length > 0) &&
+           (progress.currentNode || progress.completedNodes.length > 0 || !streamedText) && (
             <div className="flex gap-3 justify-start">
               <Avatar className="h-8 w-8 flex-shrink-0">
                 <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>

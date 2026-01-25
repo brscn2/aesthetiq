@@ -273,6 +273,8 @@ export interface UseChatApiReturn {
   clearError: () => void
   /** Set pending clarification context (for multi-turn) */
   setPendingClarification: (context: ClarificationContext | null) => void
+  /** Reset session state (for starting a new chat) */
+  resetSession: () => void
 }
 
 /**
@@ -332,6 +334,30 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
     setSessionState((prev) => ({ ...prev, pendingClarification: context }))
   }, [])
 
+  const resetSession = useCallback(() => {
+    setSessionState({
+      sessionId: null,
+      isLoading: false,
+      isStreaming: false,
+      currentStatus: null,
+      currentNode: null,
+      pendingClarification: null,
+      error: null,
+    })
+    setStreamedText("")
+    setFoundItems([])
+    setProgress({
+      currentNode: null,
+      displayName: null,
+      completedNodes: [],
+      intent: null,
+      itemsFound: 0,
+      sources: [],
+      decision: null,
+      toolCalls: [],
+    })
+  }, [])
+
   const sendMessage = useCallback(
     async (message: string, sessionId?: string | null): Promise<DoneEvent | null> => {
       // Cancel any existing request
@@ -369,9 +395,10 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
         const token = await getToken()
 
         // Build request - user_id is injected by backend from auth token
+        // Use nullish coalescing to explicitly handle null (start new session) vs undefined (use existing)
         const request: ChatRequest = {
           message,
-          sessionId: sessionId || sessionState.sessionId || undefined,
+          sessionId: sessionId ?? sessionState.sessionId ?? undefined,
           // Include pending clarification context if available
           pendingContext: sessionState.pendingClarification || undefined,
         }
@@ -496,6 +523,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
       cancelRequest,
       clearError,
       setPendingClarification,
+      resetSession,
     }),
     [
       sessionState,
@@ -506,6 +534,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
       cancelRequest,
       clearError,
       setPendingClarification,
+      resetSession,
     ]
   )
 }

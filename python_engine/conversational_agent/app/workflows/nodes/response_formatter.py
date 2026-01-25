@@ -68,7 +68,7 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
         return {}
     
     message = state.get("message", "")
-    retrieved_items = state.get("retrieved_items", [])
+    retrieved_items = state.get("retrieved_items") or []
     analysis_result = state.get("analysis_result", {})
     needs_clarification = state.get("needs_clarification", False)
     clarification_question = state.get("clarification_question")
@@ -295,7 +295,7 @@ async def _format_items(
                             color = color_hex
                     else:
                         # Try colors array
-                        colors = item.get("colors", [])
+                        colors = item.get("colors") or []
                         if colors and isinstance(colors, list) and len(colors) > 0:
                             try:
                                 color = get_color_name_from_hex_list(colors)
@@ -305,7 +305,7 @@ async def _format_items(
                             # Last resort: check raw item
                             raw = item.get("raw", {})
                             if isinstance(raw, dict):
-                                raw_colors = raw.get("colors", [])
+                                raw_colors = raw.get("colors") or []
                                 if raw_colors and isinstance(raw_colors, list) and len(raw_colors) > 0:
                                     try:
                                         color = get_color_name_from_hex_list(raw_colors)

@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { ChatStylist } from "@/components/chat-stylist"
-import { ChatSidebar } from "@/components/chat-sidebar"
+import { ChatSidebar, type ChatSidebarRef } from "@/components/chat-sidebar"
 import { StyleDnaSummary } from "@/components/style-dna-summary"
 import { StyleDnaPanel } from "@/components/style-dna-panel"
 import { TrendsSidebar } from "@/components/trends-sidebar"
@@ -19,7 +19,10 @@ export default function DashboardPage() {
   const [activeSessionMessages, setActiveSessionMessages] = useState<
     Array<{ role: "user" | "assistant"; content: string; timestamp?: string }>
   >([])
+  const [resetTrigger, setResetTrigger] = useState(0)
   const sessionsApi = useChatSessionsApi()
+  const sidebarRef = useRef<ChatSidebarRef>(null)
+  const desktopSidebarRef = useRef<ChatSidebarRef>(null)
 
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
@@ -41,15 +44,49 @@ export default function DashboardPage() {
   )
 
   const handleNewChat = useCallback(() => {
-    setActiveSessionId(null)
-    setActiveSessionMessages([])
-    // Note: pendingClarification will be cleared in ChatStylist when activeSessionId changes to null
+    try {
+      // Immediate synchronous state updates for instant UI feedback
+      setActiveSessionId(null)
+      setActiveSessionMessages([])
+      
+      // Force reset in ChatStylist by incrementing resetTrigger
+      // This ensures resetSession is called even if activeSessionId was already null
+      setResetTrigger((prev) => prev + 1)
+      
+      // Handle async sidebar refresh separately (non-blocking)
+      // Sessions are automatically created/updated by the backend when messages are sent
+      // Use a small delay to ensure backend has processed the session save
+      setTimeout(async () => {
+        try {
+          await sidebarRef.current?.refreshSessions()
+          await desktopSidebarRef.current?.refreshSessions()
+        } catch (error) {
+          console.error("Failed to refresh sidebar:", error)
+          // Don't throw - sidebar refresh failure shouldn't break the new chat functionality
+        }
+      }, 500)
+    } catch (error) {
+      console.error("Error in handleNewChat:", error)
+      // Even if there's an error, ensure state is cleared
+      setActiveSessionId(null)
+      setActiveSessionMessages([])
+      setResetTrigger((prev) => prev + 1)
+    }
   }, [])
 
   const handleSessionUpdated = useCallback(
-    (sessionId: string, lastMessage: string) => {
-      // Session was updated, sidebar will refresh on next load
-      // For now, we can trigger a refresh if needed
+    async (sessionId: string, lastMessage: string) => {
+      // Session was updated, refresh the sidebar to show the updated session
+      // Add a delay to ensure backend has processed the title update (smart naming)
+      // Increased to 1000ms to give backend more time to complete title update
+      setTimeout(async () => {
+        try {
+          await sidebarRef.current?.refreshSessions()
+          await desktopSidebarRef.current?.refreshSessions()
+        } catch (error) {
+          console.error("Failed to refresh sidebar after session update:", error)
+        }
+      }, 2000)
     },
     []
   )
@@ -99,8 +136,9 @@ export default function DashboardPage() {
               {/* Mobile: Slide-over drawer */}
               <div className="lg:hidden fixed inset-0 z-50 bg-background">
                 <div className="flex h-full">
-                  <div className="w-full sm:w-80 md:w-96 border-r border-border">
+                  <div className="w-full sm:w-64 md:w-72 border-r border-border">
                     <ChatSidebar
+                      ref={sidebarRef}
                       activeSessionId={activeSessionId}
                       onSelectSession={(id) => {
                         handleSelectSession(id)
@@ -119,6 +157,7 @@ export default function DashboardPage() {
               {/* Desktop: Persistent sidebar */}
               <div className="hidden lg:block flex-shrink-0">
                 <ChatSidebar
+                  ref={desktopSidebarRef}
                   activeSessionId={activeSessionId}
                   onSelectSession={handleSelectSession}
                   onNewChat={handleNewChat}
@@ -192,6 +231,7 @@ export default function DashboardPage() {
               activeSessionId={activeSessionId}
               initialMessages={activeSessionMessages}
               onSessionUpdated={handleSessionUpdated}
+              resetTrigger={resetTrigger}
             />
           </div>
 

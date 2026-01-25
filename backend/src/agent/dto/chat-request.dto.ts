@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, MaxLength, MinLength, IsObject, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 class PendingContextDto {
   @ApiProperty({ description: 'Original message that triggered clarification' })
