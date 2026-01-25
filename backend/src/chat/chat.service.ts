@@ -117,12 +117,25 @@ export class ChatService {
     sessionId: string,
     metadata: Record<string, any>,
   ): Promise<ChatSession> {
-    const session = await this.findBySessionId(sessionId);
-    if (!session) {
+    // Build nested $set operations for atomic updates
+    // This prevents race conditions by updating individual metadata fields atomically
+    const setOps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(metadata)) {
+      setOps[`metadata.${key}`] = value;
+    }
+    
+    const updatedSession = await this.chatSessionModel
+      .findOneAndUpdate(
+        { sessionId },
+        { $set: setOps },
+        { new: true, upsert: false },
+      )
+      .exec();
+    
+    if (!updatedSession) {
       throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
     }
-    const mergedMetadata = { ...(session.metadata || {}), ...metadata };
-    return this.updateMetadata(sessionId, mergedMetadata);
+    return updatedSession;
   }
 }
 

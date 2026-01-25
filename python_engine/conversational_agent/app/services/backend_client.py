@@ -251,7 +251,10 @@ class BackendClient:
         metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Update session metadata by merging with existing metadata.
+        Update session metadata by merging with existing metadata (atomic).
+        
+        Backend handles the merge atomically using MongoDB $set with nested paths,
+        preventing race conditions in concurrent update scenarios.
         
         Args:
             session_id: The session identifier
@@ -264,23 +267,13 @@ class BackendClient:
             BackendClientError: If update fails
         """
         client = await self._get_client()
-        
-        # First get current session to merge metadata
-        try:
-            current_session = await self.get_session(session_id)
-            current_metadata = current_session.get("metadata", {})
-            merged_metadata = {**current_metadata, **metadata}
-        except BackendClientError:
-            # If session doesn't exist, just use new metadata
-            merged_metadata = metadata
-        
-        # Use PATCH endpoint via agent API (which uses sessionId, not MongoDB _id)
-        payload = {"metadata": merged_metadata}
+        payload = {"metadata": metadata}  # Backend will merge atomically
         
         logger.debug(f"Updating metadata for session {session_id}")
         
         try:
             # Use agent API endpoint which accepts sessionId directly
+            # Backend's mergeMetadata() handles atomic merge using MongoDB $set
             response = await client.patch(f"/api/agent/sessions/{session_id}", json=payload)
             return await self._handle_response(response)
         except httpx.RequestError as e:

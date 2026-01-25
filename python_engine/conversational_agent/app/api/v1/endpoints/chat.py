@@ -18,6 +18,58 @@ settings = get_settings()
 logger = get_logger(__name__)
 
 
+async def save_workflow_context_to_session(
+    session_service,
+    session_id: str,
+    final_state: Dict[str, Any],
+    request_message: Optional[str] = None,
+) -> None:
+    """
+    Save workflow context (pending clarification or completed workflow) to session metadata.
+    
+    This helper centralizes the context saving logic used by both chat() and chat_stream().
+    
+    Args:
+        session_service: SessionService instance
+        session_id: The session identifier
+        final_state: Final state from workflow execution
+        request_message: Optional original user message (for streaming endpoint limitations)
+    """
+    workflow_status = final_state.get("workflow_status", "completed")
+    
+    if workflow_status == "awaiting_clarification":
+        try:
+            from app.workflows.state import create_clarification_context
+            clarification_context = create_clarification_context(final_state)
+            await session_service.save_pending_context(
+                session_id=session_id,
+                context=clarification_context,
+            )
+        except Exception as context_error:
+            logger.error(f"Failed to save pending context: {context_error}")
+            # Don't fail the request if context save fails
+    
+    elif workflow_status == "completed":
+        try:
+            retrieved_items = final_state.get("retrieved_items", [])
+            if retrieved_items:
+                workflow_context = {
+                    "intent": final_state.get("intent"),
+                    "extracted_filters": final_state.get("extracted_filters"),
+                    "retrieved_items": retrieved_items,
+                    "style_dna": final_state.get("style_dna"),
+                    "user_profile": final_state.get("user_profile"),
+                    "search_scope": final_state.get("search_scope"),
+                }
+                await session_service.save_workflow_context(
+                    session_id=session_id,
+                    context=workflow_context,
+                )
+        except Exception as context_error:
+            logger.error(f"Failed to save workflow context: {context_error}")
+            # Don't fail the request if context save fails
+
+
 class ChatRequest(BaseModel):
     """Request body for chat endpoints."""
     user_id: str = Field(..., description="User identifier")
@@ -128,39 +180,13 @@ async def chat(
             logger.error(f"Failed to save conversation turn: {save_error}")
             # Don't fail the request if save fails, but log it
         
-        # Save pending clarification context if workflow is awaiting clarification
-        if workflow_status == "awaiting_clarification":
-            try:
-                from app.workflows.state import create_clarification_context
-                clarification_context = create_clarification_context(final_state)
-                await session_service.save_pending_context(
-                    session_id=session_data.session_id,
-                    context=clarification_context,
-                )
-            except Exception as context_error:
-                logger.error(f"Failed to save pending context: {context_error}")
-                # Don't fail the request if context save fails
-        
-        # Save completed workflow context if workflow completed successfully with items
-        elif workflow_status == "completed":
-            try:
-                retrieved_items = final_state.get("retrieved_items", [])
-                if retrieved_items:
-                    workflow_context = {
-                        "intent": final_state.get("intent"),
-                        "extracted_filters": final_state.get("extracted_filters"),
-                        "retrieved_items": retrieved_items,
-                        "style_dna": final_state.get("style_dna"),
-                        "user_profile": final_state.get("user_profile"),
-                        "search_scope": final_state.get("search_scope"),
-                    }
-                    await session_service.save_workflow_context(
-                        session_id=session_data.session_id,
-                        context=workflow_context,
-                    )
-            except Exception as context_error:
-                logger.error(f"Failed to save workflow context: {context_error}")
-                # Don't fail the request if context save fails
+        # Save workflow context (pending clarification or completed workflow)
+        await save_workflow_context_to_session(
+            session_service,
+            session_data.session_id,
+            final_state,
+            request.message,
+        )
         
         # End trace
         tracing_service.end_trace(
@@ -311,44 +337,16 @@ async def chat_stream(
                 logger.error(f"Failed to save conversation turn: {save_error}")
                 # Don't fail the stream if save fails
             
-            # Save pending clarification context if workflow is awaiting clarification
-            if final_state and final_state.get("workflow_status") == "awaiting_clarification":
-                try:
-                    # Note: We don't have full state in done event, so we can't save full context
-                    # This is a limitation - we'd need to track state during streaming
-                    # For now, we'll save a minimal context
-                    clarification_context = {
-                        "original_message": request.message,
-                        "clarification_question": None,  # Would need to track
-                        "extracted_filters": None,
-                        "search_scope": None,
-                        "retrieved_items": final_state.get("retrieved_items", []),
-                        "iteration": 0,
-                    }
-                    await session_service.save_pending_context(
-                        session_id=session_data.session_id,
-                        context=clarification_context,
-                    )
-                except Exception as context_error:
-                    logger.error(f"Failed to save pending context: {context_error}")
-            
-            # Save completed workflow context if workflow completed successfully with items
-            elif final_state and final_state.get("workflow_status") == "completed":
-                try:
-                    retrieved_items = final_state.get("retrieved_items", [])
-                    if retrieved_items:
-                        workflow_context = {
-                            "intent": final_intent,
-                            "retrieved_items": retrieved_items,
-                            # Note: Other fields not available in done event
-                            # This is a limitation of streaming - we'd need to track state
-                        }
-                        await session_service.save_workflow_context(
-                            session_id=session_data.session_id,
-                            context=workflow_context,
-                        )
-                except Exception as context_error:
-                    logger.error(f"Failed to save workflow context: {context_error}")
+            # Save workflow context (pending clarification or completed workflow)
+            # Note: Streaming endpoint has incomplete state (limitation of done event),
+            # but helper function will save what's available
+            if final_state:
+                await save_workflow_context_to_session(
+                    session_service,
+                    session_data.session_id,
+                    final_state,
+                    request.message,
+                )
             
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
