@@ -7,6 +7,7 @@ import FormData from 'form-data';
 import { ColorAnalysis, ColorAnalysisDocument } from './schemas/color-analysis.schema';
 import { CreateColorAnalysisDto } from './dto/create-color-analysis.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
+import { EmbeddingService } from '../ai/embedding.service';
 
 @Injectable()
 export class AnalysisService {
@@ -18,6 +19,7 @@ export class AnalysisService {
     private colorAnalysisModel: Model<ColorAnalysisDocument>,
     private readonly httpService: HttpService,
     private readonly azureStorageService: AzureStorageService,
+    private readonly embeddingService: EmbeddingService,
   ) {}
 
   async analyzeImage(file: Express.Multer.File, userId: string): Promise<ColorAnalysis> {
@@ -28,6 +30,16 @@ export class AnalysisService {
     let imageUrl: string | undefined;
 
     try {
+      // 0. Validate image content (Zero-Trust Fashion Check)
+      // This ensures we only process clothing/fashion items or people
+      const isValid = await this.embeddingService.validateImage(file);
+      
+      if (!isValid) {
+        throw new BadRequestException(
+          'Invalid Item: The uploaded image does not appear to be a clothing item or fashion accessory. Please upload a relevant photo.'
+        );
+      }
+
       // First, save the image to blob storage
       this.logger.log('Uploading image to blob storage...');
       try {

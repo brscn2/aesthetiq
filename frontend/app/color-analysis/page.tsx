@@ -98,10 +98,21 @@ export default function ColorAnalysisPage() {
       // Reload past analyses to include the new one
       loadPastAnalyses()
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Failed to analyze image")
+      const errorMessage = err.response?.data?.message || err.message || "Failed to analyze image"
+
+      // Check for validation error
+      if (errorMessage.includes("Invalid Item")) {
+        setError(errorMessage)
+        toast.error("Invalid Image Detected", {
+          description: "Please upload a photo of clothing, fashion accessories, or a person."
+        })
+      } else {
+        setError(errorMessage)
+        toast.error("Analysis failed. Please try again.")
+      }
+
       setAnalysisState("upload")
       setUploadedImageUrl(null)
-      toast.error("Analysis failed. Please try again.")
     }
   }
 
