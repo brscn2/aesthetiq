@@ -12,6 +12,8 @@ from mcp_servers.style_dna_server.schemas import (
     GetStyleArchetypeRequest,
     GetStyleDNAResponse,
     GetStyleDNARequest,
+    GetJewelryRecommendationRequest,
+    GetJewelryRecommendationResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,27 @@ async def get_recommended_colors(req: GetRecommendedColorsRequest):
 async def test_style_dna(user_id: str = Query(...)):
     """Test endpoint to fetch complete style DNA."""
     dna = await tools.get_style_dna(user_id)
+    
+@router.post("/tools/get_jewelry_recommendation", response_model=GetJewelryRecommendationResponse, operation_id="get_jewelry_recommendation")
+async def get_jewelry_recommendation(req: GetJewelryRecommendationRequest):
+    """
+    Get jewelry metal recommendations based on the user's color analysis.
+    
+    Returns recommendations for which metals (gold/brass vs silver/platinum)
+    will best complement the user's skin undertone and color season.
+    """
+    logger.info(f"get_jewelry_recommendation called with user_id: {req.user_id}")
+    recommendation = await tools.get_jewelry_recommendation_for_user(req.user_id)
+    logger.info(f"get_jewelry_recommendation result: undertone={recommendation.undertone}, recommended={recommendation.recommended_metals}")
+    return GetJewelryRecommendationResponse(
+        user_id=req.user_id,
+        recommended_metals=recommendation.recommended_metals,
+        recommendation_reason=recommendation.recommendation_reason,
+        undertone=recommendation.undertone,
+        styling_tips=recommendation.styling_tips,
+    )
+
+
     if not dna:
         raise HTTPException(status_code=404, detail="Style DNA not found")
     return {

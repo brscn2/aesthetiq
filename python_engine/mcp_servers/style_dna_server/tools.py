@@ -15,6 +15,10 @@ from mcp_servers.style_dna_server.schemas import (
     FitPreferences,
     BudgetRange,
 )
+from mcp_servers.style_dna_server.styling_recommendations import (
+    get_jewelry_recommendation,
+    JewelryRecommendation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,3 +191,25 @@ async def get_user_palette(user_id: str) -> List[PaletteColor]:
     if color_analysis:
         return _parse_palette(color_analysis)
     return []
+
+
+async def get_jewelry_recommendation_for_user(user_id: str) -> JewelryRecommendation:
+    """
+    Get jewelry metal recommendations based on the user's color analysis.
+    
+    Returns recommendations for which metals (gold/brass vs silver/platinum)
+    will best complement the user's skin undertone and color season.
+    """
+    color_analysis = await db.get_color_analysis(user_id)
+    
+    undertone = None
+    season = None
+    
+    if color_analysis:
+        undertone = color_analysis.get("undertone")
+        season = color_analysis.get("season")
+        logger.info(f"Found color analysis for user {user_id}: undertone={undertone}, season={season}")
+    else:
+        logger.warning(f"No color analysis found for user {user_id}, returning default recommendation")
+    
+    return get_jewelry_recommendation(undertone=undertone, season=season)

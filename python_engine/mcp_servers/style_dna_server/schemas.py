@@ -168,3 +168,30 @@ class GetRecommendedColorsResponse(BaseModel):
     user_id: str
     colors: List[str] = Field(default_factory=list)
     palette: List[PaletteColor] = Field(default_factory=list)
+
+
+# -----------------------------------------------------------------------------
+# Jewelry Recommendation schemas
+# -----------------------------------------------------------------------------
+
+class MetalType(str, Enum):
+    GOLD = "gold"
+    BRASS = "brass"
+    ROSE_GOLD = "rose_gold"
+    COPPER = "copper"
+    SILVER = "silver"
+    PLATINUM = "platinum"
+    WHITE_GOLD = "white_gold"
+    GUNMETAL = "gunmetal"
+
+
+class GetJewelryRecommendationRequest(BaseModel):
+    user_id: str
+
+
+class GetJewelryRecommendationResponse(BaseModel):
+    user_id: str
+    recommended_metals: List[MetalType] = Field(default_factory=list)
+    recommendation_reason: str = ""
+    undertone: str = "Unknown"
+    styling_tips: List[str] = Field(default_factory=list)
