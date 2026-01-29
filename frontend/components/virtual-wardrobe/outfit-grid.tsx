@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/lib/api"
 import { Outfit } from "@/types/api"
 import { OutfitCard } from "./outfit-card"
+import { VirtualTryOn } from "./virtual-tryon"
 import { Button } from "@/components/ui/button"
 import { Loader2, Heart, HeartOff } from "lucide-react"
 import {
@@ -30,6 +31,7 @@ export function OutfitGrid({ onEdit, onView }: OutfitGridProps) {
   const { toast } = useToast()
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [deleteOutfit, setDeleteOutfit] = useState<Outfit | null>(null)
+  const [tryOnOutfit, setTryOnOutfit] = useState<Outfit | null>(null)
 
   const { data: outfits, isLoading, error } = useQuery({
     queryKey: ["outfits"],
@@ -101,6 +103,7 @@ export function OutfitGrid({ onEdit, onView }: OutfitGridProps) {
               onDelete={() => setDeleteOutfit(outfit)}
               onToggleFavorite={() => favoriteMutation.mutate(outfit._id)}
               onView={() => onView(outfit)}
+              onVirtualTryOn={() => setTryOnOutfit(outfit)}
             />
           ))}
         </div>
@@ -135,6 +138,14 @@ export function OutfitGrid({ onEdit, onView }: OutfitGridProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Virtual Try-On Modal */}
+      {tryOnOutfit && (
+        <VirtualTryOn
+          outfit={tryOnOutfit}
+          onClose={() => setTryOnOutfit(null)}
+        />
+      )}
     </div>
   )
 }

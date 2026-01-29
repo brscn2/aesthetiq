@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Heart, Pencil, Trash2, AlertCircle } from "lucide-react"
+import { Heart, Pencil, Trash2, AlertCircle, Zap } from "lucide-react"
 import { Outfit, WardrobeItem } from "@/types/api"
 
 interface OutfitCardProps {
@@ -12,6 +12,7 @@ interface OutfitCardProps {
   onDelete: () => void
   onToggleFavorite: () => void
   onView: () => void
+  onVirtualTryOn: () => void
 }
 
 function getItemImage(item: string | WardrobeItem | undefined): string | null {
@@ -23,7 +24,7 @@ function isItemDeleted(item: string | WardrobeItem | undefined): boolean {
   return typeof item === "string" || item === null
 }
 
-export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView }: OutfitCardProps) {
+export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView, onVirtualTryOn }: OutfitCardProps) {
   const topImage = getItemImage(outfit.items.top)
   const bottomImage = getItemImage(outfit.items.bottom)
   const shoeImage = getItemImage(outfit.items.shoe)
@@ -95,6 +96,15 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
             {outfit.name}
           </span>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => { e.stopPropagation(); onVirtualTryOn(); }}
+              title="Virtual try-on"
+            >
+              <Zap className="h-4 w-4 text-purple-500" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

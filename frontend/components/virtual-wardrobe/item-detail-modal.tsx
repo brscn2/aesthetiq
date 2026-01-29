@@ -11,13 +11,14 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Palette, Shirt, Loader2, Sparkles, MessageSquare } from "lucide-react"
+import { Trash2, Calendar, Palette, Shirt, Loader2, Sparkles, MessageSquare, Wand2 } from "lucide-react"
 import { WardrobeItem, Category } from "@/types/api"
 import { useApi } from "@/lib/api"
 import { getClosestColorName } from "@/lib/colors"
 import { getBestMatchingPalettes, getPaletteDisplayName, formatScore, getScoreBgColor, getScoreColor } from "@/lib/seasonal-colors"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { VirtualTryOn } from "./virtual-tryon"
 
 interface ItemDetailModalProps {
   item: WardrobeItem | null
