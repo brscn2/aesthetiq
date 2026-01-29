@@ -13,6 +13,7 @@ import Image from "next/image"
 import { useApi } from "@/lib/api"
 import { ColorAnalysis } from "@/types/api"
 import { toast } from "sonner"
+import { getMakeupColors } from "@/lib/get-makeup-colors"
 
 export default function ColorAnalysisPage() {
   const [analysisState, setAnalysisState] = useState<"upload" | "processing" | "complete" | "viewing">("upload")
@@ -567,6 +568,12 @@ function AnalysisReport({
 
   const jewelryTips = getJewelryTips(analysis.season)
 
+  const makeupColors = getMakeupColors(
+    analysis.season,
+    analysis.undertone,
+    analysis.contrastLevel,
+  )
+
   const getSeasonDescription = (season: string) => {
     const descriptions: Record<string, string> = {
       "Dark Autumn": "Rich, warm, and dark. You shine in colors that mirror the turning leaves and deep earth tones.",
@@ -811,21 +818,28 @@ function AnalysisReport({
           <TabsContent value="makeup" className="mt-6">
             <Card className="bg-card/30 backdrop-blur-sm">
               <CardContent className="p-8">
-                <div className="grid gap-8 md:grid-cols-2">
+                <div className="mb-6 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                  <Sparkles className="h-4 w-4 text-primary" />
+
+                  <p className="text-sm font-medium text-primary">
+                    Personalized makeup shades based on your season, undertone, and contrast
+                  </p>
+                </div>
+                <div className="grid gap-8 md:grid-cols-3">
                   <div className="space-y-4">
                     <h4 className="font-serif text-lg font-medium">Lips</h4>
                     <div className="flex gap-3">
-                      <PaletteSwatch color="#800000" name="Maroon" size="sm" />
-                      <PaletteSwatch color="#A0522D" name="Sienna" size="sm" />
-                      <PaletteSwatch color="#CC5500" name="Burnt Orange" size="sm" />
+                      {makeupColors.lips.map((item, idx) => (
+                        <PaletteSwatch key={idx} color={item.color} name={item.name} size="sm" />
+                      ))}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <h4 className="font-serif text-lg font-medium">Eyes</h4>
                     <div className="flex gap-3">
-                      <PaletteSwatch color="#556B2F" name="Olive" size="sm" />
-                      <PaletteSwatch color="#DAA520" name="Goldenrod" size="sm" />
-                      <PaletteSwatch color="#3E2723" name="Coffee" size="sm" />
+                      {makeupColors.eyes.map((item, idx) => (
+                        <PaletteSwatch key={idx} color={item.color} name={item.name} size="sm" />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -873,9 +887,15 @@ function PaletteSwatch({
   name,
   size = "md",
   crossOut = false,
-}: { color: string; name: string; size?: "sm" | "md"; crossOut?: boolean }) {
+}: {
+  color: string
+  name: string
+  size?: "sm" | "md"
+  crossOut?: boolean
+}) {
   return (
-    <div className="group relative flex cursor-pointer flex-col items-center gap-2">
+    <div className="group relative flex cursor-pointer flex-col items-center">
+      {/* Swatch */}
       <div
         className={cn(
           "relative rounded-full shadow-lg ring-1 ring-border/50 transition-transform duration-300 group-hover:scale-110",
@@ -889,9 +909,11 @@ function PaletteSwatch({
           </div>
         )}
       </div>
+
+      {/* Label (absolute, no layout shift) */}
       <span
         className={cn(
-          "text-center font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100",
+          "absolute -bottom-6 text-center font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 whitespace-nowrap",
           size === "md" ? "text-xs" : "text-[10px]",
         )}
       >
