@@ -142,9 +142,9 @@ PYTHONPATH=. pytest tests/unit/test_guardrails_layer.py tests/unit/test_workflow
 
 ```bash
 cd python_engine/conversational_agent
-PYTHONPATH=. python scripts/check_input_guardrails.py
-PYTHONPATH=. python scripts/check_output_guardrails.py
-PYTHONPATH=. python scripts/run_guardrails_tests.py
+PYTHONPATH=. python attack_scripts/check_input_guardrails.py
+PYTHONPATH=. python attack_scripts/check_output_guardrails.py
+PYTHONPATH=. python attack_scripts/run_guardrails_tests.py
 ```
 
-See `scripts/README.md` and `scripts/attacks/README.md` for full usage and research-backed attack categories.
+See `attack_scripts/README.md` and `attack_scripts/attacks/README.md` for full usage and research-backed attack categories (OWASP, HackAPrompt, GPT-4.1-nano–targeted).

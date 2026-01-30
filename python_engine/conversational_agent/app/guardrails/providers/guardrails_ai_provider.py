@@ -84,6 +84,13 @@ PROMPT_INJECTION_PATTERNS = [
     r"(role[\s\-]?play|simulating)\s+(an?\s+)?(api|ai|model).*unfiltered",
     r"reveal\s+(system\s+)?prompt",
     r"reval\s+system\s+prompt",  # typo
+    r"generate\s+.*questions\s+.*(rejected|refuse)",
+    r"list\s+questions\s+.*refuse",
+    r"raw\s+API\s+mode",
+    r"return\s+unfiltered\s+responses",
+    r"red[- ]?team\s+testing.*bypass",
+    r"bypass\s+(all\s+)?guardr",  # guardrails or truncated
+    r"decode\s+and\s+obey",
 ]
 
 # Toxic/harmful content patterns for fallback detection
@@ -114,6 +121,8 @@ TOXIC_PATTERNS = [
     r"\bhow\s+to\s+kill\b",
     r"\bhow\s+to\s+murder\b",
     r"\bhow\s+to\s+harm\b",
+    r"\bways?\s+to\s+murder\b",
+    r"\bmurder\s+and\s+avoid\b",
 ]
 
 

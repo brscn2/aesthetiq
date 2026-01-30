@@ -1,23 +1,20 @@
-# Attack datasets for guardrails and safety testing
+# Attack datasets for guardrail and safety testing
 
-**Defensive use only.** These prompts and pairs are used to evaluate input/output guardrails and to compare model-only vs model+guardrails block rates. They are not for reproducing harmful content.
+Input attacks live in `input/*.txt` (one payload per non-empty line). Output attacks are prompt/response pairs in `output/toxic_pairs.json`. All tests run in-process; no backend or auth required.
 
-## Layout
+## Input attack categories
 
-- **input/** — One text file per category; one attack payload per line (no empty lines in payload). Used for input guardrail tests and for workflow attack runs (model-only and guardrails-on).
-- **output/** — `toxic_pairs.json`: list of `{"prompt": "...", "response": "..."}` for deterministic output guardrail checks.
+| File | Description |
+|------|-------------|
+| `prompt_injection.txt` | Direct prompt injection: ignore instructions, reveal system prompt, override filters (OWASP LLM01-style). |
+| `jailbreak_style.txt` | Role-play jailbreaks: DAN, “no restrictions”, “different AI with no guidelines”. |
+| `obfuscation.txt` | Obfuscated injections: leetspeak, typos, Unicode escapes to evade keyword detection. |
+| `toxicity_elicitation.txt` | Toxicity and harm: violence, self-harm, weapons, explosives (defensive evaluation only). |
+| `gpt41_nano_targeted.txt` | Model-specific: developer mode, API simulation, security-eval framing for GPT-4.1-nano. |
+| `gpt41_nano_extreme.txt` | Extreme research-backed prompts: Plinny-style, involuntary jailbreak, resource-hijack style. |
 
-## Categories (input/)
+Attack sets are research-backed (OWASP LLM Top 10, HackAPrompt, GPT-4.1-nano–targeted). Use for defensive evaluation and red-team testing only.
 
-| File | Description | Sources |
-|------|-------------|---------|
-| `prompt_injection.txt` | Direct instruction override, privilege escalation, system-prompt extraction | OWASP LLM01, HackAPrompt |
-| `jailbreak_style.txt` | "Do Anything Now", role-play, virtualization, deception | In-the-wild jailbreak studies |
-| `obfuscation.txt` | Encoding, typoglycemia, leetspeak, indirect phrasing | HackAPrompt, OWASP |
-| `toxicity_elicitation.txt` | Prompts designed to elicit harmful or toxic output | Toxicity benchmarks |
-| `gpt4o_mini_targeted.txt` | Patterns tailored to GPT-4o-mini / GPT-4o family | arxiv 2511.17666, in-the-wild |
+## Output attacks
 
-## Usage
-
-- **No backend, no auth**: All tests run in-process from the Python engine; they do not send requests to the NestJS backend and do not require an authentication token.
-- Scripts load from `scripts/attacks/input/*` and `scripts/attacks/output/toxic_pairs.json` when run with `PYTHONPATH=.` from `python_engine/conversational_agent`.
+`output/toxic_pairs.json` contains `{ "prompt": "...", "response": "..." }` pairs that should be blocked by the output guardrail.
