@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Input guardrail check: run attack payloads from scripts/attacks/input/* through
+Input guardrail check: run attack payloads from attack_scripts/attacks/input/* through
 get_safety_guardrails().check_input() with guardrails ON; assert expected-unsafe
 lines are blocked (is_safe == False).
 
 No backend, no auth: runs entirely in-process. Do not send requests to the NestJS
 backend; no authentication token required. Use for defensive evaluation only.
 
-Run: cd python_engine/conversational_agent && PYTHONPATH=. python scripts/check_input_guardrails.py
+Run: cd python_engine/conversational_agent && PYTHONPATH=. python attack_scripts/check_input_guardrails.py
 """
 import sys
 import os
@@ -26,7 +26,7 @@ ATTACKS_INPUT_DIR = SCRIPT_DIR / "attacks" / "input"
 
 
 def load_attack_lines():
-    """Load all attack lines from scripts/attacks/input/*.txt (one payload per non-empty line)."""
+    """Load all attack lines from attack_scripts/attacks/input/*.txt (one payload per non-empty line)."""
     lines_by_category = {}
     if not ATTACKS_INPUT_DIR.exists():
         return lines_by_category
@@ -47,7 +47,7 @@ def main():
     guardrails = get_safety_guardrails()
     lines_by_category = load_attack_lines()
     if not lines_by_category:
-        print("No attack files found under scripts/attacks/input/")
+        print("No attack files found under attack_scripts/attacks/input/")
         return 1
 
     total = 0

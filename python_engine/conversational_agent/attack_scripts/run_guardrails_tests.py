@@ -6,7 +6,7 @@ if --workflow and results exist).
 
 Guardrails-off is tested via run_workflow_attacks.py --phase model-only (real LLM).
 
-Run: cd python_engine/conversational_agent && PYTHONPATH=. python scripts/run_guardrails_tests.py [--workflow]
+Run: cd python_engine/conversational_agent && PYTHONPATH=. python attack_scripts/run_guardrails_tests.py [--workflow]
 """
 import os
 import subprocess

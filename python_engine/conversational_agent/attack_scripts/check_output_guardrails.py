@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Output guardrail check: load (prompt, response) pairs from scripts/attacks/output/toxic_pairs.json,
+Output guardrail check: load (prompt, response) pairs from attack_scripts/attacks/output/toxic_pairs.json,
 call get_safety_guardrails().check_output(prompt, response) with guardrails ON; assert
 expected-toxic pairs are blocked (is_safe == False).
 
 No backend, no auth: runs entirely in-process. Do not send requests to the NestJS
 backend; no authentication token required. Use for defensive evaluation only.
 
-Run: cd python_engine/conversational_agent && PYTHONPATH=. python scripts/check_output_guardrails.py
+Run: cd python_engine/conversational_agent && PYTHONPATH=. python attack_scripts/check_output_guardrails.py
 """
 import sys
 import json
@@ -37,7 +37,7 @@ def load_toxic_pairs():
 def main():
     pairs = load_toxic_pairs()
     if not pairs:
-        print("No toxic pairs found at scripts/attacks/output/toxic_pairs.json")
+        print("No toxic pairs found at attack_scripts/attacks/output/toxic_pairs.json")
         return 1
 
     guardrails = get_safety_guardrails()

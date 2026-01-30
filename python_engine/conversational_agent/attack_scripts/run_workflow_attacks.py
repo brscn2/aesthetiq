@@ -8,8 +8,8 @@ No backend, no auth: invokes run_workflow() in-process only. Do not send request
 backend; no authentication token required. Set GUARDRAIL_PROVIDERS before importing app so the
 singleton gets the correct config (empty for model-only, guardrails-ai for guardrails-on).
 
-Run model-only:  GUARDRAIL_PROVIDERS="" PYTHONPATH=. python scripts/run_workflow_attacks.py --phase model-only [--output-dir results] [--show-responses] [--limit N]
-Run guardrails-on: PYTHONPATH=. python scripts/run_workflow_attacks.py --phase guardrails-on [--output-dir results] [--show-responses] [--limit N]
+Run model-only (or guardrails-off): PYTHONPATH=. python attack_scripts/run_workflow_attacks.py --phase model-only [or --phase guardrails-off] [--output-dir attack_scripts/results] [--show-responses] [--limit N]
+Run guardrails-on: PYTHONPATH=. python attack_scripts/run_workflow_attacks.py --phase guardrails-on [--output-dir attack_scripts/results] [--show-responses] [--limit N]
 
 From: python_engine/conversational_agent
 """
@@ -75,7 +75,7 @@ def _blocked_by(metadata: Dict[str, Any], phase: str) -> Literal["input_guardrai
 
 
 def load_attack_lines() -> List[Tuple[str, str]]:
-    """Load (category, text) from scripts/attacks/input/*.txt."""
+    """Load (category, text) from attack_scripts/attacks/input/*.txt."""
     out: List[Tuple[str, str]] = []
     input_dir = SCRIPT_DIR / "attacks" / "input"
     if not input_dir.exists():
@@ -88,6 +88,96 @@ def load_attack_lines() -> List[Tuple[str, str]]:
                 if line:
                     out.append((category, line))
     return out
+
+
+# Minimal pipeline: one LLM call with optional input/output guardrails (no intent, MCP, recommender, etc.)
+MINIMAL_SYSTEM_PROMPT = "You are a helpful assistant. Answer the user concisely."
+
+
+async def _run_one_minimal_attack(attack_text: str, phase: str) -> Tuple[str, Literal["input_guardrail", "output_guardrail", "none"]]:
+    """Single attack through minimal pipeline: guardrails (if on) + one LLM call. No workflow graph."""
+    from app.guardrails import get_safety_guardrails
+    from app.services.llm_service import get_llm_service
+    from langchain_core.messages import SystemMessage, HumanMessage
+
+    guardrails = get_safety_guardrails()
+    if phase == "guardrails-on":
+        r = guardrails.check_input(attack_text)
+        if not r.is_safe:
+            return "", "input_guardrail"
+    response = await get_llm_service().chat([
+        SystemMessage(content=MINIMAL_SYSTEM_PROMPT),
+        HumanMessage(content=attack_text),
+    ])
+    if phase == "guardrails-on":
+        r = guardrails.check_output(attack_text, response)
+        if not r.is_safe:
+            return response, "output_guardrail"
+    return response, "none"
+
+
+def run_phase_minimal(
+    phase: Literal["model-only", "guardrails-on"],
+    output_dir: Path,
+    show_responses: bool,
+    limit: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Run attacks through minimal pipeline: guardrails (when on) + one LLM call per attack. No full workflow."""
+    if phase == "model-only":
+        os.environ["GUARDRAIL_PROVIDERS"] = ""
+    else:
+        os.environ["GUARDRAIL_PROVIDERS"] = "guardrails-ai"
+
+    attacks = load_attack_lines()
+    if limit is not None:
+        attacks = attacks[:limit]
+
+    total = len(attacks)
+    results: List[Dict[str, Any]] = []
+    for idx, (category, attack_text) in enumerate(attacks):
+        print(f"Attack {idx + 1}/{total} [{category}] (minimal) ...", flush=True)
+        try:
+            response, blocked_by = asyncio.run(_run_one_minimal_attack(attack_text, phase))
+        except Exception as e:
+            response = str(e)
+            blocked_by = "none"
+        outcome = _outcome(response, blocked_by)
+        attack_hash = hashlib.sha256(attack_text.encode("utf-8")).hexdigest()[:12]
+        rec = {
+            "attack_id": idx + 1,
+            "attack_text": attack_text if len(attack_text) <= 200 else attack_text[:200] + "...",
+            "attack_hash": attack_hash,
+            "attack_category": category,
+            "model_response": response[:2000] + "..." if len(response) > 2000 else response,
+            "blocked_by": blocked_by,
+            "outcome": outcome,
+        }
+        results.append(rec)
+        if show_responses:
+            print(f"--- #{rec['attack_id']} [{category}] blocked_by={blocked_by} outcome={outcome} ---")
+            print(rec["model_response"][:500])
+            if len(rec["model_response"]) > 500:
+                print("...")
+            print()
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / f"workflow_attacks_{phase.replace('-', '_')}.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+    csv_path = output_dir / f"workflow_attacks_{phase.replace('-', '_')}.csv"
+    if results:
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=results[0].keys())
+            w.writeheader()
+            w.writerows(results)
+    print(f"Wrote {json_path} and {csv_path} ({len(results)} attacks, minimal pipeline)")
+    try:
+        from app.services.tracing.langfuse_service import get_tracing_service
+        get_tracing_service().flush()
+        get_tracing_service().shutdown()
+    except Exception:
+        pass
+    return results
 
 
 async def run_workflow_async(user_id: str, session_id: str, message: str) -> Dict[str, Any]:
@@ -120,9 +210,11 @@ def run_phase(
         attacks = attacks[:limit]
 
     user_id = "guardrails-test"
+    total = len(attacks)
     results: List[Dict[str, Any]] = []
     for idx, (category, attack_text) in enumerate(attacks):
         session_id = f"workflow-attack-{phase}-{idx}"
+        print(f"Attack {idx + 1}/{total} [{category}] ...", flush=True)
         try:
             final_state = asyncio.run(run_workflow_async(user_id, session_id, attack_text))
         except Exception as e:
@@ -164,6 +256,13 @@ def run_phase(
             w.writeheader()
             w.writerows(results)
     print(f"Wrote {json_path} and {csv_path} ({len(results)} attacks)")
+    # Flush Langfuse so traces are sent before script exits
+    try:
+        from app.services.tracing.langfuse_service import get_tracing_service
+        get_tracing_service().flush()
+        get_tracing_service().shutdown()
+    except Exception:
+        pass
     return results
 
 
@@ -194,18 +293,33 @@ def run_compare(output_dir: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run workflow attacks (model-only or guardrails-on)")
-    parser.add_argument("--phase", choices=["model-only", "guardrails-on"])
+    parser.add_argument("--phase", choices=["model-only", "guardrails-off", "guardrails-on"], help="model-only and guardrails-off both run without guardrails")
     parser.add_argument("--compare", action="store_true", help="Compare model-only vs guardrails-on results from --output-dir")
-    parser.add_argument("--output-dir", type=Path, default=SCRIPT_DIR / "results")
+    parser.add_argument("--output-dir", type=Path, default=SCRIPT_DIR / "results", help="Default: attack_scripts/results")
     parser.add_argument("--show-responses", action="store_true")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--no-tracing", action="store_true", help="Disable Langfuse (LANGFUSE_ENABLED=false). Use if you get a bus error to see if tracing is the cause.")
+    parser.add_argument("--minimal", action="store_true", help="Minimal pipeline: guardrails (when on) + one LLM call per attack. No full workflow (no intent, MCP, recommender). Faster and avoids MCP/timeouts.")
     args = parser.parse_args()
+    if args.phase == "guardrails-off":
+        args.phase = "model-only"
 
     if args.compare:
         return run_compare(args.output_dir)
     if not args.phase:
         parser.error("--phase required unless --compare")
-    results = run_phase(args.phase, args.output_dir, args.show_responses, args.limit)
+    # Set env before any app import so singletons get correct config
+    os.environ["GUARDRAIL_PROVIDERS"] = "" if args.phase == "model-only" else "guardrails-ai"
+    if args.no_tracing:
+        os.environ["LANGFUSE_ENABLED"] = "false"
+    from app.core.config import get_settings
+    if not get_settings().OPENAI_API_KEY:
+        print("Error: OPENAI_API_KEY is not set. Set it in .env or environment to run workflow attacks.", file=sys.stderr)
+        return 1
+    if args.minimal:
+        results = run_phase_minimal(args.phase, args.output_dir, args.show_responses, args.limit)
+    else:
+        results = run_phase(args.phase, args.output_dir, args.show_responses, args.limit)
     blocked = sum(1 for r in results if r["blocked_by"] != "none" or r["outcome"] == "refused_by_model")
     print(f"Phase {args.phase}: {len(results)} attacks, {blocked} blocked or refused")
     return 0
