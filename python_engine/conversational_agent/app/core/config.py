@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4o"
+    OPENAI_MODEL: str = "gpt-4o-mini"  # Override via .env;
     OPENAI_TEMPERATURE: float = 0.7
     
     # Langfuse Tracing

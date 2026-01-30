@@ -323,8 +323,8 @@ async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
     """
     Output guardrails node - validates LLM responses.
     
-    Note: Currently not used in the workflow per requirements, but implementation
-    is available for future use.
+    Unsafe output routes to error_response; user receives a generic message
+    instead of the raw LLM response.
     """
     from app.guardrails import get_safety_guardrails
     
@@ -355,10 +355,6 @@ async def output_guardrails_node(state: ConversationState) -> Dict[str, Any]:
             logger.warning(f"Output guardrail warnings: {result.warnings}")
     else:
         logger.warning(f"Output guardrails blocked (provider: {result.provider}, risk: {result.risk_score:.2f}, warnings: {result.warnings})")
-    
-    # Note: Per requirements, we don't actually block output even if guardrails fail
-    # The implementation is here for future use, but we always mark as safe for now
-    metadata["output_safe"] = True  # Override to always allow output
     
     # Return updated state with filtered response if it was modified
     return {
