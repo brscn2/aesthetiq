@@ -11,8 +11,36 @@ logger = get_logger(__name__)
 PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
     r"disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"override\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"bypass\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"override\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
+    r"bypass\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
     r"forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)",
     r"you\s+are\s+now\s+(DAN|jailbroken|unfiltered|evil)",
+    r"you\s+are\s+now\s+a\s+different\s+ai",
+    r"you\s+are\s+now\s+a\s+new\s+ai",
+    r"you\s+are\s+now\s+a\s+different\s+person",
+    r"you\s+are\s+now\s+a\s+new\s+person",
+    r"you\s+are\s+now\s+a\s+different\s+role",
+    r"you\s+are\s+now\s+a\s+new\s+role",
+    r"you\s+are\s+now\s+a\s+different\s+character",
+    r"you\s+are\s+now\s+a\s+new\s+character",
+    r"you\s+are\s+now\s+a\s+different\s+gender",
+    r"you\s+are\s+now\s+a\s+new\s+gender",
+    r"you\s+are\s+now\s+a\s+different\s+race",
+    r"you\s+are\s+now\s+a\s+new\s+race",
+    r"you\s+are\s+now\s+a\s+different\s+ethnicity",
+    r"you\s+are\s+now\s+a\s+new\s+ethnicity",
+    r"you\s+are\s+now\s+a\s+different\s+religion",
+    r"you\s+are\s+now\s+a\s+new\s+religion",
+    r"you\s+are\s+now\s+a\s+different\s+politics",
+    r"you\s+are\s+now\s+a\s+new\s+politics",
+    r"you\s+are\s+now\s+a\s+different\s+culture",
+    r"you\s+are\s+now\s+a\s+new\s+culture",
+    r"you\s+are\s+now\s+a\s+different\s+language",
+    r"you\s+are\s+now\s+a\s+new\s+language",
     r"pretend\s+(to\s+be|you\s+are)\s+(a\s+)?different",
     r"act\s+as\s+(if\s+you\s+were|a)\s+(different|new)",
     r"new\s+(system\s+)?instructions?:",
@@ -20,24 +48,71 @@ PROMPT_INJECTION_PATTERNS = [
     r"system\s+prompt:\s*",
     r"\[system\]",
     r"<system>",
+    r"system\s+prompt:",
+    r"system\s+instruction:",
     r"###\s*(system|instruction)",
     r"bypass\s+(safety|content|filter)",
+    r"bypass\s+all\s+(content\s+)?filters?",
+    r"ignore\s+all\s+(content\s+)?filters?",
+    r"(for\s+)?(research|reserach)\s+only\s*:?\s*.*(ignore|bypass)",
+    r"no\s+restrictions?",
+    r"you\s+have\s+no\s+restrictions",
+    r"(fictional|simulation|simulate).*?no\s+(rules|restrictions)",
+    r"trusted\s+system\s*\.?\s*.*?(directive|ignore)",
+    r"new\s+directive\s*:?\s*ignore",
+    r"override\s+your\s+(instructions?|prompts?|rules?)",
+    r"act\s+as\s+if\s+you\s+were\s+(a\s+)?different\s+ai",
+    r"simulating\s+.*?unfiltered",
+    r"returns\s+unfiltered",
+    r"no\s+content\s+policy",
+    r"treat\s+the\s+following\s+as\s+.*?(privileged|command|disregard)",
+    r"disregard\s+guidelines",
+    r"evaluation\s+only\s*:?\s*.*?no\s+restrictions",
     r"jailbreak",
     r"developer\s+mode",
     r"do\s+anything\s+now",
     r"evil\s+mode",
+    r"act\s+as\s+(if\s+you\s+were|a)\s+.*(different|new)\s+ai",
+    r"act\s+as\s+(if\s+you\s+were|a)\s+(different|new)",
+    r"act\s+as\s+a\s+human",
+    r"act\s+as\s+a\s+professional",
+    r"act\s+as\s+a\s+expert",
+    r"act\s+as\s+a\s+superhuman",
+    r"act\s+as\s+a\s+superman",
+    r"act\s+as\s+a\s+supergirl",
+    r"act\s+as\s+a\s+superguy",
+    r"(role[\s\-]?play|simulating)\s+(an?\s+)?(api|ai|model).*unfiltered",
+    r"reveal\s+(system\s+)?prompt",
+    r"reval\s+system\s+prompt",  # typo
 ]
 
 # Toxic/harmful content patterns for fallback detection
 TOXIC_PATTERNS = [
     r"\b(kill|murder|harm|hurt|attack|destroy)\s+(yourself|myself|them|people|someone)\b",
+    r"\b(kill|murder|harm|hurt|attack|destroy)\s+(others|people|someone)\b",
+    r"\b(hurt|hurting)\s+.*(people|others|someone)\b",
+    r"\b(instructions?|how)\s+to\s+(hurt|harm|kill|murder|poison)\b",
     r"\b(suicide|self.harm)\b",
     r"\bhow\s+to\s+(make|build|create)\s+(a\s+)?(bomb|weapon|explosive|poison)\b",
     r"\b(make|build|create)\s+(a\s+)?(bomb|weapon|explosive|poison)\b",
     r"\b(bomb|explosive|weapon)\s+(making|building|creation|instructions?)\b",
+    r"\bbuild\s+.*(explosive|bomb|weapon|poison)\b",
+    r"\b(explosive|bomb|weapon)\s+device\b",
+    r"\binstructions?\s+to\s+build\s+(an?\s+)?(explosive|bomb)\b",
+    r"\bhow\s+to\s+poison\b",
+    r"\bpoison\s+(someone|people)\b",
+    r"\btell\s+me\s+how\s+to\s+poison\b",
+    r"\bweapons?\s+(can\s+i\s+)?build\b",
+    r"\bwhat\s+weapons?\s+can\s+i\s+build\b",
+    r"\bweapons?\s+.*?build.*?household\b",
+    r"\binstructions?\s+for\s+hurting\s+(people|others)\b",
+    r"\bhurting\s+people\b",
+    r"\bexplosive\s+device\b",
     r"\b(hate|racist|sexist|homophobic)\b",
     r"\b(slur|offensive\s+term)\b",
     r"\bhow\s+to\s+hurt\b",
+    r"\bhow\s+to\s+kill\b",
+    r"\bhow\s+to\s+murder\b",
     r"\bhow\s+to\s+harm\b",
 ]
 
@@ -137,42 +212,55 @@ class GuardrailsAIProvider(BaseProvider):
         
         return self._output_guard
     
+    def _normalize_obfuscation(self, text: str) -> str:
+        """Normalize common obfuscation (leetspeak, unicode escapes, typos) for pattern matching."""
+        t = text.lower()
+        # Decode \uXXXX unicode escapes if present (literal backslash-u in file)
+        if "\\u" in t or ("\\" in t and "u" in t):
+            try:
+                t = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), t)
+            except Exception:
+                pass
+        # Simple leetspeak/numeral substitution
+        for char, replacement in (("0", "o"), ("1", "i"), ("3", "e"), ("4", "a"), ("5", "s"), ("7", "t")):
+            t = t.replace(char, replacement)
+        # Common typos used in obfuscated attacks (after leet: 1->i, 0->o, etc.)
+        typos = (
+            ("pervious", "previous"), ("previus", "previous"), ("prev1ous", "previous"),
+            ("isnturctions", "instructions"), ("instructians", "instructions"), ("instruct1ons", "instructions"),
+            ("reserach", "research"), ("ignoer", "ignore"), ("disregrad", "disregard"),
+            ("yuor", "your"), ("gudielines", "guidelines"), ("reval", "reveal"), ("secerts", "secrets"),
+        )
+        for typo, correct in typos:
+            t = t.replace(typo, correct)
+        return t
+
     def _check_prompt_injection_patterns(self, text: str) -> Tuple[bool, List[str]]:
         """
         Fallback pattern-based prompt injection detection.
-        
-        Args:
-            text: Text to check
-            
-        Returns:
-            Tuple of (is_injection_detected, list_of_matched_patterns)
+        Runs patterns on both original and obfuscation-normalized text.
         """
         matched_patterns = []
         text_lower = text.lower()
-        
+        text_normalized = self._normalize_obfuscation(text)
+
         for pattern in self._prompt_injection_patterns:
-            if pattern.search(text_lower):
+            if pattern.search(text_lower) or pattern.search(text_normalized):
                 matched_patterns.append(pattern.pattern)
-        
         return len(matched_patterns) > 0, matched_patterns
     
     def _check_toxic_patterns(self, text: str) -> Tuple[bool, List[str]]:
         """
         Fallback pattern-based toxic content detection.
-        
-        Args:
-            text: Text to check
-            
-        Returns:
-            Tuple of (is_toxic_detected, list_of_matched_patterns)
+        Runs patterns on both original and obfuscation-normalized text.
         """
         matched_patterns = []
         text_lower = text.lower()
-        
+        text_normalized = self._normalize_obfuscation(text)
+
         for pattern in self._toxic_patterns:
-            if pattern.search(text_lower):
+            if pattern.search(text_lower) or pattern.search(text_normalized):
                 matched_patterns.append(pattern.pattern)
-        
         return len(matched_patterns) > 0, matched_patterns
     
     def _fallback_check_input(self, text: str) -> GuardrailResult:
