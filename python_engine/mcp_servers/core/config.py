@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     # Matches NestJS CommerceItem model collection name
     # (backend `CommerceItem` model → Mongo collection `commerceitems`)
     MONGODB_COLLECTION_COMMERCE: str = "commerceitems"
+    # Retail items collection (for crawler-scraped items)
+    MONGODB_COLLECTION_RETAIL: str = "retailitems"
     # Matches NestJS User model collection name
     # (backend `User` model → Mongo collection `users`)
     MONGODB_COLLECTION_USERS: str = "users"
@@ -69,9 +71,13 @@ class Settings(BaseSettings):
     # Embedding service (default to localhost for local dev, override to embedding_service:8004 for Docker)
     EMBEDDING_SERVICE_URL: str = "http://localhost:8004"
 
-    # Web search
-    TAVILY_API_KEY: Optional[str] = None
-    TAVILY_BASE_URL: str = "https://api.tavily.com"
+    # Google Custom Search API
+    GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_CX: Optional[str] = None  # Custom Search Engine ID
+
+    # Crawler service
+    CRAWLER_TARGET_URLS_PATH: Optional[str] = None  # Path to target URLs YAML file
+    CACHE_FRESHNESS_DAYS: int = 30  # Days for cache freshness threshold
 
     # Server
     HOST: str = "0.0.0.0"

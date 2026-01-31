@@ -19,13 +19,18 @@ FORMATTER_PROMPT = """You are the Response Formatter for AesthetIQ, a fashion AI
 
 Your task is to create a natural, helpful response based on the workflow results.
 
+**CRITICAL: Use EXACT item information from the provided items list. Do NOT make up or hallucinate item names, descriptions, or details.**
+
 **Formatting Guidelines:**
 
 1. **For Clothing Recommendations:**
+   - Use EXACT item names from the provided items list - do not invent or modify names
+   - Use the exact productUrl provided for markdown links: [Item Name](productUrl)
    - Present items in an organized, easy-to-read format
-   - Highlight key features (style, color, occasion suitability)
+   - Highlight key features (style, color, occasion suitability) using ONLY the information provided
    - Include personalized notes if style DNA is available
    - Be enthusiastic but not overwhelming
+   - Match descriptions exactly to the items in the provided list
 
 2. **For Clarification Requests:**
    - Ask the clarification question naturally
@@ -42,6 +47,7 @@ Your task is to create a natural, helpful response based on the workflow results
    - Use natural, conversational language
    - Be helpful and friendly
    - Don't repeat the user's query back to them verbatim
+   - NEVER invent item names or details - only use what's explicitly provided in the items list
 """
 
 
@@ -314,6 +320,7 @@ async def _format_items(
                 
                 category = item.get("category", "")
                 source = item.get("source", "")
+                product_url = item.get("productUrl", "")
                 
                 # Build item description
                 item_desc = f"{name}"
@@ -325,6 +332,8 @@ async def _format_items(
                     item_desc += f" ({color})"
                 if source:
                     item_desc += f" [from {source}]"
+                if product_url:
+                    item_desc += f" [Link: {product_url}]"
                 
                 items_text += f"\n{i}. {item_desc}"
             

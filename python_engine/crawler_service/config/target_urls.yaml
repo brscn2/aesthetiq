@@ -1,0 +1,9 @@
+retailers:
+  - name: "Uniqlo"
+    retailerId: "697799e8714ab5ff83ef832e"  # Optional: MongoDB ObjectId string for retailer
+    urls:
+      - "https://www.uniqlo.com/us/en/new-arrivals"
+  
+  - name: "Zalando"
+    retailerId: "69779a45714ab5ff83ef8342"  # Optional: MongoDB ObjectId string for retailer
+    urls:
