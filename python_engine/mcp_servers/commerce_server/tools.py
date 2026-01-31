@@ -132,23 +132,23 @@ async def filter_commerce_items(
     limit: int = 100
 ) -> List[CommerceItem]:
     """
-    Filter commerce items by criteria.
+    Filter items by criteria (searches retailitems collection).
     
     Args:
         filters: Optional filters (category, brand, price range, etc.)
         limit: Maximum number of items to return
     
     Returns:
-        List of commerce items matching the filters
+        List of items matching the filters
     """
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
-    docs = await db.find_commerce_items(filters=filter_dict, limit=limit)
+    docs = await db.find_commerce_items(filters=filter_dict, limit=limit, use_retail_collection=True)
     return [_doc_to_item(d) for d in docs]
 
 
 async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     """
-    Get a single commerce item by ID.
+    Get a single item by ID (searches retailitems collection).
     
     Args:
         item_id: The item's _id
@@ -156,7 +156,7 @@ async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     Returns:
         CommerceItem or None if not found
     """
-    doc = await db.get_commerce_item(item_id=item_id)
+    doc = await db.get_commerce_item(item_id=item_id, use_retail_collection=True)
     if not doc:
         return None
     return _doc_to_item(doc)
@@ -192,17 +192,19 @@ async def search_commerce_items(
     """
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
     
-    # First, try to get items with pre-computed embeddings
+    # First, try to get items with pre-computed embeddings from retailitems collection
     docs = await db.find_items_with_embeddings(
         filters=filter_dict,
-        limit=candidate_pool
+        limit=candidate_pool,
+        use_retail_collection=True  # Use retailitems collection
     )
     
-    # If no items with embeddings, fall back to all items
+    # If no items with embeddings, fall back to all items from retailitems collection
     if not docs:
         docs = await db.find_commerce_items(
             filters=filter_dict,
-            limit=candidate_pool
+            limit=candidate_pool,
+            use_retail_collection=True  # Use retailitems collection
         )
     
     if not docs:

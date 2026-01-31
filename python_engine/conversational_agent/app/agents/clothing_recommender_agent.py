@@ -6,6 +6,7 @@ This agent handles the "clothing" intent path:
 - Uses web search as fallback when no items found
 """
 from typing import Any, Dict, List, Optional
+import hashlib
 import json
 
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -68,14 +69,12 @@ Your role is to find and recommend clothing items based on the user's request.
 **Tool Usage Guidelines:**
 
 1. Get user's style_dna FIRST to personalize recommendations
-2. For database searches:
-   - Use filter tools when specific criteria are provided (category, brand, color, price)
-   - Use search tools for vague or semantic queries
-3. Prioritize database tools over web search
-4. Only use web_search if database returns zero results AND user explicitly wants trending/external items
-5. Pick ONE appropriate search tool - don't call multiple search tools sequentially
 
-Keep tool usage minimal - ideally 2 calls maximum (style_dna + one search).
+2. For clothing searches:
+   - For wardrobe scope: use `search_wardrobe_items`
+   - For retailer scope: **ALWAYS use `search_retailer_items`** - This searches the retailitems collection with fresh, crawler-scraped items from retailers like UNIQLO and Zalando
+
+3. Keep tool usage minimal - ideally 2 calls maximum (style_dna + one search).
 Return results immediately after finding items.
 """
 
@@ -119,17 +118,20 @@ def _normalize_item_to_clothing_item(item: Dict[str, Any], source: str) -> Dict[
         logger.debug(f"[COMMERCE] Normalizing commerce item: has name={'name' in item}, has imageUrl={'imageUrl' in item}, has colors={'colors' in item}, has price={'price' in item}, has productUrl={'productUrl' in item}")
     
     # Extract ID (handle both id and _id fields, and stringify if needed)
-    item_id = item.get("id") or item.get("_id")
-    if item_id is None:
-        # Fallback: try to get from raw dict if it exists
-        raw = item.get("raw", {})
-        if isinstance(raw, dict):
-            item_id = raw.get("id") or raw.get("_id")
-    # Convert to string if it's not already
-    item_id = str(item_id) if item_id is not None else ""
+    # For web items, we'll generate ID from URL later
+    item_id = None
+    if source != "web":
+        item_id = item.get("id") or item.get("_id")
+        if item_id is None:
+            # Fallback: try to get from raw dict if it exists
+            raw = item.get("raw", {})
+            if isinstance(raw, dict):
+                item_id = raw.get("id") or raw.get("_id")
+        # Convert to string if it's not already
+        item_id = str(item_id) if item_id is not None else ""
     
     normalized = {
-        "id": item_id,
+        "id": item_id or "",  # Will be set for web items later
         "source": source,
     }
     
@@ -148,56 +150,190 @@ def _normalize_item_to_clothing_item(item: Dict[str, Any], source: str) -> Dict[
     # Debug logging - log extracted fields
     logger.debug(f"Extracted fields - brand: '{brand}', subCategory: '{sub_category}', category: '{category}'")
     
-    # Generate name if missing (wardrobe items don't have name, but commerce items do)
-    if "name" not in item or not item.get("name"):
-        name_parts = []
-        # Check for non-empty strings (strip whitespace)
-        if brand and brand.strip():
-            name_parts.append(brand.strip())
-        if sub_category and sub_category.strip():
-            name_parts.append(sub_category.strip())
-        elif category and category.strip():
-            name_parts.append(category.strip())
+    # Handle web search results with OG tags
+    if source == "web":
+        # Log OG tags presence in raw item
+        og_tags_present = {
+            "og_image": bool(item.get("og_image")),
+            "og_title": bool(item.get("og_title")),
+            "og_description": bool(item.get("og_description")),
+        }
+        logger.info(f"[NORMALIZE] Web item OG tags present: {og_tags_present}")
         
-        if name_parts:
-            normalized["name"] = " ".join(name_parts)
+        # For web items, prefer OG tags over default fields
+        # Use og_title for name if available, otherwise use title
+        og_title = item.get("og_title")
+        title = item.get("title") or ""
+        if og_title and og_title.strip():
+            normalized["name"] = og_title.strip()
+            logger.debug(f"[NORMALIZE] Using og_title for name: '{og_title[:50]}...'")
+        elif title and title.strip():
+            normalized["name"] = title.strip()
+            logger.debug(f"[NORMALIZE] Using title for name (og_title not available): '{title[:50]}...'")
         else:
-            # Better fallback - use category if available
-            if category and category.strip():
-                normalized["name"] = f"{category.strip()} Item"
+            normalized["name"] = "Web Item"
+            logger.warning(f"[NORMALIZE] No og_title or title found, using default name")
+        
+        # Use og_image as imageUrl for web items
+        og_image = item.get("og_image")
+        if og_image and og_image.strip():
+            normalized["imageUrl"] = og_image.strip()
+            logger.debug(f"[NORMALIZE] Using og_image for imageUrl: '{og_image[:50]}...'")
+        else:
+            # Fallback to regular imageUrl if og_image not available
+            image_url = item.get("imageUrl")
+            if image_url and image_url.strip():
+                normalized["imageUrl"] = image_url.strip()
+                logger.debug(f"[NORMALIZE] Using fallback imageUrl (og_image not available): '{image_url[:50]}...'")
             else:
-                # Use source-appropriate default name
-                normalized["name"] = "Commerce Item" if source == "commerce" else "Wardrobe Item"
+                logger.warning(f"[NORMALIZE] No og_image or imageUrl found for web item")
+        
+        # Use og_description for description if available
+        og_description = item.get("og_description")
+        if og_description and og_description.strip():
+            normalized["description"] = og_description.strip()
+            logger.debug(f"[NORMALIZE] Using og_description for description")
+        elif item.get("content"):
+            normalized["description"] = item.get("content")
+            logger.debug(f"[NORMALIZE] Using content for description (og_description not available)")
+        
+        # Use url as productUrl for web items
+        url = item.get("url")
+        if url:
+            normalized["productUrl"] = url
+            logger.debug(f"[NORMALIZE] Using url for productUrl: '{url[:50]}...'")
+            
+            # Generate unique ID from URL for web items (required for frontend display)
+            # Use MD5 hash of URL to create a stable, unique identifier
+            url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()
+            normalized["id"] = url_hash
+            logger.info(f"[NORMALIZE] Generated ID for web item from URL: {url_hash[:16]}... (url: {url[:50]}...)")
+        else:
+            logger.warning(f"[NORMALIZE] No url found for web item - cannot generate ID")
+            # Fallback: generate ID from title or use a random hash
+            if normalized.get("name"):
+                name_hash = hashlib.md5(normalized["name"].encode('utf-8')).hexdigest()
+                normalized["id"] = name_hash
+                logger.warning(f"[NORMALIZE] Generated ID from name as fallback: {name_hash[:16]}...")
+            else:
+                # Last resort: use a hash of the entire item dict
+                item_str = str(sorted(item.items()))
+                item_hash = hashlib.md5(item_str.encode('utf-8')).hexdigest()
+                normalized["id"] = item_hash
+                logger.warning(f"[NORMALIZE] Generated ID from item dict as last resort: {item_hash[:16]}...")
+        
+        logger.info(f"[NORMALIZE] Normalized web item: id='{normalized.get('id')[:16] if normalized.get('id') else 'missing'}...', name='{normalized.get('name')}', imageUrl={'present' if normalized.get('imageUrl') else 'missing'}, productUrl={'present' if normalized.get('productUrl') else 'missing'}")
     else:
-        # Commerce items have name field, wardrobe items don't
-        normalized["name"] = item["name"]
-    
-    logger.debug(f"Generated name: '{normalized.get('name')}'")
-    
-    # Extract imageUrl - prefer processedImageUrl for wardrobe items
-    # Commerce items only have imageUrl (no processedImageUrl)
-    # Handle both dict access and attribute access (for Pydantic models that weren't converted)
-    image_url = None
-    if source == "wardrobe":
-        image_url = item.get("processedImageUrl") or item.get("imageUrl")
-        # Also try attribute access if dict access failed
-        if not image_url and hasattr(item, "processedImageUrl"):
-            image_url = getattr(item, "processedImageUrl", None)
-        if not image_url and hasattr(item, "imageUrl"):
-            image_url = getattr(item, "imageUrl", None)
-    else:
-        # Commerce and web items: use imageUrl directly
-        image_url = item.get("imageUrl")
-        if not image_url and hasattr(item, "imageUrl"):
-            image_url = getattr(item, "imageUrl", None)
-    
-    # Always set imageUrl if present (even if empty string - let frontend handle it)
-    if image_url is not None and image_url != "":
-        normalized["imageUrl"] = image_url
-        image_preview = image_url[:50] + "..." if len(image_url) > 50 else image_url
-        logger.debug(f"Set imageUrl: '{image_preview}'")
-    else:
-        logger.warning(f"No imageUrl found in item from {source}, keys: {list(item.keys())}")
+        # Check if this is a WebSearchResult format item (from search_retailer_items)
+        # even though source is "commerce" - search_retailer_items returns WebSearchResult format
+        has_og_tags = any(key in item for key in ("og_title", "og_image", "og_description"))
+        has_web_fields = any(key in item for key in ("title", "url")) and not item.get("name")
+        
+        if has_og_tags or has_web_fields:
+            # Handle as WebSearchResult format even though source is "commerce"
+            logger.debug(f"[NORMALIZE] Detected WebSearchResult format item with source='commerce', handling OG tags")
+            
+            # Use og_title for name if available, otherwise use title
+            og_title = item.get("og_title")
+            title = item.get("title") or ""
+            if og_title and og_title.strip():
+                normalized["name"] = og_title.strip()
+                logger.debug(f"[NORMALIZE] Using og_title for name: '{og_title[:50]}...'")
+            elif title and title.strip():
+                normalized["name"] = title.strip()
+                logger.debug(f"[NORMALIZE] Using title for name (og_title not available): '{title[:50]}...'")
+            else:
+                normalized["name"] = "Commerce Item"
+                logger.warning(f"[NORMALIZE] No og_title or title found for WebSearchResult format item")
+            
+            # Use og_image as imageUrl
+            og_image = item.get("og_image")
+            if og_image and og_image.strip():
+                normalized["imageUrl"] = og_image.strip()
+                logger.debug(f"[NORMALIZE] Using og_image for imageUrl: '{og_image[:50]}...'")
+            else:
+                # Fallback to regular imageUrl if og_image not available
+                image_url = item.get("imageUrl")
+                if image_url and image_url.strip():
+                    normalized["imageUrl"] = image_url.strip()
+                    logger.debug(f"[NORMALIZE] Using fallback imageUrl: '{image_url[:50]}...'")
+                else:
+                    logger.warning(f"[NORMALIZE] No og_image or imageUrl found for WebSearchResult format item")
+            
+            # Use og_description for description if available
+            og_description = item.get("og_description")
+            if og_description and og_description.strip():
+                normalized["description"] = og_description.strip()
+                logger.debug(f"[NORMALIZE] Using og_description for description")
+            elif item.get("content"):
+                normalized["description"] = item.get("content")
+                logger.debug(f"[NORMALIZE] Using content for description")
+            
+            # Use url as productUrl
+            url = item.get("url")
+            if url:
+                normalized["productUrl"] = url
+                logger.debug(f"[NORMALIZE] Using url for productUrl: '{url[:50]}...'")
+                
+                # Generate unique ID from URL if not already set
+                if not normalized.get("id"):
+                    url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()
+                    normalized["id"] = url_hash
+                    logger.debug(f"[NORMALIZE] Generated ID for WebSearchResult format item from URL: {url_hash[:16]}...")
+            else:
+                logger.warning(f"[NORMALIZE] No url found for WebSearchResult format item")
+        else:
+            # Standard commerce/wardrobe item handling
+            # Generate name if missing (wardrobe items don't have name, but commerce items do)
+            if "name" not in item or not item.get("name"):
+                name_parts = []
+                # Check for non-empty strings (strip whitespace)
+                if brand and brand.strip():
+                    name_parts.append(brand.strip())
+                if sub_category and sub_category.strip():
+                    name_parts.append(sub_category.strip())
+                elif category and category.strip():
+                    name_parts.append(category.strip())
+                
+                if name_parts:
+                    normalized["name"] = " ".join(name_parts)
+                else:
+                    # Better fallback - use category if available
+                    if category and category.strip():
+                        normalized["name"] = f"{category.strip()} Item"
+                    else:
+                        # Use source-appropriate default name
+                        normalized["name"] = "Commerce Item" if source == "commerce" else "Wardrobe Item"
+            else:
+                # Commerce items have name field, wardrobe items don't
+                normalized["name"] = item["name"]
+        
+        logger.debug(f"Generated name: '{normalized.get('name')}'")
+        
+        # Extract imageUrl - prefer processedImageUrl for wardrobe items
+        # Commerce items only have imageUrl (no processedImageUrl)
+        # Handle both dict access and attribute access (for Pydantic models that weren't converted)
+        image_url = None
+        if source == "wardrobe":
+            image_url = item.get("processedImageUrl") or item.get("imageUrl")
+            # Also try attribute access if dict access failed
+            if not image_url and hasattr(item, "processedImageUrl"):
+                image_url = getattr(item, "processedImageUrl", None)
+            if not image_url and hasattr(item, "imageUrl"):
+                image_url = getattr(item, "imageUrl", None)
+        else:
+            # Commerce items: use imageUrl directly
+            image_url = item.get("imageUrl")
+            if not image_url and hasattr(item, "imageUrl"):
+                image_url = getattr(item, "imageUrl", None)
+        
+        # Always set imageUrl if present (even if empty string - let frontend handle it)
+        if image_url is not None and image_url != "":
+            normalized["imageUrl"] = image_url
+            image_preview = image_url[:50] + "..." if len(image_url) > 50 else image_url
+            logger.debug(f"Set imageUrl: '{image_preview}'")
+        else:
+            logger.warning(f"No imageUrl found in item from {source}, keys: {list(item.keys())}")
     
     # Map category and subCategory (handle enum if present)
     if "category" in item:
@@ -307,11 +443,21 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
     items = []
     
     def _convert_to_dict(obj: Any) -> Dict[str, Any]:
-        """Convert Pydantic model or dict to dict."""
+        """Convert Pydantic model or dict to dict.
+        
+        For WebSearchResult objects, this preserves all fields including:
+        - OG tags: og_image, og_title, og_description
+        - Tavily fields: url, title, content, score
+        """
         if isinstance(obj, BaseModel):
-            # Convert Pydantic model to dict
+            # Convert Pydantic model to dict - model_dump() preserves all fields including OG tags
             result = obj.model_dump()
-            logger.debug(f"[EXTRACT] Converted BaseModel to dict, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            keys = list(result.keys()) if isinstance(result, dict) else []
+            logger.debug(f"[EXTRACT] Converted BaseModel to dict, keys: {keys}")
+            # Log OG tags if present (for WebSearchResult objects)
+            if isinstance(result, dict) and any(key.startswith("og_") for key in keys):
+                og_fields = {k: v for k, v in result.items() if k.startswith("og_")}
+                logger.debug(f"[EXTRACT] Found OG tags in BaseModel: {og_fields}")
             return result
         elif isinstance(obj, dict):
             return obj
@@ -319,7 +465,12 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
             # Try to convert if it has model_dump method
             if hasattr(obj, "model_dump"):
                 result = obj.model_dump()
-                logger.debug(f"[EXTRACT] Converted object with model_dump() to dict, keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+                keys = list(result.keys()) if isinstance(result, dict) else []
+                logger.debug(f"[EXTRACT] Converted object with model_dump() to dict, keys: {keys}")
+                # Log OG tags if present
+                if isinstance(result, dict) and any(key.startswith("og_") for key in keys):
+                    og_fields = {k: v for k, v in result.items() if k.startswith("og_")}
+                    logger.debug(f"[EXTRACT] Found OG tags in object with model_dump(): {og_fields}")
                 return result
             # Fallback: try dict() constructor
             try:
@@ -332,17 +483,27 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
     
     if isinstance(tool_result, dict):
         # Handle {results: [{item: {...}, score: ...}]} format (from SearchWardrobeItemsResponse)
+        # Also handles {results: [WebSearchResult, ...]} format (from WebSearchResponse)
         if "results" in tool_result:
             results_list = tool_result.get("results") or []
-            logger.info(f"[EXTRACT] Processing {len(results_list)} results from 'results' key")
+            logger.info(f"[EXTRACT] Processing {len(results_list)} results from 'results' key (source: {source})")
             for i, r in enumerate(results_list):
                 r_dict = _convert_to_dict(r)
                 if r_dict:
                     logger.debug(f"[EXTRACT] Result {i}: keys={list(r_dict.keys())}")
+                    # For WebSearchResponse, results are direct WebSearchResult objects (no "item" wrapper)
+                    # For other responses, results may have "item" key
                     item = r_dict.get("item") if "item" in r_dict else r_dict
                     item_dict = _convert_to_dict(item)
                     if item_dict:
-                        logger.debug(f"[EXTRACT] Extracted item {i}: has id={('id' in item_dict or '_id' in item_dict)}, has imageUrl={'imageUrl' in item_dict}")
+                        logger.debug(f"[EXTRACT] Extracted item {i}: has id={('id' in item_dict or '_id' in item_dict)}, has imageUrl={'imageUrl' in item_dict}, has url={'url' in item_dict}")
+                        # Log OG tags for web search results
+                        if source == "web":
+                            og_tags = {k: v for k, v in item_dict.items() if k.startswith("og_")}
+                            if og_tags:
+                                logger.info(f"[EXTRACT] Web item {i} OG tags: {og_tags}")
+                            else:
+                                logger.warning(f"[EXTRACT] Web item {i} has no OG tags! Available keys: {list(item_dict.keys())}")
                         if "score" in r_dict:
                             item_dict["_search_score"] = r_dict.get("score")
                         items.append(item_dict)
@@ -402,6 +563,10 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
             item_dict = _convert_to_dict(item)
             if item_dict:
                 logger.debug(f"[EXTRACT] Extracted item {i} from list: keys={list(item_dict.keys())}, has id={('id' in item_dict or '_id' in item_dict)}, has imageUrl={'imageUrl' in item_dict}")
+                # Log OG tags for web search results
+                if source == "web" and any(key.startswith("og_") for key in item_dict.keys()):
+                    og_tags = {k: v for k, v in item_dict.items() if k.startswith("og_")}
+                    logger.info(f"[EXTRACT] Web item {i} from list OG tags: {og_tags}")
                 
                 # Check if this is a langchain ToolMessage format (has 'type', 'text', 'id' but not wardrobe/commerce fields)
                 # The actual response JSON is inside the 'text' field
@@ -679,7 +844,8 @@ Filters: {filter_str}{refinement_context}"""
                     # Track sources based on tool name
                     if "wardrobe" in tool_name:
                         search_sources_used.append("wardrobe") if "wardrobe" not in search_sources_used else None
-                    elif "commerce" in tool_name:
+                    elif "commerce" in tool_name or tool_name == "search_retailer_items":
+                        # search_retailer_items searches retailitems collection (commerce)
                         search_sources_used.append("commerce") if "commerce" not in search_sources_used else None
                     elif tool_name == "web_search":
                         fallback_used = True
@@ -736,8 +902,12 @@ Filters: {filter_str}{refinement_context}"""
                     if extracted:
                         style_dna = {**(style_dna or {}), **extracted} if style_dna else extracted
                 
-                elif any(kw in tool_name for kw in ("wardrobe", "commerce", "web_search")):
-                    source = "wardrobe" if "wardrobe" in tool_name else ("web" if "web" in tool_name else "commerce")
+                elif any(kw in tool_name for kw in ("wardrobe", "commerce", "web_search", "search_retailer")):
+                    # search_retailer_items searches retailitems collection (commerce), not web
+                    source = "wardrobe" if "wardrobe" in tool_name else (
+                        "commerce" if "commerce" in tool_name or ("retailer" in tool_name and "web_search" not in tool_name)
+                        else ("web" if "web" in tool_name else "commerce")
+                    )
                     logger.info(f"[RECOMMENDER] Processing tool result from {tool_name} (source: {source})")
                     logger.debug(f"[RECOMMENDER] tool_result type: {type(tool_result)}, is dict: {isinstance(tool_result, dict)}, is list: {isinstance(tool_result, list)}")
                     if isinstance(tool_result, dict):
@@ -803,7 +973,34 @@ Filters: {filter_str}{refinement_context}"""
             else:
                 logger.warning(f"[RECOMMENDER] Skipping non-dict item: {type(item)}")
         
-        retrieved_items = validated_items
+        # Deduplicate items by ID (or URL for web items) to prevent React key conflicts
+        seen_ids = set()
+        deduplicated_items = []
+        for item in validated_items:
+            if not isinstance(item, dict):
+                continue
+            
+            # Get unique identifier for deduplication
+            item_id = item.get("id")
+            if not item_id and item.get("source") == "web":
+                # For web items without ID yet, use URL as identifier
+                item_id = item.get("url") or item.get("productUrl")
+            
+            if item_id:
+                if item_id not in seen_ids:
+                    seen_ids.add(item_id)
+                    deduplicated_items.append(item)
+                else:
+                    logger.debug(f"[RECOMMENDER] Skipping duplicate item with id/url: {item_id[:50] if isinstance(item_id, str) else item_id}")
+            else:
+                # Items without ID/URL - keep them but log warning
+                logger.warning(f"[RECOMMENDER] Item without ID or URL, keeping anyway: {item.get('name', 'unknown')}")
+                deduplicated_items.append(item)
+        
+        if len(validated_items) != len(deduplicated_items):
+            logger.info(f"[RECOMMENDER] Deduplicated items: {len(validated_items)} -> {len(deduplicated_items)} (removed {len(validated_items) - len(deduplicated_items)} duplicates)")
+        
+        retrieved_items = deduplicated_items
         
         logger.info(f"[RECOMMENDER] Final retrieved_items count: {len(retrieved_items)}")
         if retrieved_items:
