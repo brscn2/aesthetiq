@@ -11,11 +11,17 @@ class WebSearchResult(BaseModel):
     content: Optional[str] = None
     score: Optional[float] = None
     raw: Dict[str, Any] = Field(default_factory=dict)
+    # Open Graph metadata
+    og_image: Optional[str] = None
+    og_title: Optional[str] = None
+    og_description: Optional[str] = None
 
 
 class WebSearchRequest(BaseModel):
     query: str
     max_results: int = 5
+    filter_retailers_only: bool = False
+    scrape_og_tags: bool = True
 
 
 class WebSearchResponse(BaseModel):
@@ -29,6 +35,11 @@ class TrendsRequest(BaseModel):
 
 
 class BlogsRequest(BaseModel):
+    query: str
+    max_results: int = 5
+
+
+class RetailerSearchRequest(BaseModel):
     query: str
     max_results: int = 5
 

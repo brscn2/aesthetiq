@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4o"
+    OPENAI_MODEL: str = "gpt-4.1-nano"  # Override via .env;
     OPENAI_TEMPERATURE: float = 0.7
     
     # Langfuse Tracing
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     LANGFUSE_ENABLED: bool = True
     
-    # MongoDB (for MCP servers - will be used in future issues)
+    # MongoDB (for MCP servers)
     MONGODB_URI: Optional[str] = None
     
     # MCP Configuration
@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # Workflow Configuration
     MAX_REFINEMENT_ITERATIONS: int = 3
     MAX_CONVERSATION_HISTORY: int = 10
+    
+    # Guardrails Configuration (Guardrails AI - prompt injection + toxic content detection)
+    GUARDRAIL_PROVIDERS: str = "guardrails-ai"
+    GUARDRAIL_MAX_INPUT_LENGTH: int = 10000
+    GUARDRAIL_MAX_OUTPUT_LENGTH: int = 50000
+    GUARDRAILS_AI_THRESHOLD: float = 0.5  # Toxicity threshold (0.0 to 1.0)
     
     # Logging
     LOG_LEVEL: str = "INFO"

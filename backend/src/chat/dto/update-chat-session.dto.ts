@@ -39,5 +39,10 @@ export class UpdateChatSessionDto {
   @Type(() => ChatMessageDto)
   @IsOptional()
   messages?: ChatMessageDto[];
+
+  @ApiProperty({ type: Object, required: false })
+  @IsObject()
+  @IsOptional()
+  metadata?: Record<string, any>;
 }
 

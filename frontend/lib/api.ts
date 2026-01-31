@@ -6,6 +6,8 @@ import axios, { AxiosError, AxiosInstance } from "axios"
 import type {
   AddMessageDto,
   AnalyzeClothingResponse,
+  Brand,
+  BrandSearchOptions,
   Category,
   ChatSession,
   ColorAnalysis,
@@ -188,6 +190,17 @@ const createOutfitApi = (client: AxiosInstance) => ({
   update: (id: string, data: UpdateOutfitDto): Promise<Outfit> => client.patch(`/outfits/${id}`, data).then((res) => res.data),
   delete: (id: string): Promise<void> => client.delete(`/outfits/${id}`).then(() => undefined),
   toggleFavorite: (id: string): Promise<Outfit> => client.patch(`/outfits/${id}/favorite`).then((res) => res.data),
+})
+
+const createBrandsApi = (client: AxiosInstance) => ({
+  getAll: (options?: BrandSearchOptions): Promise<{ brands: Brand[]; total: number }> => {
+    const params = new URLSearchParams()
+    if (options?.search) params.append("search", options.search)
+    if (options?.limit) params.append("limit", options.limit.toString())
+    
+    const queryString = params.toString()
+    return client.get(`/brands${queryString ? `?${queryString}` : ""}`).then((res) => res.data)
+  },
 })
 
 export interface UploadResponse {
@@ -489,6 +502,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   uploadApi: createUploadApi(client),
   aiApi: createAiApi(client),
   commerceApi: createCommerceApi(client),
+  brandsApi: createBrandsApi(client),
   // Admin APIs
   adminWardrobeApi: createAdminWardrobeApi(client),
   adminAuditApi: createAdminAuditApi(client),

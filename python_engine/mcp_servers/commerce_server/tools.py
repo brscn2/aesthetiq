@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from bson import ObjectId
 
 from mcp_servers.shared.embeddings_client import embed_text
 from mcp_servers.commerce_server import db
@@ -20,17 +21,22 @@ from mcp_servers.commerce_server.style_ranking import (
 
 
 def _sanitize_mongo_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove/stringify ObjectId for JSON serialization."""
-    doc = dict(doc)
-    _id = doc.pop("_id", None)
-    if _id is not None:
-        doc["_id"] = str(_id)
-    # Also handle brandId and retailerId if they're ObjectIds
-    if "brandId" in doc and doc["brandId"] is not None:
-        doc["brandId"] = str(doc["brandId"])
-    if "retailerId" in doc and doc["retailerId"] is not None:
-        doc["retailerId"] = str(doc["retailerId"])
-    return doc
+    """Recursively convert all ObjectId values to strings for JSON serialization."""
+    if not doc:
+        return {}
+    return _sanitize_value(doc)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize a value, converting ObjectId to string."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    elif isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    else:
+        return value
 
 
 def _parse_category(doc: Dict[str, Any]) -> Category:
@@ -126,23 +132,23 @@ async def filter_commerce_items(
     limit: int = 100
 ) -> List[CommerceItem]:
     """
-    Filter commerce items by criteria.
+    Filter items by criteria (searches retailitems collection).
     
     Args:
         filters: Optional filters (category, brand, price range, etc.)
         limit: Maximum number of items to return
     
     Returns:
-        List of commerce items matching the filters
+        List of items matching the filters
     """
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
-    docs = await db.find_commerce_items(filters=filter_dict, limit=limit)
+    docs = await db.find_commerce_items(filters=filter_dict, limit=limit, use_retail_collection=True)
     return [_doc_to_item(d) for d in docs]
 
 
 async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     """
-    Get a single commerce item by ID.
+    Get a single item by ID (searches retailitems collection).
     
     Args:
         item_id: The item's _id
@@ -150,7 +156,7 @@ async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     Returns:
         CommerceItem or None if not found
     """
-    doc = await db.get_commerce_item(item_id=item_id)
+    doc = await db.get_commerce_item(item_id=item_id, use_retail_collection=True)
     if not doc:
         return None
     return _doc_to_item(doc)
@@ -186,17 +192,19 @@ async def search_commerce_items(
     """
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
     
-    # First, try to get items with pre-computed embeddings
+    # First, try to get items with pre-computed embeddings from retailitems collection
     docs = await db.find_items_with_embeddings(
         filters=filter_dict,
-        limit=candidate_pool
+        limit=candidate_pool,
+        use_retail_collection=True  # Use retailitems collection
     )
     
-    # If no items with embeddings, fall back to all items
+    # If no items with embeddings, fall back to all items from retailitems collection
     if not docs:
         docs = await db.find_commerce_items(
             filters=filter_dict,
-            limit=candidate_pool
+            limit=candidate_pool,
+            use_retail_collection=True  # Use retailitems collection
         )
     
     if not docs:

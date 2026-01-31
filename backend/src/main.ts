@@ -11,8 +11,24 @@ async function bootstrap() {
   });
 
   // Increase body size limit for base64 image uploads (20MB)
-  app.use(bodyParser.json({ limit: '20mb' }));
-  app.use(bodyParser.urlencoded({ limit: '20mb', extended: true }));
+  // Exclude webhook routes from body parsing to preserve raw body for signature verification
+  app.use((req, res, next) => {
+    // Skip body parsing for webhook routes to preserve raw body
+    if (req.path?.startsWith('/webhooks') || req.path?.startsWith('/api/webhooks')) {
+      return next();
+    }
+    // Apply body parsing for all other routes
+    bodyParser.json({ limit: '20mb' })(req, res, next);
+  });
+  
+  app.use((req, res, next) => {
+    // Skip body parsing for webhook routes to preserve raw body
+    if (req.path?.startsWith('/webhooks') || req.path?.startsWith('/api/webhooks')) {
+      return next();
+    }
+    // Apply urlencoded parsing for all other routes
+    bodyParser.urlencoded({ limit: '20mb', extended: true })(req, res, next);
+  });
 
   // Enable CORS
   // Allow localhost for local dev, Vercel deployments, and any additional frontend URLs from env

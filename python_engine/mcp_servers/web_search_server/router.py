@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 
 from mcp_servers.web_search_server.schemas import (
     BlogsRequest,
+    RetailerSearchRequest,
     TrendsRequest,
     WebSearchRequest,
     WebSearchResponse,
@@ -18,7 +19,12 @@ async def health():
 
 @router.post("/tools/web_search", response_model=WebSearchResponse, operation_id="web_search")
 async def web_search(req: WebSearchRequest):
-    results = await tools.web_search(req.query, max_results=req.max_results)
+    results = await tools.web_search(
+        req.query,
+        max_results=req.max_results,
+        filter_retailers_only=req.filter_retailers_only,
+        scrape_og_tags=req.scrape_og_tags,
+    )
     return WebSearchResponse(query=req.query, results=results)
 
 
@@ -31,6 +37,17 @@ async def search_trends(req: TrendsRequest):
 @router.post("/tools/search_blogs", response_model=WebSearchResponse, operation_id="search_blogs")
 async def search_blogs(req: BlogsRequest):
     results = await tools.search_blogs(req.query, max_results=req.max_results)
+    return WebSearchResponse(query=req.query, results=results)
+
+
+@router.post("/tools/search_retailer_items", response_model=WebSearchResponse, operation_id="search_retailer_items")
+async def search_retailer_items(req: RetailerSearchRequest):
+    """Search for clothing items from retailer websites only.
+    
+    This endpoint filters results to only include allowed retailer domains
+    (UNIQLO, Zalando, etc.) and scrapes Open Graph tags for better metadata.
+    """
+    results = await tools.search_retailer_items(req.query, max_results=req.max_results)
     return WebSearchResponse(query=req.query, results=results)
 
 
