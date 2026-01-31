@@ -4,7 +4,7 @@ This node analyzes clothing-related queries to determine:
 - Search scope: commerce (buy new), wardrobe (existing clothes), or both
 - Extracted filters: category, subCategory, brand, color, occasion, etc.
 """
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,11 @@ class ExtractedFilters(BaseModel):
     )
     sub_category: Optional[str] = Field(
         None,
-        description="Specific type: Jacket, Shirt, Pants, Dress, etc."
+        description="Specific type: Jacket, Shirt, Pants, Dress, etc. (directly mentioned in query)"
+    )
+    sub_categories: Optional[List[str]] = Field(
+        None,
+        description="Decomposed clothing items for outfit concepts (e.g., 'gym outfit' -> ['T-shirt', 'Sweatpants', 'Sneakers'])"
     )
     brand: Optional[str] = Field(
         None,
@@ -72,18 +76,32 @@ Your task is to analyze the user's clothing-related query and extract:
 
 2. **Filters** - Extract any specific requirements:
    - category: TOP, BOTTOM, SHOE, ACCESSORY (Note: jackets, blazers, coats are categorized as TOP with appropriate sub_category)
-   - sub_category: Jacket, Blazer, Coat, Shirt, T-shirt, Pants, Jeans, Dress, Skirt, Sneakers, Boots, etc.
+   - sub_category: Jacket, Blazer, Coat, Shirt, T-shirt, Pants, Jeans, Dress, Skirt, Sneakers, Boots, etc. (for directly mentioned items)
+   - sub_categories: DECOMPOSED OUTFIT ITEMS - If user asks for an outfit concept, decompose it into concrete items:
+     * "gym outfit" -> ["T-shirt", "Sweatpants", "Sneakers"]
+     * "casual look" -> ["Jeans", "Shirt", "Sneakers"]
+     * "business casual" -> ["Blazer", "Dress Pants", "Loafers"]
+     * "date night" -> ["Dress", "Heels"]
+     * "beach outfit" -> ["Swimsuit", "Shorts", "T-shirt"]
+     * "athleisure" -> ["Leggings", "Sports Top", "Sneakers"]
+     * "winter outfit" -> ["Coat", "Sweater", "Jeans", "Boots"]
    - brand: Any mentioned brand name
    - color: Any mentioned color
-   - occasion: casual, formal, business, party, date, wedding, interview, everyday
-   - style: classic, modern, minimalist, bold, elegant, sporty
+   - occasion: casual, formal, business, party, date, wedding, interview, everyday, gym, athletic
+   - style: classic, modern, minimalist, bold, elegant, sporty, athletic
    - price_range: budget, mid-range, luxury (if mentioned)
 
 Guidelines:
+- **OUTFIT DECOMPOSITION**: If user mentions an outfit concept (gym outfit, casual look, business casual, etc.):
+  1. Identify the outfit type
+  2. Decompose it into 2-4 concrete clothing item types
+  3. Return these in sub_categories list
+  4. Set occasion to describe the context
 - Default to "commerce" if unclear but buying seems implied
 - Default to "both" if the user mentions combining items
 - Only extract filters that are explicitly or clearly implied in the query
 - Leave filters as null if not mentioned
+- Prioritize outfit decomposition over generic searches (e.g., don't just search for "GYM", search for T-shirt, Sweatpants, etc.)
 """
 
 
@@ -133,6 +151,11 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
         # Convert filters to dict, removing None values
         filters_dict = {k: v for k, v in analysis.filters.model_dump().items() if v is not None}
         
+        # Log decomposed outfit items if present
+        decomposed_items = filters_dict.get("sub_categories", [])
+        if decomposed_items:
+            logger.info(f"Outfit decomposition detected: {decomposed_items}")
+        
         # Log to Langfuse
         if trace_id:
             tracing_service.log_llm_call(
@@ -144,6 +167,7 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                     "search_scope": analysis.search_scope,
                     "filters": filters_dict,
                     "reasoning": analysis.reasoning,
+                    "decomposed_items": decomposed_items,
                 },
             )
         

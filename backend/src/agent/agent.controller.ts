@@ -76,6 +76,8 @@ export class AgentController {
       ? authorization.substring(7) 
       : undefined;
     
+    this.logger.debug(`Auth token present: ${!!authToken}, length: ${authToken?.length || 0}`);
+    
     return this.agentService.chat({
       user_id: user.clerkId,
       session_id: chatRequest.sessionId,
@@ -122,6 +124,8 @@ Returns real-time progress updates as the AI processes your request.
     const authToken = authorization?.startsWith('Bearer ') 
       ? authorization.substring(7) 
       : undefined;
+    
+    this.logger.debug(`Auth token present: ${!!authToken}, length: ${authToken?.length || 0}`);
     
     await this.agentService.streamChat(
       {

@@ -51,6 +51,9 @@ export class AgentService {
     // Forward the auth token if provided
     if (request.auth_token) {
       headers['X-Auth-Token'] = request.auth_token;
+      this.logger.debug(`Forwarding auth token to Python agent (length: ${request.auth_token.length})`);
+    } else {
+      this.logger.warn(`No auth token provided for user ${request.user_id} - session saves will fail`);
     }
 
     const body: any = {

@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.logger import get_logger
 from app.workflows.main_workflow import run_workflow, run_workflow_streaming, get_workflow
 from app.services.session.session_service import get_session_service
-from app.services.backend_client import BackendClient
+from app.services.backend_client import BackendClient, InvalidTokenError
 from app.services.tracing.langfuse_service import get_tracing_service
 
 router = APIRouter()
@@ -112,11 +112,33 @@ async def chat(
         
     Returns:
         ChatResponse with the assistant's response
+        
+    Raises:
+        HTTPException: 401 if auth token is invalid/expired, 500 for other errors
     """
     logger.info(f"Chat request from user {request.user_id}")
     
-    # Create backend client with auth token if provided
-    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    # Log token reception
+    if x_auth_token:
+        logger.debug(f"Received auth token for user {request.user_id} (length: {len(x_auth_token)})")
+    else:
+        logger.warning(f"No auth token received for user {request.user_id} - session saves will require token")
+    
+    # Validate token early if provided (fail fast for auth issues)
+    try:
+        backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+        
+        # Validate token with backend to ensure it's accepted by Clerk
+        if backend_client:
+            logger.debug(f"Validating token with backend for user {request.user_id}")
+            await backend_client.validate_token_with_backend()
+            logger.debug(f"Token validation successful for user {request.user_id}")
+    except InvalidTokenError as e:
+        logger.error(f"Token validation failed for user {request.user_id}: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token. Please log in again."
+        )
     
     # Get services
     session_service = get_session_service(backend_client=backend_client)
@@ -235,13 +257,21 @@ async def chat(
         
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
+        
+        # Check if this is an authentication error
+        if isinstance(e, InvalidTokenError):
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication failed. Please log in again."
+            )
+        
         # Generate user-friendly error response
         error_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
         
-        # Try to save error message to session if we have session_id
-        if request.session_id:
+        # Try to save error message to session if we have session_id and auth token
+        if request.session_id and x_auth_token:
             try:
-                backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+                backend_client = BackendClient(auth_token=x_auth_token)
                 session_service = get_session_service(backend_client=backend_client)
                 await session_service.save_conversation_turn(
                     session_id=request.session_id,
@@ -249,8 +279,12 @@ async def chat(
                     assistant_message=error_response,
                     assistant_metadata={"error": str(e), "error_type": type(e).__name__},
                 )
+            except InvalidTokenError:
+                logger.warning("Cannot save error message - authentication token invalid")
             except Exception as save_error:
                 logger.error(f"Failed to save error message: {save_error}")
+        elif request.session_id:
+            logger.warning("Cannot save error message - no auth token provided")
         
         raise HTTPException(status_code=500, detail=error_response)
 
@@ -286,11 +320,35 @@ async def chat_stream(
         
     Returns:
         StreamingResponse with SSE events
+        
+    Raises:
+        HTTPException: 401 if auth token is invalid/expired
     """
     logger.info(f"Streaming chat request from user {request.user_id}")
     
-    # Create backend client with auth token if provided
-    backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+    # Log token reception
+    if x_auth_token:
+        logger.debug(f"Received auth token for user {request.user_id} (length: {len(x_auth_token)})")
+    else:
+        logger.warning(f"No auth token received for user {request.user_id} - session saves will require token")
+    
+    # Validate token early if provided (fail fast for auth issues)
+    try:
+        backend_client = BackendClient(auth_token=x_auth_token) if x_auth_token else None
+        
+        # Validate token with backend to ensure it's accepted by Clerk
+        if backend_client:
+            logger.debug(f"Validating token with backend for user {request.user_id}")
+            await backend_client.validate_token_with_backend()
+            logger.debug(f"Token validation successful for user {request.user_id}")
+    except InvalidTokenError as e:
+        logger.error(f"Token validation failed for user {request.user_id}: {e}")
+        async def error_stream():
+            yield _format_sse_event("error", {
+                "message": "Invalid or expired authentication token. Please log in again.",
+                "type": "auth_error"
+            })
+        return StreamingResponse(error_stream(), media_type="text/event-stream", status_code=401)
     
     async def generate_stream():
         """Generate SSE stream with real intermediate results."""
@@ -359,9 +417,17 @@ async def chat_stream(
                     },
                 )
                 logger.info(f"Streaming: Successfully saved conversation turn for session {session_data.session_id}")
+            except InvalidTokenError as token_error:
+                logger.error(f"Cannot save conversation turn - authentication failed: {token_error}")
+                # Token error is critical - user needs to re-authenticate
+                yield _format_sse_event("error", {
+                    "type": "auth_error",
+                    "message": "Authentication token expired. Please log in again."
+                })
             except Exception as save_error:
                 logger.error(f"Failed to save conversation turn: {save_error}")
-                # Don't fail the stream if save fails
+                # Log but don't fail the stream
+                logger.warning("Conversation will not be saved to history")
             
             # Update title if still default (smart naming)
             # Only update on first message (check message count before saving)
@@ -387,6 +453,8 @@ async def chat_stream(
                 else:
                     logger.info(f"Streaming: Skipping title update - not first message (user_message_count: {user_message_count})")
                 logger.info(f"Streaming: Completed title update check for session {session_data.session_id}")
+            except InvalidTokenError:
+                logger.warning("Cannot update session title - authentication token invalid")
             except Exception as title_error:
                 logger.warning(f"Failed to update session title: {title_error}", exc_info=True)
                 # Non-critical, continue
@@ -404,46 +472,57 @@ async def chat_stream(
             
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
-            error_message = "I apologize, but I encountered an issue processing your request. Please try again."
-            yield _format_sse_event("error", {"message": error_message})
             
-            # Try to save error message to session
-            if session_id:
-                try:
-                    error_response = error_message
-                    await session_service.save_conversation_turn(
-                        session_id=session_id,
-                        user_message=request.message,
-                        assistant_message=error_response,
-                        assistant_metadata={
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "streaming": True,
-                        },
-                    )
-                    
-                    # Update title if still default (smart naming) - even on error
+            # Check if this is an authentication error
+            if isinstance(e, InvalidTokenError):
+                error_message = "Authentication token expired. Please log in again."
+                yield _format_sse_event("error", {
+                    "type": "auth_error",
+                    "message": error_message
+                })
+            else:
+                error_message = "I apologize, but I encountered an issue processing your request. Please try again."
+                yield _format_sse_event("error", {"message": error_message})
+                
+                # Try to save error message to session (only if not auth error)
+                if session_id and x_auth_token:
                     try:
-                        logger.info(f"Streaming (error path): Starting title update check for session {session_id}")
-                        updated_session = await session_service.backend_client.get_session(session_id)
-                        current_title = updated_session.get("title", "New Conversation")
-                        messages = updated_session.get("messages") or []
-                        user_message_count = len([m for m in messages if m.get("role") == "user"])
-                        logger.info(f"Streaming (error path): Session {session_id} - title: '{current_title}', user messages: {user_message_count}")
+                        error_response = error_message
+                        await session_service.save_conversation_turn(
+                            session_id=session_id,
+                            user_message=request.message,
+                            assistant_message=error_response,
+                            assistant_metadata={
+                                "error": str(e),
+                                "error_type": type(e).__name__,
+                                "streaming": True,
+                            },
+                        )
                         
-                        if user_message_count <= 1:
-                            logger.info(f"Streaming (error path): Updating title for first message in session {session_id}")
-                            await session_service.update_title_if_default(
-                                session_id=session_id,
-                                user_message=request.message,
-                                current_title=current_title,
-                            )
-                        else:
-                            logger.info(f"Streaming (error path): Skipping title update - not first message (user_message_count: {user_message_count})")
-                    except Exception as title_error:
-                        logger.warning(f"Failed to update session title in error handler: {title_error}", exc_info=True)
-                except Exception as save_error:
-                    logger.error(f"Failed to save error message: {save_error}")
+                        # Update title if still default (smart naming) - even on error
+                        try:
+                            logger.info(f"Streaming (error path): Starting title update check for session {session_id}")
+                            updated_session = await session_service.backend_client.get_session(session_id)
+                            current_title = updated_session.get("title", "New Conversation")
+                            messages = updated_session.get("messages") or []
+                            user_message_count = len([m for m in messages if m.get("role") == "user"])
+                            logger.info(f"Streaming (error path): Session {session_id} - title: '{current_title}', user messages: {user_message_count}")
+                            
+                            if user_message_count <= 1:
+                                logger.info(f"Streaming (error path): Updating title for first message in session {session_id}")
+                                await session_service.update_title_if_default(
+                                    session_id=session_id,
+                                    user_message=request.message,
+                                    current_title=current_title,
+                                )
+                            else:
+                                logger.info(f"Streaming (error path): Skipping title update - not first message (user_message_count: {user_message_count})")
+                        except Exception as title_error:
+                            logger.warning(f"Failed to update session title in error handler: {title_error}", exc_info=True)
+                    except InvalidTokenError:
+                        logger.warning("Cannot save error message - authentication token invalid")
+                    except Exception as save_error:
+                        logger.error(f"Failed to save error message: {save_error}")
     
     return StreamingResponse(
         generate_stream(),

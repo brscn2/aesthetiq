@@ -1,5 +1,7 @@
 """HTTP client for the NestJS Backend Chat API."""
 import httpx
+import jwt
+import time
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 
@@ -16,6 +18,13 @@ class BackendClientError(Exception):
         super().__init__(message)
         self.status_code = status_code
         self.response = response
+
+
+class InvalidTokenError(BackendClientError):
+    """Exception raised for invalid or expired tokens."""
+    
+    def __init__(self, message: str = "Invalid or expired authentication token"):
+        super().__init__(message, status_code=401)
 
 
 class BackendClient:
@@ -41,12 +50,91 @@ class BackendClient:
             base_url: Backend API base URL (defaults to settings)
             timeout: Request timeout in seconds (defaults to settings)
             auth_token: Bearer token for authentication (optional)
+            
+        Raises:
+            InvalidTokenError: If auth_token is provided but expired or invalid
         """
         settings = get_settings()
         self.base_url = base_url or settings.BACKEND_URL
         self.timeout = timeout or settings.BACKEND_TIMEOUT
         self.auth_token = auth_token
         self._client: Optional[httpx.AsyncClient] = None
+        
+        # Validate token on initialization if provided
+        if self.auth_token:
+            self._validate_token()
+    
+    def _validate_token(self) -> None:
+        """
+        Validate JWT token expiration without external key validation.
+        
+        This checks the JWT exp claim to detect expired tokens before
+        making API calls. Full validation happens on backend.
+        
+        Raises:
+            InvalidTokenError: If token is expired
+        """
+        if not self.auth_token:
+            return
+        
+        try:
+            # Decode without verification to check exp claim
+            # Full verification happens on NestJS backend
+            payload = jwt.decode(
+                self.auth_token,
+                options={"verify_signature": False}
+            )
+            
+            # Check expiration
+            exp = payload.get("exp")
+            if exp and exp < time.time():
+                logger.warning(f"Token expired at {exp}, current time: {time.time()}")
+                raise InvalidTokenError("Authentication token has expired")
+            
+            logger.debug(f"Token validated, expires at {exp}")
+        except jwt.DecodeError as e:
+            logger.error(f"Failed to decode token: {e}")
+            raise InvalidTokenError(f"Invalid authentication token: {e}")
+        except InvalidTokenError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error validating token: {e}")
+            raise InvalidTokenError(f"Token validation failed: {e}")
+    
+    async def validate_token_with_backend(self) -> bool:
+        """
+        Validate token by making a test API call to the backend.
+        
+        This ensures the token is not only structurally valid but also
+        accepted by Clerk authentication on the backend.
+        
+        Returns:
+            True if token is valid, False otherwise
+            
+        Raises:
+            InvalidTokenError: If token is rejected by backend
+        """
+        if not self.auth_token:
+            raise InvalidTokenError("No authentication token provided")
+        
+        try:
+            # Make a lightweight API call to test token validity
+            # Using /api/chat/user which requires auth
+            client = await self._get_client()
+            response = await client.get("/api/chat/user")
+            
+            if response.status_code == 401:
+                raise InvalidTokenError("Token rejected by backend authentication")
+            elif response.status_code >= 400:
+                raise BackendClientError(f"Backend returned {response.status_code}")
+            
+            logger.debug("Token validated successfully with backend")
+            return True
+        except InvalidTokenError:
+            raise
+        except httpx.RequestError as e:
+            logger.error(f"Network error validating token: {e}")
+            raise BackendClientError(f"Network error: {e}")
     
     @property
     def headers(self) -> Dict[str, str]:
@@ -94,7 +182,8 @@ class BackendClient:
             Parsed JSON response
             
         Raises:
-            BackendClientError: If response indicates an error
+            InvalidTokenError: If response indicates authentication failure (401)
+            BackendClientError: If response indicates any other error
         """
         try:
             data = response.json()
@@ -103,6 +192,15 @@ class BackendClient:
         
         if response.status_code >= 400:
             error_message = data.get("message", data.get("error", "Unknown error"))
+            
+            # Handle 401 Unauthorized as token error
+            if response.status_code == 401:
+                logger.error(
+                    f"Authentication failed: {error_message}",
+                    extra={"url": str(response.url)},
+                )
+                raise InvalidTokenError(error_message)
+            
             logger.error(
                 f"Backend API error: {response.status_code} - {error_message}",
                 extra={"url": str(response.url), "response": data},

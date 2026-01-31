@@ -2,8 +2,9 @@
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 import uuid
+import jwt
 
-from app.services.backend_client import BackendClient, BackendClientError
+from app.services.backend_client import BackendClient, BackendClientError, InvalidTokenError
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
@@ -50,6 +51,36 @@ class SessionService:
         """
         self.backend_client = backend_client or BackendClient()
         self.settings = get_settings()
+    
+    def _extract_user_id_from_token(self) -> Optional[str]:
+        """
+        Extract user ID from the backend client's auth token.
+        
+        Returns:
+            User ID from token's 'sub' claim, or None if no token
+        """
+        if not self.backend_client or not self.backend_client.auth_token:
+            return None
+        
+        try:
+            payload = jwt.decode(
+                self.backend_client.auth_token,
+                options={"verify_signature": False}
+            )
+            return payload.get("sub")  # 'sub' is the Clerk user ID
+        except Exception as e:
+            logger.warning(f"Could not extract user ID from token: {e}")
+            return None
+    
+    def _validate_backend_client_authenticated(self) -> None:
+        """
+        Validate that backend client has a valid authentication token.
+        
+        Raises:
+            InvalidTokenError: If backend client has no auth token
+        """
+        if not self.backend_client or not self.backend_client.auth_token:
+            raise InvalidTokenError("Session save operations require authentication. No auth token provided.")
     
     async def load_session(
         self,
@@ -109,7 +140,14 @@ class SessionService:
             role: Message role ("user" or "assistant")
             content: Message content
             metadata: Optional metadata for the message
+            
+        Raises:
+            InvalidTokenError: If backend client is not authenticated
+            BackendClientError: If save operation fails
         """
+        # Require authentication for session saves
+        self._validate_backend_client_authenticated()
+        
         try:
             await self.backend_client.add_message(
                 session_id=session_id,

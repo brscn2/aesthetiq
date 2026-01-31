@@ -74,7 +74,14 @@ Your role is to find and recommend clothing items based on the user's request.
    - For wardrobe scope: use `search_wardrobe_items`
    - For retailer scope: **ALWAYS use `search_retailer_items`** - This searches the retailitems collection with fresh, crawler-scraped items from retailers like UNIQLO and Zalando
 
-3. Keep tool usage minimal - ideally 2 calls maximum (style_dna + one search).
+3. **IMPORTANT: Handle outfit decomposition**
+   - If you receive decomposed sub_categories (e.g., for a gym outfit: ["T-shirt", "Sweatpants", "Sneakers"]):
+     * Search for EACH sub_category separately
+     * Combine the results from all searches
+     * Return items from all searches together
+   - Example: For gym outfit, make 3 searches: one for T-shirt, one for Sweatpants, one for Sneakers
+
+4. Keep tool usage minimal - ideally 2-3 calls maximum (style_dna + one or more searches).
 Return results immediately after finding items.
 """
 
@@ -805,6 +812,13 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
         
         # Build search request - let agent decide which tools to use
         filter_str = ", ".join(f"{k}={v}" for k, v in mcp_filters.items()) if mcp_filters else "none"
+        
+        # Handle outfit decomposition - expand search to include all decomposed sub_categories
+        decomposed_items = extracted_filters.get("sub_categories", [])
+        decomposition_context = ""
+        if decomposed_items:
+            decomposition_context = f"\n\nDECOMPOSED OUTFIT ITEMS: {', '.join(decomposed_items)}\nSearch for each of these items to build a complete outfit."
+        
         refinement_context = ""
         if refinement_notes and iteration > 0:
             refinement_context = f"\n\nRefinement needed (attempt {iteration + 1}): {', '.join(refinement_notes)}"
@@ -812,7 +826,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
         search_request = f"""User request: {message}
 User ID: {user_id}
 Search scope: {search_scope}
-Filters: {filter_str}{refinement_context}"""
+Filters: {filter_str}{decomposition_context}{refinement_context}"""
         
         agent_result = await agent.ainvoke({"messages": [HumanMessage(content=search_request)]})
         
