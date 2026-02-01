@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aesthetiq Wardrobe</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="logo">
+        <span class="logo-icon">👗</span>
+        <span class="logo-text">Aesthetiq</span>
+      </div>
+      <button id="settingsBtn" class="icon-btn" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Auth Section (shown when not logged in) -->
+    <section id="authSection" class="section auth-section hidden">
+      <div class="auth-content">
+        <div class="auth-icon">🔐</div>
+        <h2>Welcome to Aesthetiq</h2>
+        <p>Log in to start adding items to your virtual wardrobe</p>
+        <button id="loginBtn" class="btn btn-primary btn-full">
+          Log In / Sign Up
+        </button>
+      </div>
+    </section>
+
+    <!-- Main Section (shown when logged in) -->
+    <section id="mainSection" class="section hidden">
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <button id="openWardrobeBtn" class="btn btn-primary btn-full">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          </svg>
+          Open My Wardrobe
+        </button>
+      </div>
+
+      <!-- Instructions -->
+      <div class="instructions">
+        <h3>How to add items</h3>
+        <ol>
+          <li>
+            <span class="step-icon">🖱️</span>
+            Right-click on any clothing image
+          </li>
+          <li>
+            <span class="step-icon">➕</span>
+            Select "Add to Aesthetiq Wardrobe"
+          </li>
+          <li>
+            <span class="step-icon">✨</span>
+            Choose category or use AI analysis
+          </li>
+        </ol>
+      </div>
+
+      <!-- Recent Items -->
+      <div class="recent-section">
+        <h3>Recently Added</h3>
+        <div id="recentItems" class="recent-items">
+          <p class="empty-state">No items added yet</p>
+        </div>
+      </div>
+
+      <!-- User Info -->
+      <div class="user-section">
+        <div id="userInfo" class="user-info">
+          <span class="user-avatar">👤</span>
+          <span class="user-email">Loading...</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-text">Log Out</button>
+      </div>
+    </section>
+
+    <!-- Loading Section -->
+    <section id="loadingSection" class="section loading-section">
+      <div class="spinner"></div>
+      <p>Loading...</p>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
