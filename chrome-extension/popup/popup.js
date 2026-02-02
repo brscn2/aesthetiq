@@ -8,6 +8,7 @@ const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const openWardrobeBtn = document.getElementById('openWardrobeBtn');
 const settingsBtn = document.getElementById('settingsBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 const userInfo = document.getElementById('userInfo');
 const recentItems = document.getElementById('recentItems');
 
@@ -16,6 +17,7 @@ let isAuthenticated = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  initializeTheme();
   await checkAuthStatus();
 });
 
@@ -24,6 +26,7 @@ loginBtn.addEventListener('click', handleLogin);
 logoutBtn.addEventListener('click', handleLogout);
 openWardrobeBtn.addEventListener('click', handleOpenWardrobe);
 settingsBtn.addEventListener('click', handleOpenSettings);
+themeToggleBtn.addEventListener('click', handleThemeToggle);
 
 // Check authentication status
 async function checkAuthStatus() {
@@ -186,3 +189,60 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// Theme Management
+function initializeTheme() {
+  chrome.storage.local.get(['theme'], (result) => {
+    const theme = result.theme || 'system';
+    applyTheme(theme);
+  });
+}
+
+function applyTheme(theme) {
+  const html = document.documentElement;
+  const darkIcon = document.querySelector('.theme-icon-dark');
+  const lightIcon = document.querySelector('.theme-icon-light');
+  
+  if (theme === 'dark') {
+    html.setAttribute('data-theme', 'dark');
+    darkIcon.style.display = 'block';
+    lightIcon.style.display = 'none';
+  } else if (theme === 'light') {
+    html.setAttribute('data-theme', 'light');
+    darkIcon.style.display = 'none';
+    lightIcon.style.display = 'block';
+  } else {
+    // System theme
+    html.removeAttribute('data-theme');
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    darkIcon.style.display = isDark ? 'block' : 'none';
+    lightIcon.style.display = isDark ? 'none' : 'block';
+  }
+}
+
+function handleThemeToggle() {
+  chrome.storage.local.get(['theme'], (result) => {
+    const currentTheme = result.theme || 'system';
+    let newTheme;
+    
+    // Cycle through: system -> dark -> light -> system
+    switch (currentTheme) {
+      case 'system':
+        newTheme = 'dark';
+        break;
+      case 'dark':
+        newTheme = 'light';
+        break;
+      case 'light':
+        newTheme = 'system';
+        break;
+      default:
+        newTheme = 'system';
+    }
+    
+    chrome.storage.local.set({ theme: newTheme }, () => {
+      applyTheme(newTheme);
+    });
+  });
+}
+
