@@ -10,7 +10,14 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole } from '../schemas/user.schema';
+import {
+  SubscriptionStatus,
+  Units,
+  Theme,
+  Currency,
+  ShoppingRegion,
+  UserRole,
+} from '../schemas/user.schema';
 
 class UserSettingsDto {
   // Measurement & Regional
@@ -47,7 +54,10 @@ class UserSettingsDto {
   contributeToTrendLearning?: boolean;
 
   // Feedback & Personalization
-  @ApiProperty({ required: false, description: 'Days before disliked feedback decays (1-30)' })
+  @ApiProperty({
+    required: false,
+    description: 'Days before disliked feedback decays (1-30)',
+  })
   @IsInt()
   @Min(1)
   @Max(30)
@@ -98,4 +108,3 @@ export class UpdateUserDto {
   @IsOptional()
   settings?: UserSettingsDto;
 }
-

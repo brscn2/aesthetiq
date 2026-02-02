@@ -27,8 +27,7 @@ export function calculateVarietyScore(items: any[]): number {
   // Scoring: penalize over-concentration in one category
   const categoryBalance =
     categoryCount.size > 0
-      ? 1 -
-        Math.max(...Array.from(categoryCount.values())) / items.length
+      ? 1 - Math.max(...Array.from(categoryCount.values())) / items.length
       : 0;
 
   // Scoring: reward color diversity
@@ -43,12 +42,17 @@ export function calculateVarietyScore(items: any[]): number {
  * Calculate seasonal compatibility (0-100)
  * % of items that score high for user's seasonal palette
  */
-export function calculateSeasonalCompatibility(items: any[], targetPalette?: string): number {
+export function calculateSeasonalCompatibility(
+  items: any[],
+  targetPalette?: string,
+): number {
   if (items.length === 0) return 0;
 
   // Most seasonal palettes should have scores
   const itemsWithScores = items.filter(
-    (item) => item.seasonalPaletteScores && typeof item.seasonalPaletteScores === 'object'
+    (item) =>
+      item.seasonalPaletteScores &&
+      typeof item.seasonalPaletteScores === 'object',
   );
 
   if (itemsWithScores.length === 0) return 50; // No data yet
@@ -58,10 +62,11 @@ export function calculateSeasonalCompatibility(items: any[], targetPalette?: str
   }
 
   // Calculate average compatibility for the user's palette
-  const avgScore = itemsWithScores.reduce((sum, item) => {
-    const score = item.seasonalPaletteScores?.[targetPalette] ?? 0;
-    return sum + score;
-  }, 0) / itemsWithScores.length;
+  const avgScore =
+    itemsWithScores.reduce((sum, item) => {
+      const score = item.seasonalPaletteScores?.[targetPalette] ?? 0;
+      return sum + score;
+    }, 0) / itemsWithScores.length;
 
   return Math.round(avgScore * 100);
 }
@@ -70,7 +75,10 @@ export function calculateSeasonalCompatibility(items: any[], targetPalette?: str
  * Calculate archetype alignment (0-100)
  * How well items match user's style persona from style profile
  */
-export function calculateArchetypeAlignment(items: any[], styleProfile: any): number {
+export function calculateArchetypeAlignment(
+  items: any[],
+  styleProfile: any,
+): number {
   if (!styleProfile || !styleProfile.archetype) {
     return 50; // Neutral if no profile
   }
@@ -93,7 +101,8 @@ export function calculateArchetypeAlignment(items: any[], styleProfile: any): nu
 
   // Simplified: count items with matching keywords in notes/brand
   const matchingItems = items.filter((item) => {
-    const text = `${item.brand || ''} ${item.notes || ''} ${item.subCategory || ''}`.toLowerCase();
+    const text =
+      `${item.brand || ''} ${item.notes || ''} ${item.subCategory || ''}`.toLowerCase();
     return keywords.some((keyword) => text.includes(keyword));
   });
 
@@ -133,12 +142,14 @@ export function calculateColorHarmonyScore(items: any[]): number {
   });
 
   // Penalize if one color dominates
-  const dominantColorCount = Math.max(...Array.from(colorDistribution.values()));
+  const dominantColorCount = Math.max(
+    ...Array.from(colorDistribution.values()),
+  );
   const overconcentration = dominantColorCount / items.length;
   const diversityPenalty = Math.max(0, 1 - overconcentration);
 
   return Math.round(
-    Math.min(uniqueColors.length / 10, 1) * 70 + diversityPenalty * 30
+    Math.min(uniqueColors.length / 10, 1) * 70 + diversityPenalty * 30,
   );
 }
 
@@ -151,7 +162,7 @@ export function calculateItemRotationRisk(item: any): number {
 
   const daysSince = Math.floor(
     (new Date().getTime() - new Date(item.lastWorn).getTime()) /
-      (1000 * 60 * 60 * 24)
+      (1000 * 60 * 60 * 24),
   );
 
   if (daysSince < 30) return 0; // Recently worn
