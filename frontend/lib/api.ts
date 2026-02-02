@@ -542,3 +542,13 @@ export const useApi = () => {
   return useMemo(() => createApiHelpers(client), [client])
 }
 
+// Standalone function to get current user (for use outside of React components)
+export const getCurrentUser = async (token: string): Promise<User> => {
+  const response = await axios.get(`${API_BASE_URL}/users/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  return response.data
+}
+

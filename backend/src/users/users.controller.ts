@@ -10,8 +10,11 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -80,6 +83,22 @@ export class UsersController {
     @Body() updateSettingsDto: UpdateSettingsDto,
   ) {
     return this.usersService.updateSettingsByClerkId(req.user.clerkId, updateSettingsDto);
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Post('me/tryon-avatar')
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload try-on avatar photo' })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully', schema: { properties: { url: { type: 'string' } } } })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async uploadTryonAvatar(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const url = await this.usersService.uploadTryonAvatar(req.user.clerkId, file.buffer);
+    return { url };
   }
 
   @Get()

@@ -51,6 +51,9 @@ export class User {
   @Prop()
   avatarUrl?: string;
 
+  @Prop()
+  tryonAvatarUrl?: string;
+
   @Prop({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   subscriptionStatus: SubscriptionStatus;
 

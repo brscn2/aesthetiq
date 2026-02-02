@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { BlobServiceClient } from '@azure/storage-blob';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -8,7 +9,16 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  private readonly blobServiceClient: BlobServiceClient;
+  private readonly containerName = 'tryon-avatars';
+
+  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {
+    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+    if (!connectionString) {
+      throw new Error('AZURE_STORAGE_CONNECTION_STRING is not defined');
+    }
+    this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+  }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const createdUser = new this.userModel(createUserDto);
@@ -168,6 +178,41 @@ export class UsersService {
     }
     
     return user.settings;
+  }
+
+  async uploadTryonAvatar(clerkId: string, avatarFile: Buffer): Promise<string> {
+    try {
+      const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+      
+      // Create container if it doesn't exist
+      await containerClient.createIfNotExists({
+        access: 'blob', // Public read access for blobs
+      });
+
+      // Generate unique filename
+      const filename = `user-${clerkId}-${Date.now()}.jpg`;
+      const blockBlobClient = containerClient.getBlockBlobClient(filename);
+
+      // Upload the file
+      await blockBlobClient.upload(avatarFile, avatarFile.length, {
+        blobHTTPHeaders: {
+          blobContentType: 'image/jpeg',
+        },
+      });
+
+      const avatarUrl = blockBlobClient.url;
+
+      // Update user's tryonAvatarUrl
+      await this.userModel.findOneAndUpdate(
+        { clerkId },
+        { tryonAvatarUrl: avatarUrl },
+        { new: true }
+      ).exec();
+
+      return avatarUrl;
+    } catch (error) {
+      throw new Error(`Failed to upload try-on avatar: ${error.message}`);
+    }
   }
 }
 
