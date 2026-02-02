@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aesthetiq Extension Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header class="options-header">
+      <div class="logo">
+        <span class="logo-icon">👗</span>
+        <h1>Aesthetiq Settings</h1>
+      </div>
+      <p class="subtitle">Configure your Chrome extension preferences</p>
+    </header>
+
+    <main class="options-content">
+      <!-- Connection Settings -->
+      <section class="settings-section">
+        <h2>Connection</h2>
+        
+        <div class="form-group">
+          <label for="apiUrl">Backend API URL</label>
+          <input type="url" id="apiUrl" placeholder="http://localhost:3001/api" />
+          <p class="hint">The URL of your Aesthetiq backend API</p>
+        </div>
+
+        <div class="form-group">
+          <label for="frontendUrl">Frontend URL</label>
+          <input type="url" id="frontendUrl" placeholder="http://localhost:3000" />
+          <p class="hint">The URL of your Aesthetiq web application</p>
+        </div>
+
+        <button id="testConnection" class="btn btn-secondary">
+          Test Connection
+        </button>
+        <span id="connectionStatus" class="status-badge"></span>
+      </section>
+
+      <!-- Default Settings -->
+      <section class="settings-section">
+        <h2>Defaults</h2>
+
+        <div class="form-group">
+          <label for="defaultCategory">Default Category</label>
+          <select id="defaultCategory">
+            <option value="">Ask every time</option>
+            <option value="TOP">Top</option>
+            <option value="BOTTOM">Bottom</option>
+            <option value="SHOE">Shoe</option>
+            <option value="ACCESSORY">Accessory</option>
+          </select>
+          <p class="hint">Pre-select this category when adding items</p>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="useAIByDefault" />
+            <span>Use AI analysis by default</span>
+          </label>
+          <p class="hint">Automatically analyze items with AI when adding</p>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="showNotifications" checked />
+            <span>Show browser notifications</span>
+          </label>
+          <p class="hint">Show notifications when items are added</p>
+        </div>
+      </section>
+
+      <!-- Authentication -->
+      <section class="settings-section">
+        <h2>Authentication</h2>
+        
+        <div id="authStatus" class="auth-status">
+          <span class="auth-icon">🔒</span>
+          <span>Checking authentication...</span>
+        </div>
+
+        <div class="form-group">
+          <label for="authToken">Auth Token (Advanced)</label>
+          <input type="password" id="authToken" placeholder="Paste your auth token here" />
+          <p class="hint">Manually set your authentication token. Usually obtained automatically after login.</p>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <section class="settings-section">
+        <h2>Actions</h2>
+        
+        <div class="action-buttons">
+          <button id="saveBtn" class="btn btn-primary">
+            Save Settings
+          </button>
+          <button id="resetBtn" class="btn btn-secondary">
+            Reset to Defaults
+          </button>
+        </div>
+      </section>
+
+      <!-- About -->
+      <section class="settings-section about-section">
+        <h2>About</h2>
+        <p><strong>Aesthetiq Chrome Extension</strong></p>
+        <p>Version 1.0.0</p>
+        <p class="hint">Add clothing items from any website to your virtual wardrobe</p>
+        <a href="#" id="openWardrobeLink" class="link">Open Aesthetiq Wardrobe →</a>
+      </section>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden">
+      <span id="toastMessage"></span>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
