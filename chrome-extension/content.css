@@ -1,20 +1,80 @@
 /* Aesthetiq Chrome Extension - Content Script Styles */
+/* Luxury Fashion Dark & Light Theme */
 
 /* CSS Variables */
 :root {
-  --aesthetiq-primary: #000000;
-  --aesthetiq-primary-hover: #333333;
-  --aesthetiq-secondary: #f5f5f5;
-  --aesthetiq-secondary-hover: #e5e5e5;
-  --aesthetiq-success: #10b981;
-  --aesthetiq-error: #ef4444;
-  --aesthetiq-text: #1a1a1a;
-  --aesthetiq-text-muted: #666666;
-  --aesthetiq-border: #e5e5e5;
-  --aesthetiq-bg: #ffffff;
-  --aesthetiq-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* Dark Mode (Default) */
+  --aesthetiq-bg-primary: oklch(0.12 0 0);
+  --aesthetiq-bg-secondary: oklch(0.16 0 0);
+  --aesthetiq-bg-tertiary: oklch(0.20 0 0);
+  --aesthetiq-primary: oklch(0.75 0.15 280);
+  --aesthetiq-primary-hover: oklch(0.70 0.18 320);
+  --aesthetiq-secondary: oklch(0.20 0 0);
+  --aesthetiq-secondary-hover: oklch(0.22 0 0);
+  --aesthetiq-success: oklch(0.65 0.15 140);
+  --aesthetiq-error: oklch(0.60 0.18 30);
+  --aesthetiq-text: oklch(0.98 0 0);
+  --aesthetiq-text-muted: oklch(0.70 0 0);
+  --aesthetiq-border: oklch(0.22 0 0);
+  --aesthetiq-bg: oklch(0.16 0 0);
+  --aesthetiq-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   --aesthetiq-radius: 12px;
-  --aesthetiq-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --aesthetiq-font: "Inter", "system-ui", "sans-serif";
+}
+
+/* Light Mode */
+@media (prefers-color-scheme: light) {
+  :root {
+    --aesthetiq-bg-primary: oklch(0.98 0 0);
+    --aesthetiq-bg-secondary: oklch(0.94 0 0);
+    --aesthetiq-bg-tertiary: oklch(0.90 0 0);
+    --aesthetiq-primary: oklch(0.75 0.15 280);
+    --aesthetiq-primary-hover: oklch(0.70 0.18 320);
+    --aesthetiq-secondary: oklch(0.90 0 0);
+    --aesthetiq-secondary-hover: oklch(0.85 0 0);
+    --aesthetiq-success: oklch(0.65 0.15 140);
+    --aesthetiq-error: oklch(0.60 0.18 30);
+    --aesthetiq-text: oklch(0.145 0 0);
+    --aesthetiq-text-muted: oklch(0.556 0 0);
+    --aesthetiq-border: oklch(0.85 0 0);
+    --aesthetiq-bg: oklch(0.94 0 0);
+    --aesthetiq-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Manual theme override */
+[data-theme="dark"] {
+  --aesthetiq-bg-primary: oklch(0.12 0 0);
+  --aesthetiq-bg-secondary: oklch(0.16 0 0);
+  --aesthetiq-bg-tertiary: oklch(0.20 0 0);
+  --aesthetiq-primary: oklch(0.75 0.15 280);
+  --aesthetiq-primary-hover: oklch(0.70 0.18 320);
+  --aesthetiq-secondary: oklch(0.20 0 0);
+  --aesthetiq-secondary-hover: oklch(0.22 0 0);
+  --aesthetiq-success: oklch(0.65 0.15 140);
+  --aesthetiq-error: oklch(0.60 0.18 30);
+  --aesthetiq-text: oklch(0.98 0 0);
+  --aesthetiq-text-muted: oklch(0.70 0 0);
+  --aesthetiq-border: oklch(0.22 0 0);
+  --aesthetiq-bg: oklch(0.16 0 0);
+  --aesthetiq-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+  --aesthetiq-bg-primary: oklch(0.98 0 0);
+  --aesthetiq-bg-secondary: oklch(0.94 0 0);
+  --aesthetiq-bg-tertiary: oklch(0.90 0 0);
+  --aesthetiq-primary: oklch(0.75 0.15 280);
+  --aesthetiq-primary-hover: oklch(0.70 0.18 320);
+  --aesthetiq-secondary: oklch(0.90 0 0);
+  --aesthetiq-secondary-hover: oklch(0.85 0 0);
+  --aesthetiq-success: oklch(0.65 0.15 140);
+  --aesthetiq-error: oklch(0.60 0.18 30);
+  --aesthetiq-text: oklch(0.145 0 0);
+  --aesthetiq-text-muted: oklch(0.556 0 0);
+  --aesthetiq-border: oklch(0.85 0 0);
+  --aesthetiq-bg: oklch(0.94 0 0);
+  --aesthetiq-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
 }
 
 /* Toast Notifications */
@@ -23,9 +83,10 @@
   bottom: 24px;
   right: 24px;
   background: var(--aesthetiq-bg);
-  padding: 14px 20px;
+  border: 1px solid var(--aesthetiq-border);
+  padding: 16px 20px;
   border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 40px rgba(117, 115, 193, 0.3);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -33,6 +94,7 @@
   animation: aesthetiq-slide-in-right 0.3s ease-out;
   font-family: var(--aesthetiq-font);
   max-width: 350px;
+  font-size: 14px;
 }
 
 .aesthetiq-toast.aesthetiq-fade-out {
@@ -58,6 +120,7 @@
 .aesthetiq-toast-message {
   font-size: 14px;
   color: var(--aesthetiq-text);
+  font-weight: 500;
 }
 
 /* Spinner */

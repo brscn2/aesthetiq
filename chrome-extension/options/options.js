@@ -7,6 +7,7 @@ const defaultSettings = {
   defaultCategory: '',
   useAIByDefault: false,
   showNotifications: true,
+  theme: 'system',
 };
 
 // DOM Elements
@@ -24,9 +25,11 @@ const resetBtn = document.getElementById('resetBtn');
 const openWardrobeLink = document.getElementById('openWardrobeLink');
 const toast = document.getElementById('toast');
 const toastMessage = document.getElementById('toastMessage');
+const themeSelect = document.getElementById('themeSelect');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  initializeTheme();
   await loadSettings();
   await checkAuthStatus();
 });
@@ -36,6 +39,7 @@ testConnectionBtn.addEventListener('click', testConnection);
 saveBtn.addEventListener('click', saveSettings);
 resetBtn.addEventListener('click', resetSettings);
 openWardrobeLink.addEventListener('click', openWardrobe);
+themeSelect.addEventListener('change', handleThemeChange);
 
 // Load settings from storage
 async function loadSettings() {
@@ -46,6 +50,7 @@ async function loadSettings() {
   defaultCategorySelect.value = data.defaultCategory || defaultSettings.defaultCategory;
   useAIByDefaultCheckbox.checked = data.useAIByDefault ?? defaultSettings.useAIByDefault;
   showNotificationsCheckbox.checked = data.showNotifications ?? defaultSettings.showNotifications;
+  themeSelect.value = data.theme || defaultSettings.theme;
   
   if (data.authToken) {
     authTokenInput.value = data.authToken;
@@ -64,10 +69,24 @@ async function saveSettings() {
   };
   
   try {
-    await chrome.storage.sync.set(settings);
+    // Save sync settings
+    const syncData = {
+      apiUrl: apiUrlInput.value || defaultSettings.apiUrl,
+      frontendUrl: frontendUrlInput.value || defaultSettings.frontendUrl,
+      defaultCategory: defaultCategorySelect.value || defaultSettings.defaultCategory,
+      useAIByDefault: useAIByDefaultCheckbox.checked,
+      showNotifications: showNotificationsCheckbox.checked,
+    };
+    await chrome.storage.sync.set(syncData);
+    
+    // Save theme to local storage
+    const localData = {
+      theme: themeSelect.value || defaultSettings.theme,
+    };
+    await chrome.storage.local.set(localData);
     
     // Notify background script of settings change
-    await chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings });
+    await chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings: syncData });
     
     showToast('Settings saved successfully!', 'success');
   } catch (error) {
@@ -154,3 +173,32 @@ function showToast(message, type = 'info') {
     toast.className = 'toast hidden';
   }, 3000);
 }
+
+// Theme Management
+function initializeTheme() {
+  chrome.storage.local.get(['theme'], (result) => {
+    const theme = result.theme || 'system';
+    applyTheme(theme);
+  });
+}
+
+function applyTheme(theme) {
+  const html = document.documentElement;
+  
+  if (theme === 'dark') {
+    html.setAttribute('data-theme', 'dark');
+  } else if (theme === 'light') {
+    html.setAttribute('data-theme', 'light');
+  } else {
+    // System theme
+    html.removeAttribute('data-theme');
+  }
+}
+
+function handleThemeChange() {
+  const newTheme = themeSelect.value;
+  chrome.storage.local.set({ theme: newTheme }, () => {
+    applyTheme(newTheme);
+  });
+}
+
