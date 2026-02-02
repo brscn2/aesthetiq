@@ -1,76 +1,172 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useAuth } from "@clerk/nextjs"
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { StyleItemCard } from "@/components/style-item-card"
-import { findYourStyle, StyleItem, FindStyleItemsParams } from "@/lib/style-api"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { DashboardLayout } from "@/components/dashboard-layout";
+import { StyleItemCard } from "@/components/style-item-card";
+import { GenerateButton } from "@/components/try-on/generate-button";
+import { TryOnResultModal } from "@/components/try-on/try-on-result-modal";
+import {
+  findYourStyle,
+  StyleItem,
+  FindStyleItemsParams,
+} from "@/lib/style-api";
+import { generateTryOn } from "@/lib/try-on-api";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
 export default function FindYourStylePage() {
-  const { getToken } = useAuth()
-  const [items, setItems] = useState<StyleItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
+  const { getToken } = useAuth();
+  const [items, setItems] = useState<StyleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState<FindStyleItemsParams>({
     limit: 50,
-  })
+  });
+
+  // Virtual Try-On State
+  const [selectedItems, setSelectedItems] = useState<Record<string, StyleItem>>(
+    {},
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   const loadItems = async (currentPage: number = 1) => {
     try {
-      setLoading(true)
-      setError(null)
-      const token = await getToken()
+      setLoading(true);
+      setError(null);
+      const token = await getToken();
       if (!token) {
-        setError("Authentication required")
-        return
+        setError("Authentication required");
+        return;
       }
 
       console.log("Loading items with params:", {
         ...filters,
         page: currentPage,
-      })
+      });
 
       const response = await findYourStyle(token, {
         ...filters,
         page: currentPage,
-      })
+      });
 
-      console.log("API Response:", response)
+      console.log("API Response:", response);
 
-      setItems(response.items)
-      setTotal(response.total)
-      setPage(response.page)
+      setItems(response.items);
+      setTotal(response.total);
+      setPage(response.page);
     } catch (err: any) {
-      console.error("Error loading style items:", err)
-      setError(err.message || "Failed to load items")
+      console.error("Error loading style items:", err);
+      setError(err.message || "Failed to load items");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    loadItems(1)
-  }, [filters])
+    loadItems(1);
+  }, [filters]);
 
-  const handleFilterChange = (key: keyof FindStyleItemsParams, value: string) => {
-    setPage(1)
+  const handleFilterChange = (
+    key: keyof FindStyleItemsParams,
+    value: string,
+  ) => {
+    setPage(1);
     setFilters((prev) => ({
       ...prev,
       [key]: value === "all" ? undefined : value,
-    }))
-  }
+    }));
+  };
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-    loadItems(newPage)
-  }
+    setPage(newPage);
+    loadItems(newPage);
+  };
 
-  const totalPages = Math.ceil(total / (filters.limit || 50))
+  // Handle item selection for Virtual Try-On
+  const handleItemSelect = (item: StyleItem) => {
+    setSelectedItems((prev) => {
+      const category = item.category;
+
+      // If this item is already selected, deselect it
+      if (prev[category]?._id === item._id) {
+        const { [category]: _, ...rest } = prev;
+        return rest;
+      }
+
+      // Otherwise, select this item (replacing any previous item in this category)
+      return {
+        ...prev,
+        [category]: item,
+      };
+    });
+  };
+
+  // Handle generate try-on
+  const handleGenerate = async () => {
+    try {
+      setIsGenerating(true);
+      setError(null);
+
+      const token = await getToken();
+      if (!token) {
+        setError("Authentication required");
+        return;
+      }
+
+      // Get current user to check for try-on photo
+      const userResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/users/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!userResponse.ok) {
+        setError("Failed to fetch user profile");
+        return;
+      }
+
+      const user = await userResponse.json();
+      const userPhotoUrl = user.tryOnPhotoUrl;
+
+      if (!userPhotoUrl) {
+        setError(
+          "Please upload a photo of yourself first to use Virtual Try-On. Go to Settings → Virtual Try-On to add your photo.",
+        );
+        return;
+      }
+
+      const response = await generateTryOn(token, userPhotoUrl, selectedItems);
+
+      if (response.success && response.imageBase64) {
+        setGeneratedImage(response.imageBase64);
+        setShowResultModal(true);
+      } else {
+        setError(response.error || "Failed to generate try-on image");
+      }
+    } catch (err: any) {
+      console.error("Error generating try-on:", err);
+      setError(err.message || "Failed to generate try-on image");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const totalPages = Math.ceil(total / (filters.limit || 50));
 
   return (
     <DashboardLayout>
@@ -85,8 +181,8 @@ export default function FindYourStylePage() {
           </p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4">
+        {/* Filters and Generate Button */}
+        <div className="flex flex-wrap items-center gap-4">
           <Select
             value={filters.gender || "all"}
             onValueChange={(value) => handleFilterChange("gender", value)}
@@ -147,12 +243,37 @@ export default function FindYourStylePage() {
               <SelectItem value="Mango">Mango</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Generate Button */}
+          <div className="ml-auto">
+            <GenerateButton
+              selectedItemsCount={Object.keys(selectedItems).length}
+              isGenerating={isGenerating}
+              onGenerate={handleGenerate}
+            />
+          </div>
         </div>
 
         {/* Results Count */}
         <div className="text-sm text-muted-foreground">
           Showing {items.length} of {total} items
         </div>
+
+        {/* Selected Items Debug (for testing) */}
+        {Object.keys(selectedItems).length > 0 && (
+          <div className="rounded-lg border border-primary bg-primary/10 p-4">
+            <p className="text-sm font-medium text-primary mb-2">
+              Selected Items ({Object.keys(selectedItems).length}):
+            </p>
+            <div className="space-y-1">
+              {Object.entries(selectedItems).map(([category, item]) => (
+                <p key={category} className="text-xs text-muted-foreground">
+                  <span className="font-medium">{category}:</span> {item.name}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
@@ -172,7 +293,12 @@ export default function FindYourStylePage() {
         {!loading && !error && items.length > 0 && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((item) => (
-              <StyleItemCard key={item._id} item={item} />
+              <StyleItemCard
+                key={item._id}
+                item={item}
+                isSelected={selectedItems[item.category]?._id === item._id}
+                onSelect={handleItemSelect}
+              />
             ))}
           </div>
         )}
@@ -209,6 +335,16 @@ export default function FindYourStylePage() {
           </div>
         )}
       </div>
+
+      {/* Try-On Result Modal */}
+      {generatedImage && (
+        <TryOnResultModal
+          isOpen={showResultModal}
+          onClose={() => setShowResultModal(false)}
+          imageBase64={generatedImage}
+          selectedItems={selectedItems}
+        />
+      )}
     </DashboardLayout>
-  )
+  );
 }
