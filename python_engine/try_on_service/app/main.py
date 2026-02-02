@@ -5,7 +5,9 @@ This service handles virtual try-on image generation using IDM-VTON via Replicat
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -56,6 +58,23 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+
+# Add validation error handler
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log validation errors with full details."""
+    body = await request.body()
+    logger.error(f"Validation error for {request.url}")
+    logger.error(f"Validation errors: {exc.errors()}")
+    logger.error(f"Request body: {body.decode('utf-8')}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "body": body.decode('utf-8')
+        }
+    )
 
 
 @app.get("/")

@@ -56,7 +56,7 @@ export function TryOnResultModal({
           <div className="relative aspect-[3/4] w-full max-w-md mx-auto overflow-hidden rounded-lg border bg-muted">
             <Image
               src={`data:image/png;base64,${imageBase64}`}
-              alt="Virtual Try-On Result"
+              alt="Virtual try-on result showing you wearing the selected clothing items"
               fill
               className="object-contain"
               priority
@@ -65,33 +65,33 @@ export function TryOnResultModal({
 
           {/* Selected Items */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Selected Items ({Object.keys(selectedItems).length})
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {Object.entries(selectedItems).map(([category, item]) => (
-                <div key={category} className="space-y-2 rounded-lg border p-3">
-                  <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+            <h3 className="text-sm font-medium">Items Used</h3>
+            <div className="flex gap-3">
+              {Object.entries(selectedItems).map(([category, item]) => {
+                // Get image URL - try all possible fields
+                const itemData = item as any;
+                const imageUrl =
+                  itemData.imageUrl ||
+                  itemData.processedImageUrl ||
+                  (itemData.imageUrls && itemData.imageUrls[0]) ||
+                  itemData.primaryImageUrl ||
+                  "/placeholder.png";
+
+                return (
+                  <div
+                    key={category}
+                    className="relative w-20 h-20 overflow-hidden rounded-md border bg-muted"
+                  >
                     <Image
-                      src={
-                        item.imageUrls?.[0] ||
-                        item.primaryImageUrl ||
-                        "/placeholder.png"
-                      }
-                      alt={item.name}
+                      src={imageUrl}
+                      alt={`${itemData.name || itemData.subCategory || category}`}
                       fill
                       className="object-cover"
-                      sizes="(max-width: 768px) 50vw, 25vw"
+                      sizes="80px"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {category}
-                    </p>
-                    <p className="text-xs line-clamp-2">{item.name}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

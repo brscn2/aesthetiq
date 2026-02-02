@@ -112,23 +112,20 @@ class IDMVTONService:
             
             logger.info("Calling IDM-VTON via Replicate API...")
             
-            # Open files for Replicate
-            with open(user_photo_path, 'rb') as human_img, \
-                 open(clothing_path, 'rb') as garm_img:
-                
-                # Call IDM-VTON via Replicate
-                output = replicate.run(
-                    settings.IDM_VTON_MODEL,
-                    input={
-                        "human_img": human_img,
-                        "garm_img": garm_img,
-                        "garment_des": prompt if prompt else "clothing item",
-                        "is_checked": True,  # Use auto-generated mask
-                        "is_checked_crop": False,  # Don't crop
-                        "denoise_steps": 30,  # Quality vs speed (20-50)
-                        "seed": 42  # For reproducibility
-                    }
-                )
+            # Replicate expects file paths or URLs
+            # Try using file paths directly
+            output = replicate.run(
+                settings.IDM_VTON_MODEL,
+                input={
+                    "human_img": open(user_photo_path, 'rb'),
+                    "garm_img": open(clothing_path, 'rb'),
+                    "garment_des": prompt if prompt else "clothing item",
+                    "is_checked": True,  # Use auto-generated mask
+                    "is_checked_crop": False,  # Don't crop
+                    "denoise_steps": 30,  # Quality vs speed (20-50)
+                    "seed": 42  # For reproducibility
+                }
+            )
             
             logger.info("IDM-VTON API response received")
             

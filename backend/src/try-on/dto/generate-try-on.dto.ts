@@ -10,6 +10,15 @@ import { Type } from 'class-transformer';
 
 export class TryOnItem {
   @ApiProperty({
+    required: false,
+    example: '507f1f77bcf86cd799439011',
+    description: 'Item ID',
+  })
+  @IsString()
+  @IsOptional()
+  id?: string;
+
+  @ApiProperty({
     example: 'https://example.com/clothing-image.jpg',
     description: 'URL to the clothing item image',
   })
@@ -18,12 +27,31 @@ export class TryOnItem {
   imageUrl: string;
 
   @ApiProperty({
-    example: 'Black Leather Jacket',
-    description: 'Name of the clothing item',
+    required: false,
+    example: 'https://example.com/processed-image.jpg',
+    description: 'Processed image URL (for WardrobeItem)',
   })
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  processedImageUrl?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'Black Leather Jacket',
+    description: 'Name of the clothing item (StyleItem)',
+  })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'A stylish black leather jacket',
+    description: 'Description of the clothing item (StyleItem)',
+  })
+  @IsString()
+  @IsOptional()
+  description?: string;
 
   @ApiProperty({
     example: 'TOP',
@@ -45,7 +73,7 @@ export class TryOnItem {
   @ApiProperty({
     required: false,
     example: '#000000',
-    description: 'Primary color hex code',
+    description: 'Primary color hex code (StyleItem)',
   })
   @IsString()
   @IsOptional()
@@ -53,12 +81,47 @@ export class TryOnItem {
 
   @ApiProperty({
     required: false,
+    example: 'black',
+    description: 'Color name (StyleItem)',
+  })
+  @IsString()
+  @IsOptional()
+  color?: string;
+
+  @ApiProperty({
+    required: false,
+    example: ['#000000', '#FFFFFF'],
+    description: 'Color array (WardrobeItem)',
+  })
+  @IsOptional()
+  colors?: string[];
+
+  @ApiProperty({
+    required: false,
     example: 'Leather',
-    description: 'Material of the clothing item',
+    description: 'Material of the clothing item (StyleItem)',
   })
   @IsString()
   @IsOptional()
   material?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'Zara',
+    description: 'Brand name',
+  })
+  @IsString()
+  @IsOptional()
+  brand?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'Favorite jacket for winter',
+    description: 'Notes (WardrobeItem)',
+  })
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class GenerateTryOnDto {
@@ -94,7 +157,7 @@ export class GenerateTryOnDto {
   })
   @IsObject()
   @IsNotEmpty()
-  items: Record<string, TryOnItem>;
+  items: Record<string, any>;
 
   @ApiProperty({
     required: false,
