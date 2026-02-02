@@ -11,9 +11,14 @@ import {
   CommerceItemDocument,
   Category,
 } from './schemas/commerce-item.schema';
+import {
+  ScrapedCommerceItem,
+  ScrapedCommerceItemDocument,
+} from './schemas/scraped-commerce-item.schema';
 import { CreateCommerceItemDto } from './dto/create-commerce-item.dto';
 import { UpdateCommerceItemDto } from './dto/update-commerce-item.dto';
 import { SearchCommerceItemsDto } from './dto/search-commerce-items.dto';
+import { FindStyleItemsDto } from './dto/find-style-items.dto';
 import { calculateSeasonalPaletteScores } from '../common/seasonal-colors';
 import { EmbeddingService } from '../ai/embedding.service';
 import {
@@ -28,6 +33,8 @@ export class CommerceService {
   constructor(
     @InjectModel(CommerceItem.name)
     private commerceItemModel: Model<CommerceItemDocument>,
+    @InjectModel(ScrapedCommerceItem.name)
+    private scrapedCommerceItemModel: Model<ScrapedCommerceItemDocument>,
     private embeddingService: EmbeddingService,
   ) {}
 
@@ -446,6 +453,61 @@ export class CommerceService {
       throw new InternalServerErrorException(
         'Failed to retrieve commerce statistics',
       );
+    }
+  }
+
+  /**
+   * Find style items from scraped commerce collection
+   */
+  async findStyleItems(
+    findStyleDto: FindStyleItemsDto,
+  ): Promise<{ items: ScrapedCommerceItem[]; total: number; page: number; limit: number }> {
+    try {
+      const { page = 1, limit = 50, brand, category, gender, store } = findStyleDto;
+      const skip = (page - 1) * limit;
+
+      this.logger.log(`Finding style items: page=${page}, limit=${limit}, brand=${brand}, category=${category}, gender=${gender}, store=${store}`);
+
+      // Build filter query
+      const filter: any = { isActive: true };
+      
+      if (brand) {
+        filter.brand = brand;
+      }
+      if (category) {
+        filter.category = category;
+      }
+      if (gender) {
+        filter.gender = gender;
+      }
+      if (store) {
+        filter.store = store;
+      }
+
+      this.logger.log(`Filter query: ${JSON.stringify(filter)}`);
+
+      const [items, total] = await Promise.all([
+        this.scrapedCommerceItemModel
+          .find(filter)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean()
+          .exec(),
+        this.scrapedCommerceItemModel.countDocuments(filter).exec(),
+      ]);
+
+      this.logger.log(`Found ${items.length} items out of ${total} total`);
+
+      return {
+        items: items as ScrapedCommerceItem[],
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to find style items: ${error.message}`);
+      throw new InternalServerErrorException('Failed to retrieve style items');
     }
   }
 }

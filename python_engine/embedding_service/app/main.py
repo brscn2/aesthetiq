@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import torch
-from sentence_transformers import SentenceTransformer
+import torch.nn.functional as F
+from sentence_transformers import SentenceTransformer, util
 from PIL import Image
 import io
 import logging
@@ -53,6 +54,14 @@ class ImageEmbedResponse(BaseModel):
     embedding: List[float]
     dimension: int
     model: str
+
+
+class ValidationResponse(BaseModel):
+    """Response model for image validation."""
+    is_valid: bool
+    confidence: float
+    detected_category: str
+    scores: dict
 
 
 @app.on_event("startup")
@@ -158,6 +167,92 @@ async def embed_image(file: UploadFile = File(...)):
     
     except Exception as e:
         logger.error(f"Error embedding image: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/validate/fashion", response_model=ValidationResponse)
+async def validate_fashion_item(file: UploadFile = File(...)):
+    """
+    Validate if an image contains a fashion item (clothing, accessory, shoe) or a person.
+    Uses Zero-Shot classification with CLIP.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    try:
+        # Define candidate categories
+        # We classify into positive (valid) vs negative (invalid) classes
+        positive_labels = [
+            "a photo of clothing", 
+            "a photo of a fashion accessory", 
+            "a photo of a shoe", 
+            "a photo of a person",
+            "a photo of a dress",
+            "a photo of a shirt",
+            "a photo of pants",
+            "a photo of a jacket"
+        ]
+        
+        negative_labels = [
+            "a photo of food", 
+            "a photo of a fruit",
+            "a photo of a vegetable", 
+            "a photo of an animal", 
+            "a photo of a dog",
+            "a photo of a cat",
+            "a photo of electronics", 
+            "a photo of furniture",
+            "a photo of a car",
+            "a photo of a building",
+            "a photo of a landscape"
+        ]
+        
+        all_labels = positive_labels + negative_labels
+        
+        # Read image
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Encode image
+        # normalize_embeddings=True to allow dot product as cosine similarity
+        img_emb = model.encode(image, convert_to_tensor=True, normalize_embeddings=True)
+        
+        # Encode text labels
+        # We can cache these text embeddings if performance becomes an issue, 
+        # but for now we compute them on the fly (CLIP is fast enough for small batches)
+        text_emb = model.encode(all_labels, convert_to_tensor=True, normalize_embeddings=True)
+        
+        # Compute cosine similarities
+        # img_emb: [D], text_emb: [N, D] -> scores: [N]
+        scores = util.cos_sim(img_emb, text_emb)[0]
+        
+        # Find best match
+        best_idx = torch.argmax(scores).item()
+        best_score = scores[best_idx].item()
+        best_label = all_labels[best_idx]
+        
+        logger.info(f"Validation result: Best match '{best_label}' with score {best_score:.4f}")
+        
+        # Determine validity
+        is_valid = best_label in positive_labels
+        
+        # Also log key scores for debugging
+        scores_dict = {
+            label: float(score) 
+            for label, score in zip(all_labels, scores)
+        }
+        
+        return ValidationResponse(
+            is_valid=is_valid,
+            confidence=best_score,
+            detected_category=best_label,
+            scores=scores_dict
+        )
+
+    except Exception as e:
+        logger.error(f"Error validating image: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

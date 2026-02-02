@@ -51,6 +51,9 @@ export class User {
   @Prop()
   avatarUrl?: string;
 
+  @Prop()
+  tryOnPhotoUrl?: string;
+
   @Prop({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   subscriptionStatus: SubscriptionStatus;
 
@@ -62,8 +65,12 @@ export class User {
       // Measurement & Regional
       units: { type: String, enum: Units, default: Units.METRIC },
       currency: { type: String, enum: Currency, default: Currency.EUR },
-      shoppingRegion: { type: String, enum: ShoppingRegion, default: ShoppingRegion.EU },
-      
+      shoppingRegion: {
+        type: String,
+        enum: ShoppingRegion,
+        default: ShoppingRegion.EU,
+      },
+
       // Privacy & Biometric Settings
       allowBiometrics: { type: Boolean, default: false },
       allowFacialAnalysis: { type: Boolean, default: true },
@@ -93,7 +100,7 @@ export class User {
     units: Units;
     currency: Currency;
     shoppingRegion: ShoppingRegion;
-    
+
     // Privacy & Biometric Settings
     allowBiometrics: boolean;
     allowFacialAnalysis: boolean;
@@ -109,4 +116,3 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
-

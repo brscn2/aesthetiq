@@ -198,6 +198,13 @@ class SafetyGuardrails:
             sanitized = base_provider._sanitize_basic(response)
             
             return GuardrailResult(
+                is_safe=True,
+                sanitized_content=sanitized,
+                warnings=warnings,
+                risk_score=0.0 if is_valid else 1.0,
+                provider="base",
+            )
+            return GuardrailResult(
                 is_safe=is_valid,
                 sanitized_content=sanitized,
                 warnings=warnings,

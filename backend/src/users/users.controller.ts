@@ -11,7 +11,13 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -36,7 +42,10 @@ export class UsersController {
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'Current user profile retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user profile retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getCurrentUser(@Request() req: any) {
@@ -47,7 +56,10 @@ export class UsersController {
   @Patch('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update current user profile' })
-  @ApiResponse({ status: 200, description: 'User profile updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile updated successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async updateCurrentUser(
@@ -61,7 +73,10 @@ export class UsersController {
   @Get('me/settings')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user settings' })
-  @ApiResponse({ status: 200, description: 'User settings retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User settings retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getCurrentUserSettings(@Request() req: any) {
@@ -79,7 +94,27 @@ export class UsersController {
     @Request() req: any,
     @Body() updateSettingsDto: UpdateSettingsDto,
   ) {
-    return this.usersService.updateSettingsByClerkId(req.user.clerkId, updateSettingsDto);
+    return this.usersService.updateSettingsByClerkId(
+      req.user.clerkId,
+      updateSettingsDto,
+    );
+  }
+
+  @UseGuards(ClerkAuthGuard)
+  @Patch('me/try-on-photo')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update try-on photo URL' })
+  @ApiResponse({
+    status: 200,
+    description: 'Try-on photo updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async updateTryOnPhoto(
+    @Request() req: any,
+    @Body() body: { photoUrl: string },
+  ) {
+    return this.usersService.updateTryOnPhoto(req.user.clerkId, body.photoUrl);
   }
 
   @Get()
@@ -91,7 +126,10 @@ export class UsersController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Get user statistics' })
-  @ApiResponse({ status: 200, description: 'User statistics retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User statistics retrieved successfully',
+  })
   async getStats(): Promise<{
     totalUsers: number;
     usersByRole: { role: string; count: number }[];
@@ -132,7 +170,10 @@ export class UsersController {
   @Get(':id/settings')
   @ApiOperation({ summary: 'Get user settings by ID' })
   @ApiParam({ name: 'id', description: 'User ID' })
-  @ApiResponse({ status: 200, description: 'User settings retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'User settings retrieved successfully',
+  })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getSettings(@Param('id') id: string) {
     return this.usersService.getSettings(id);
@@ -150,4 +191,3 @@ export class UsersController {
     return this.usersService.updateSettings(id, updateSettingsDto);
   }
 }
-
