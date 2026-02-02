@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { StyleItemCard } from "@/components/style-item-card";
 import { GenerateButton } from "@/components/try-on/generate-button";
 import { TryOnResultModal } from "@/components/try-on/try-on-result-modal";
+import { PhotoRequiredModal } from "@/components/try-on/photo-required-modal";
 import {
   findYourStyle,
   StyleItem,
@@ -33,6 +34,10 @@ export default function FindYourStylePage() {
     limit: 50,
   });
 
+  // Photo check state
+  const [hasPhoto, setHasPhoto] = useState<boolean | null>(null);
+  const [checkingPhoto, setCheckingPhoto] = useState(true);
+
   // Virtual Try-On State
   const [selectedItems, setSelectedItems] = useState<Record<string, StyleItem>>(
     {},
@@ -40,6 +45,44 @@ export default function FindYourStylePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+
+  // Check if user has uploaded a photo
+  const checkUserPhoto = async () => {
+    try {
+      setCheckingPhoto(true);
+      const token = await getToken();
+      if (!token) {
+        setHasPhoto(false);
+        return;
+      }
+
+      const userResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/users/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!userResponse.ok) {
+        setHasPhoto(false);
+        return;
+      }
+
+      const user = await userResponse.json();
+      setHasPhoto(!!user.tryOnPhotoUrl);
+    } catch (err) {
+      console.error("Error checking user photo:", err);
+      setHasPhoto(false);
+    } finally {
+      setCheckingPhoto(false);
+    }
+  };
+
+  useEffect(() => {
+    checkUserPhoto();
+  }, []);
 
   const loadItems = async (currentPage: number = 1) => {
     try {
@@ -167,6 +210,35 @@ export default function FindYourStylePage() {
   };
 
   const totalPages = Math.ceil(total / (filters.limit || 50));
+
+  // Show photo required modal if user doesn't have a photo
+  if (checkingPhoto) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (hasPhoto === false) {
+    return (
+      <DashboardLayout>
+        <PhotoRequiredModal isOpen={true} />
+        <div className="space-y-6 opacity-50 pointer-events-none">
+          <div>
+            <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">
+              Find Your Own Style
+            </h1>
+            <p className="mt-2 text-muted-foreground">
+              Discover fashion items that match your unique style
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
