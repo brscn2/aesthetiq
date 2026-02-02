@@ -49,6 +49,7 @@ def _parse_settings(doc: Dict[str, Any]) -> UserSettings:
         allowFacialAnalysis=settings_data.get("allowFacialAnalysis", True),
         storeColorHistory=settings_data.get("storeColorHistory", True),
         contributeToTrendLearning=settings_data.get("contributeToTrendLearning", False),
+        feedbackDecayDays=settings_data.get("feedbackDecayDays", 7),
         theme=settings_data.get("theme", "SYSTEM"),
     )
 

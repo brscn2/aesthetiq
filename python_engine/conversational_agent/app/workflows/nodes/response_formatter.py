@@ -67,14 +67,15 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
     Writes:
         - state["final_response"]: Formatted response string
     """
+    message = state.get("message", "")
+    retrieved_items = state.get("retrieved_items") or []
+    response_item_ids = _get_response_item_ids(retrieved_items)
+    
     # If we already have a final response (from conversation agent), just return
     existing_response = state.get("final_response")
     if existing_response:
         logger.info("Using existing final response from conversation agent")
-        return {}
-    
-    message = state.get("message", "")
-    retrieved_items = state.get("retrieved_items") or []
+        return {"response_item_ids": response_item_ids}
     analysis_result = state.get("analysis_result", {})
     needs_clarification = state.get("needs_clarification", False)
     clarification_question = state.get("clarification_question")
@@ -140,12 +141,14 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
             return {
                 "final_response": response,
                 "workflow_status": "awaiting_clarification",
+                "response_item_ids": [],
             }
         
         # Handle no items case
         elif not retrieved_items or len(retrieved_items) == 0:
             logger.info("Generating no-results response")
             response = await _format_no_results(llm_service, message)
+            response_item_ids = []
         
         # Handle items found case
         else:
@@ -158,6 +161,7 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 search_sources_used,
                 fallback_used,
             )
+            response_item_ids = _get_response_item_ids(retrieved_items)
         
         # Log to Langfuse
         if trace_id:
@@ -183,12 +187,17 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 )
             else:
                 response = "I apologize, but I'm having trouble generating a response. Please try rephrasing your question."
+
+        # Match response item IDs to items explicitly mentioned in the response
+        matched_response_ids = _extract_response_item_ids_from_text(response, retrieved_items)
+        response_item_ids = matched_response_ids if matched_response_ids else []
         
         logger.info(f"Formatted response: {len(response)} chars")
         
         return {
             "final_response": response,
             "workflow_status": "completed",
+            "response_item_ids": response_item_ids,
         }
         
     except Exception as e:
@@ -220,7 +229,134 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 "error_type": type(e).__name__,
                 "error_handled": True,
             },
+            "response_item_ids": response_item_ids if retrieved_items else [],
         }
+
+
+def _get_response_item_ids(
+    retrieved_items: List[Dict[str, Any]],
+    max_items: int = 5,
+) -> List[str]:
+    """Extract a stable list of item IDs used in the response prompt."""
+    response_ids: List[str] = []
+    seen: set[str] = set()
+
+    for item in retrieved_items[:max_items]:
+        item_id = None
+        if isinstance(item, dict):
+            item_id = item.get("id") or item.get("_id")
+            if not item_id:
+                raw = item.get("raw") or {}
+                if isinstance(raw, dict):
+                    item_id = raw.get("id") or raw.get("_id")
+        else:
+            item_id = getattr(item, "id", None) or getattr(item, "_id", None)
+
+        if item_id is None:
+            continue
+
+        item_id_str = str(item_id)
+        if item_id_str and item_id_str not in seen:
+            response_ids.append(item_id_str)
+            seen.add(item_id_str)
+
+    return response_ids
+
+
+def _extract_response_item_ids_from_text(
+    response: str,
+    retrieved_items: List[Dict[str, Any]],
+) -> List[str]:
+    """Extract item IDs whose names are explicitly mentioned in the response text."""
+    if not response or not retrieved_items:
+        return []
+
+    def normalize(text: str) -> str:
+        return "".join(ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in text).strip()
+
+    normalized_response = normalize(response)
+    allowlist = {
+        "jeans",
+        "sneakers",
+        "sweater",
+        "tshirt",
+        "t shirt",
+        "shirt",
+        "pants",
+        "skirt",
+        "dress",
+        "coat",
+        "jacket",
+        "boots",
+        "shorts",
+        "hoodie",
+    }
+
+    response_ids: List[str] = []
+    seen: set[str] = set()
+
+    for item in retrieved_items:
+        item_id = None
+        name = ""
+        brand = ""
+        sub_category = ""
+
+        if isinstance(item, dict):
+            item_id = item.get("id") or item.get("_id")
+            if not item_id:
+                raw = item.get("raw") or {}
+                if isinstance(raw, dict):
+                    item_id = raw.get("id") or raw.get("_id")
+            name = str(item.get("name") or "")
+            brand = str(item.get("brand") or "")
+            sub_category = str(item.get("subCategory") or "")
+        else:
+            item_id = getattr(item, "id", None) or getattr(item, "_id", None)
+            name = str(getattr(item, "name", ""))
+            brand = str(getattr(item, "brand", ""))
+            sub_category = str(getattr(item, "subCategory", ""))
+
+        if item_id is None:
+            continue
+
+        variants = []
+        if name:
+            variants.append(name)
+        if brand and sub_category:
+            variants.append(f"{brand} {sub_category}")
+        if sub_category:
+            variants.append(sub_category)
+
+        matched = False
+        for variant in variants:
+            normalized_variant = normalize(variant)
+            if not normalized_variant:
+                continue
+
+            tokens = [t for t in normalized_variant.split() if t]
+            if not tokens:
+                continue
+
+            if len(tokens) == 1:
+                token = tokens[0]
+                if token in allowlist and token in normalized_response:
+                    matched = True
+                    break
+                if len(token) >= 4 and token in normalized_response:
+                    matched = True
+                    break
+            else:
+                if all(token in normalized_response for token in tokens):
+                    matched = True
+                    break
+
+        if matched:
+            item_id_str = str(item_id)
+            if item_id_str and item_id_str not in seen:
+                response_ids.append(item_id_str)
+                seen.add(item_id_str)
+
+    return response_ids
 
 
 async def _format_clarification(

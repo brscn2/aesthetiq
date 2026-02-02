@@ -46,8 +46,40 @@ async def search_retailer_items(req: RetailerSearchRequest):
     
     This endpoint filters results to only include allowed retailer domains
     (UNIQLO, Zalando, etc.) and scrapes Open Graph tags for better metadata.
+    
+    Supports filtering by category, subCategory, brand, and colors to ensure
+    results match the specified criteria (e.g., only return ACCESSORY/Bag items).
     """
-    results = await tools.search_retailer_items(req.query, max_results=req.max_results)
+    # Convert schema filters to tool filters if provided
+    tool_filters = None
+    if req.filters:
+        from mcp_servers.web_search_server.tools import RetailerFilters
+        # Only pass non-None values to avoid validation errors
+        filter_kwargs = {}
+        if req.filters.category is not None:
+            filter_kwargs["category"] = req.filters.category
+        if req.filters.subCategory is not None:
+            filter_kwargs["subCategory"] = req.filters.subCategory
+        if req.filters.brand is not None:
+            filter_kwargs["brand"] = req.filters.brand
+        if req.filters.colors is not None:
+            filter_kwargs["colors"] = req.filters.colors
+        if req.filters.extra:
+            filter_kwargs["extra"] = req.filters.extra
+        
+        # Only create filter object if there are actual filters
+        if filter_kwargs:
+            tool_filters = RetailerFilters(**filter_kwargs)
+    
+    # Only pass disliked_item_ids if not None and not empty
+    disliked_ids = req.disliked_item_ids if req.disliked_item_ids else None
+    
+    results = await tools.search_retailer_items(
+        req.query,
+        max_results=req.max_results,
+        disliked_item_ids=disliked_ids,
+        filters=tool_filters,
+    )
     return WebSearchResponse(query=req.query, results=results)
 
 

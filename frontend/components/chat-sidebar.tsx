@@ -265,98 +265,96 @@ export const ChatSidebar = forwardRef<ChatSidebarRef, ChatSidebarProps>(function
               No conversations yet. Start a new chat!
             </div>
           ) : (
-            <div className="p-2">
+            <div className="p-1">
               {Object.entries(groupedSessions).map(([dateLabel, dateSessions]) => (
-                <div key={dateLabel} className="mb-4">
-                  <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase">
+                <div key={dateLabel} className="mb-3">
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase sticky top-0 bg-background/80 backdrop-blur-sm z-10">
                     {dateLabel}
                   </div>
                   {dateSessions.map((session) => (
                     <div
                       key={session.sessionId}
                       className={cn(
-                        "group relative flex items-center gap-2 p-2 sm:p-2.5 rounded-lg cursor-pointer transition-colors",
-                        activeSessionId === session.sessionId
-                          ? "bg-primary/10 text-primary"
-                          : "hover:bg-accent"
+                        "mb-1.5 rounded-lg transition-colors border",
+                        activeSessionId === session.sessionId 
+                          ? "bg-primary/10 text-primary border-primary/20" 
+                          : "bg-background border-border/30 hover:border-border/60"
                       )}
-                      onClick={() => onSelectSession(session.sessionId)}
-                      onDoubleClick={() => handleDoubleClick(session)}
                     >
-                      <MessageSquare className="h-4 w-4 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        {editingId === session.sessionId ? (
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Input
-                              value={editTitle}
-                              onChange={(e) => setEditTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleRenameSave(session.sessionId)
-                                } else if (e.key === "Escape") {
-                                  handleRenameCancel()
-                                }
-                              }}
-                              className="h-8 sm:h-7 text-sm"
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
+                      {editingId === session.sessionId ? (
+                        <div className="p-3 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleRenameSave(session.sessionId)
+                              } else if (e.key === "Escape") {
+                                handleRenameCancel()
+                              }
+                            }}
+                            className="h-8 text-sm"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div className="flex gap-2 justify-end">
                             <Button
-                              size="icon"
+                              size="sm"
                               variant="ghost"
-                              className="h-8 w-8 sm:h-7 sm:w-7 touch-manipulation"
+                              className="touch-manipulation"
                               onClick={() => handleRenameSave(session.sessionId)}
                             >
-                              <Check className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                              <Check className="h-4 w-4" />
+                              Save
                             </Button>
                             <Button
-                              size="icon"
+                              size="sm"
                               variant="ghost"
-                              className="h-8 w-8 sm:h-7 sm:w-7 touch-manipulation"
+                              className="touch-manipulation"
                               onClick={handleRenameCancel}
                             >
-                              <X className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                              <X className="h-4 w-4" />
+                              Cancel
                             </Button>
                           </div>
-                        ) : (
-                          <>
-                            <div className="text-sm font-medium truncate pr-2">{session.title}</div>
+                        </div>
+                      ) : (
+                        <>
+                          <div 
+                            className="p-3 pb-2 cursor-pointer hover:opacity-80"
+                            onClick={() => onSelectSession(session.sessionId)}
+                            onDoubleClick={() => handleDoubleClick(session)}
+                          >
+                            <div className="font-medium text-sm mb-1 line-clamp-1">{session.title}</div>
                             {session.lastMessagePreview && (
-                              <div className="text-xs text-muted-foreground line-clamp-2 break-words mt-0.5">
+                              <div className="text-xs text-muted-foreground line-clamp-2 break-words">
                                 {session.lastMessagePreview}
                               </div>
                             )}
-                          </>
-                        )}
-                      </div>
-                      {editingId !== session.sessionId && (
-                        <div
-                          className={cn(
-                            "flex items-center gap-1 flex-shrink-0 transition-opacity",
-                            activeSessionId === session.sessionId
-                              ? "opacity-100"
-                              : "opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                          )}
-                        >
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 sm:h-7 sm:w-7 touch-manipulation"
-                            onClick={(e) => handleRenameStart(session, e)}
-                            title="Rename conversation"
-                          >
-                            <Edit2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 sm:h-7 sm:w-7 text-destructive hover:text-destructive touch-manipulation"
-                            onClick={(e) => handleDeleteClick(session.sessionId, e)}
-                            title="Delete conversation"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                          </Button>
-                        </div>
+                          </div>
+                          <div className="flex gap-1 px-2 pb-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="flex-1 touch-manipulation text-xs h-8"
+                              onClick={(e) => handleRenameStart(session, e)}
+                              title="Rename conversation"
+                            >
+                              <Edit2 className="h-3.5 w-3.5 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="flex-1 touch-manipulation text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => handleDeleteClick(session.sessionId, e)}
+                              title="Delete conversation"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}

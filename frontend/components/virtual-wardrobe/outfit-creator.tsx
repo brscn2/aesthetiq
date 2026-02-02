@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/lib/api"
@@ -20,6 +20,8 @@ interface OutfitCreatorProps {
   editOutfit?: Outfit | null
   onSaved: () => void
   onCancel: () => void
+  prefillItemIds?: string[] | null
+  prefillKey?: string | null
 }
 
 interface SelectedItems {
@@ -29,7 +31,7 @@ interface SelectedItems {
   accessories: string[]
 }
 
-export function OutfitCreator({ editOutfit, onSaved, onCancel }: OutfitCreatorProps) {
+export function OutfitCreator({ editOutfit, onSaved, onCancel, prefillItemIds, prefillKey }: OutfitCreatorProps) {
   const { wardrobeApi, outfitApi } = useApi()
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -42,6 +44,7 @@ export function OutfitCreator({ editOutfit, onSaved, onCancel }: OutfitCreatorPr
     shoe: null,
     accessories: [],
   })
+  const prefillAppliedRef = useRef<string | null>(null)
 
   // Load wardrobe items
   const { data: wardrobeItems, isLoading } = useQuery({
@@ -62,6 +65,84 @@ export function OutfitCreator({ editOutfit, onSaved, onCancel }: OutfitCreatorPr
       })
     }
   }, [editOutfit])
+
+  // Pre-populate for chat suggestions (override selections)
+  useEffect(() => {
+    if (!prefillItemIds || prefillItemIds.length === 0) return
+    if (!wardrobeItems || wardrobeItems.length === 0) return
+    if (editOutfit) return
+
+    const key = prefillKey || prefillItemIds.join(",")
+    if (prefillAppliedRef.current === key) return
+
+    const nextSelection: SelectedItems = {
+      top: null,
+      bottom: null,
+      shoe: null,
+      accessories: [],
+    }
+    const missingIds: string[] = []
+    const skippedIds: string[] = []
+
+    prefillItemIds.forEach((id) => {
+      const item = wardrobeItems.find((wardrobeItem) => wardrobeItem._id === id)
+      if (!item) {
+        missingIds.push(id)
+        return
+      }
+
+      if (item.category === Category.ACCESSORY) {
+        if (!nextSelection.accessories.includes(item._id)) {
+          nextSelection.accessories.push(item._id)
+        }
+        return
+      }
+
+      if (item.category === Category.TOP) {
+        if (!nextSelection.top) {
+          nextSelection.top = item._id
+        } else {
+          skippedIds.push(item._id)
+        }
+        return
+      }
+
+      if (item.category === Category.BOTTOM) {
+        if (!nextSelection.bottom) {
+          nextSelection.bottom = item._id
+        } else {
+          skippedIds.push(item._id)
+        }
+        return
+      }
+
+      if (item.category === Category.SHOE) {
+        if (!nextSelection.shoe) {
+          nextSelection.shoe = item._id
+        } else {
+          skippedIds.push(item._id)
+        }
+      }
+    })
+
+    setSelectedItems(nextSelection)
+    prefillAppliedRef.current = key
+
+    if (missingIds.length > 0) {
+      toast({
+        title: "Some items were not found",
+        description: "We couldn't find all suggested items in your wardrobe, so they were skipped.",
+        variant: "destructive",
+      })
+    }
+
+    if (skippedIds.length > 0) {
+      toast({
+        title: "Some items were skipped",
+        description: "Only one item per top, bottom, and shoe category can be pre-selected.",
+      })
+    }
+  }, [prefillItemIds, prefillKey, wardrobeItems, editOutfit, toast])
 
   const createMutation = useMutation({
     mutationFn: (data: CreateOutfitDto) => outfitApi.create(data),

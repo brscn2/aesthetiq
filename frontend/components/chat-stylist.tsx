@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Markdown } from "@/components/ui/markdown"
 import { AgentProgress } from "@/components/agent-progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { useChatApi, generateMessageId } from "@/lib/chat-api"
 import type { ClothingItem, DoneEvent } from "@/types/chat"
@@ -74,12 +76,25 @@ interface Message {
   }
 }
 
+function filterItemsByResponseIds(
+  items: ClothingItem[] | undefined,
+  responseItemIds: string[] | undefined,
+): ClothingItem[] {
+  if (!items || items.length === 0) return []
+  if (!responseItemIds || responseItemIds.length === 0) return items
+
+  const idSet = new Set(responseItemIds.map((id) => id.toString()))
+  return items.filter((item) => idSet.has(item.id))
+}
+
 interface ChatStylistProps {
   activeSessionId?: string | null
   initialMessages?: Array<{
     role: "user" | "assistant"
     content: string
     timestamp?: string
+    items?: ClothingItem[]
+    metadata?: Record<string, any>
   }>
   onSessionUpdated?: (sessionId: string, lastMessage: string) => void
   resetTrigger?: number // Increment this to force a reset
@@ -91,10 +106,12 @@ export function ChatStylist({
   onSessionUpdated,
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
+  const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [isRecording, setIsRecording] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -120,6 +137,11 @@ export function ChatStylist({
     },
     onStreamEnd: (result: DoneEvent | null) => {
       if (result) {
+        const filteredItems = filterItemsByResponseIds(
+          result.items,
+          result.response_item_ids,
+        )
+
         // Use functional update to always work with latest state
         setMessages((prev) => {
           const newMessages = [...prev]
@@ -129,11 +151,11 @@ export function ChatStylist({
           if (lastMessage?.isStreaming) {
             // Update existing streaming message
             lastMessage.content = result.response || lastMessage.content
-            lastMessage.items = result.items
+            lastMessage.items = filteredItems
             lastMessage.isStreaming = false
             lastMessage.metadata = {
               intent: result.intent || undefined,
-              sources: result.items?.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
+              sources: filteredItems.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
               needsClarification: result.needs_clarification,
             }
             return newMessages
@@ -155,11 +177,11 @@ export function ChatStylist({
                 id: generateMessageId(),
                 role: "assistant",
                 content: result.response,
-                items: result.items,
+                items: filteredItems,
                 isStreaming: false,
                 metadata: {
                   intent: result.intent || undefined,
-                  sources: result.items?.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
+                  sources: filteredItems.map((i) => i.source).filter((v, i, a) => a.indexOf(v) === i),
                   needsClarification: result.needs_clarification,
                 },
               }
@@ -177,6 +199,27 @@ export function ChatStylist({
       }
     },
   })
+
+  const handleCreateOutfitFromItems = useCallback((items: ClothingItem[]) => {
+    const wardrobeItems = items.filter((item) => item.id && item.source === "wardrobe")
+    const uniqueIds = Array.from(new Set(wardrobeItems.map((item) => item.id)))
+
+    if (uniqueIds.length === 0) {
+      toast.error("No wardrobe items available to create an outfit.")
+      return
+    }
+
+    if (wardrobeItems.length !== items.length) {
+      toast.info("Only wardrobe items were added to the outfit.")
+    }
+
+    const params = new URLSearchParams({
+      tab: "outfits",
+      prefillItems: uniqueIds.join(","),
+    })
+
+    router.push(`/virtual-wardrobe?${params.toString()}`)
+  }, [router])
 
   // Initialize messages from props when session changes or reset is triggered
   useEffect(() => {
@@ -203,6 +246,8 @@ export function ChatStylist({
           id: generateMessageId(),
           role: msg.role,
           content: msg.content,
+          items: msg.items,
+          metadata: msg.metadata,
         }))
       )
     } else if (sessionChanged && initialMessages.length === 0) {
@@ -437,8 +482,8 @@ export function ChatStylist({
       </div>
 
       {/* Chat Messages */}
-      <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
-        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <ScrollArea className="flex-1 min-h-0 w-full" ref={scrollAreaRef}>
+        <div className="space-y-3 sm:space-y-4 md:space-y-6 p-3 sm:p-4 md:p-6 w-full">
           {/* Welcome message if no messages */}
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -455,32 +500,32 @@ export function ChatStylist({
           )}
 
           {messages.map((message) => (
-            <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={message.id} className={`flex gap-2 sm:gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" && (
-                <Avatar className="h-8 w-8 flex-shrink-0">
+                <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">
                   <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>
                 </Avatar>
               )}
 
               <div
-                className={`flex max-w-[80%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
+                className={`flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
-                  className={`rounded-2xl px-4 py-3 ${
+                  className={`rounded-2xl px-3 sm:px-4 py-2 sm:py-3 ${
                     message.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-card text-card-foreground border border-border/50"
                   }`}
                 >
                   {message.role === "user" ? (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
                   ) : (
                     <>
                       {message.content ? (
                         <>
-                          <Markdown content={message.content} className="text-sm" />
+                          <Markdown content={message.content} className="text-xs sm:text-sm" />
                           {message.isStreaming && (
                             <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
                           )}
@@ -494,7 +539,7 @@ export function ChatStylist({
                 {message.images && message.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {message.images.map((imageUrl, index) => (
-                      <div key={index} className="relative w-24 h-24 rounded-lg overflow-hidden border border-border/50">
+                      <div key={index} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-border/50">
                         <Image src={imageUrl} alt={`Attachment ${index + 1}`} fill className="object-cover" />
                       </div>
                     ))}
@@ -506,37 +551,64 @@ export function ChatStylist({
                   // Filter out items without an id - don't display incomplete items
                   const validItems = message.items.filter(item => item.id)
                   if (validItems.length === 0) return null
+                  const gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3"
                   
                   return (
-                    <div className="w-full mt-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ShoppingBag className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-medium text-foreground">
-                          {validItems.length} item{validItems.length !== 1 ? "s" : ""} found
+                      <div className="w-full mt-2 sm:mt-3">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-2">
+                        <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
+                        <span className="text-xs sm:text-sm font-medium text-foreground">
+                          {validItems.length} item{validItems.length !== 1 ? "s" : ""}
                         </span>
                         {message.metadata?.sources && message.metadata.sources.length > 0 && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-[11px] sm:text-xs text-muted-foreground">
                             from {message.metadata.sources.join(", ")}
                           </span>
                         )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] sm:text-xs"
+                          onClick={() => handleCreateOutfitFromItems(validItems)}
+                        >
+                          Create Outfit
+                        </Button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {validItems.slice(0, 4).map((item) => (
-                          <ClothingItemCard key={item.id} item={item} />
+                      <div className={gridClass}>
+                        {validItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedItem(item)}
+                            className="group flex flex-col items-center gap-1 sm:gap-2 rounded-lg border border-border/50 bg-card/60 p-1.5 sm:p-2 hover:bg-accent/40 focus:outline-hidden focus:ring-2 focus:ring-primary transition-colors"
+                          >
+                            <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+                              {item.imageUrl ? (
+                                <Image
+                                  src={item.imageUrl}
+                                  alt={item.name}
+                                  fill
+                                  className="object-contain"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[9px] sm:text-[10px] text-muted-foreground">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+                            <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
+                              {item.name}
+                            </span>
+                          </button>
                         ))}
                       </div>
-                      {validItems.length > 4 && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          + {validItems.length - 4} more items
-                        </p>
-                      )}
                     </div>
                   )
                 })()}
               </div>
 
               {message.role === "user" && (
-                <Avatar className="h-8 w-8 flex-shrink-0">
+                <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">
                   <AvatarImage src="/placeholder-user.jpg" alt="User" />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">You</AvatarFallback>
                 </Avatar>
@@ -549,11 +621,11 @@ export function ChatStylist({
           {(isLoading || sessionState.isStreaming) && 
            !messages.some(msg => msg.isStreaming && msg.content && msg.content.trim().length > 0) &&
            (progress.currentNode || progress.completedNodes.length > 0 || !streamedText) && (
-            <div className="flex gap-3 justify-start">
-              <Avatar className="h-8 w-8 flex-shrink-0">
+            <div className="flex gap-2 sm:gap-3 justify-start">
+              <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">
                 <AvatarFallback className="gradient-ai text-white">AI</AvatarFallback>
               </Avatar>
-              <div className="flex-1 max-w-[80%]">
+              <div className="flex-1 w-full sm:max-w-[80%] md:max-w-[75%]">
                 <AgentProgress 
                   progress={progress} 
                   status={sessionState.currentStatus}
@@ -567,32 +639,32 @@ export function ChatStylist({
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-border bg-background p-3 sm:p-6">
+      <div className="flex-shrink-0 border-t border-border bg-background p-2.5 sm:p-4 md:p-6">
         {/* Attached Images Preview */}
         {attachedImages.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-2 sm:mb-3 flex flex-wrap gap-2">
             {attachedImages.map((imageUrl, index) => (
-              <div key={index} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/50 group">
+              <div key={index} className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border border-border/50 group">
                 <Image src={imageUrl} alt={`Preview ${index + 1}`} fill className="object-cover" />
                 <button
                   onClick={() => removeImage(index)}
                   className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                 >
-                  <X className="h-4 w-4 text-white" />
+                  <X className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                 </button>
               </div>
             ))}
           </div>
         )}
 
-        <div className="flex gap-1.5 sm:gap-2">
+        <div className="flex gap-1 sm:gap-1.5 md:gap-2">
           <div className="relative flex-1">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ask your stylist anything..."
-              className="h-10 sm:h-12 bg-card pr-10 sm:pr-12 text-sm sm:text-base text-foreground placeholder:text-muted-foreground"
+              className="h-9 sm:h-10 md:h-12 bg-card pr-8 sm:pr-10 md:pr-12 text-xs sm:text-sm md:text-base text-foreground placeholder:text-muted-foreground"
               disabled={isLoading}
             />
             <input
@@ -607,47 +679,108 @@ export function ChatStylist({
           <Button
             size="icon"
             variant="outline"
-            className="h-10 w-10 sm:h-12 sm:w-12 border-border/50 bg-transparent"
+            className="h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 border-border/50 bg-transparent flex-shrink-0"
             onClick={() => fileInputRef.current?.click()}
             disabled={isLoading || attachedImages.length >= 5}
             title="Attach images"
           >
-            <ImageIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
           </Button>
           <Button
             size="icon"
             variant="outline"
-            className={`h-10 w-10 sm:h-12 sm:w-12 border-border/50 bg-transparent hidden sm:flex ${
+            className={`h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 border-border/50 bg-transparent hidden sm:flex flex-shrink-0 ${
               isRecording ? "bg-red-500/20 border-red-500/50" : ""
             }`}
             onClick={toggleRecording}
             disabled={isLoading}
             title={isRecording ? "Stop recording" : "Start voice input"}
           >
-            <Mic className={`h-4 w-4 sm:h-5 sm:w-5 ${isRecording ? "text-red-500 animate-pulse" : ""}`} />
+            <Mic className={`h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 ${isRecording ? "text-red-500 animate-pulse" : ""}`} />
           </Button>
           {isLoading ? (
             <Button
               size="icon"
               variant="outline"
-              className="h-10 w-10 sm:h-12 sm:w-12 border-border/50"
+              className="h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 border-border/50 flex-shrink-0"
               onClick={cancelRequest}
               title="Cancel request"
             >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
             </Button>
           ) : (
             <Button
               size="icon"
-              className="gradient-ai h-10 w-10 sm:h-12 sm:w-12 text-white"
+              className="gradient-ai h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 text-white flex-shrink-0"
               onClick={handleSendMessage}
               disabled={!input.trim() && attachedImages.length === 0}
             >
-              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+              <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
             </Button>
           )}
         </div>
       </div>
+
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+        {selectedItem && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold">
+                {selectedItem.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
+                {selectedItem.imageUrl ? (
+                  <Image
+                    src={selectedItem.imageUrl}
+                    alt={selectedItem.name}
+                    fill
+                    className="object-contain"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                    No image available
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2 text-sm">
+                {selectedItem.brand && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Brand</span>
+                    <span className="font-medium text-foreground">{selectedItem.brand}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="font-medium text-foreground">
+                    {selectedItem.source === "wardrobe" ? "Your Wardrobe" : selectedItem.source === "commerce" ? "Shop" : "Web"}
+                  </span>
+                </div>
+                {selectedItem.price && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Price</span>
+                    <span className="font-medium text-foreground">${selectedItem.price.toFixed(2)}</span>
+                  </div>
+                )}
+                {selectedItem.category && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Category</span>
+                    <span className="font-medium text-foreground">{selectedItem.category}</span>
+                  </div>
+                )}
+              </div>
+              {selectedItem.productUrl && (
+                <Button asChild className="w-full">
+                  <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
+                    View item
+                  </a>
+                </Button>
+              )}
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   )
 }
@@ -658,72 +791,116 @@ export function ChatStylist({
 
 interface ClothingItemCardProps {
   item: ClothingItem
+  size?: "default" | "small" | "compact"
 }
 
-function ClothingItemCard({ item }: ClothingItemCardProps) {
+function ClothingItemCard({ item, size = "default" }: ClothingItemCardProps) {
   const sourceLabel = {
     wardrobe: "Your Wardrobe",
     commerce: "Shop",
     web: "Web",
   }[item.source] || item.source
 
+  const imageSizeClass =
+    size === "compact"
+      ? "h-20"
+      : size === "small"
+        ? "h-24"
+        : "h-32"
+  const headerClass =
+    size === "compact"
+      ? "p-2"
+      : size === "small"
+        ? "p-2.5"
+        : "p-3"
+  const contentClass =
+    size === "compact"
+      ? "p-2 pt-0"
+      : size === "small"
+        ? "p-2.5 pt-0"
+        : "p-3 pt-0"
+  const titleClass = size === "compact" ? "text-[11px]" : size === "small" ? "text-xs" : "text-sm"
+  const descClass = size === "compact" ? "text-[10px]" : size === "small" ? "text-[11px]" : "text-xs"
+  const badgeClass = size === "compact" ? "text-[10px] px-1.5 py-0.5" : size === "small" ? "text-[11px] px-2 py-0.5" : "text-xs"
+  const cardScaleClass = size === "compact" ? "scale-[0.92]" : size === "small" ? "scale-[0.96]" : ""
+  const useOverlay = size !== "default" && !!item.imageUrl
+
   return (
-    <Card className="overflow-hidden border-border/50 bg-card hover:shadow-md transition-shadow">
+    <Card className={`overflow-hidden border-border/50 bg-card hover:shadow-md transition-shadow ${cardScaleClass}`}>
       {item.imageUrl && (
-        <div className="relative aspect-square w-full bg-muted">
+        <div className={`relative w-full ${imageSizeClass} bg-muted p-1.5`}>
           <Image
             src={item.imageUrl}
             alt={item.name}
             fill
-            className="object-cover"
+            className="object-contain"
             onError={(e) => {
               // Hide image on error
               (e.target as HTMLImageElement).style.display = "none"
             }}
           />
+          {useOverlay && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 via-background/70 to-transparent p-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className={`${titleClass} font-medium truncate`}>{item.name}</p>
+                  {item.brand && (
+                    <p className={`${descClass} text-muted-foreground truncate`}>{item.brand}</p>
+                  )}
+                </div>
+                <Badge variant="secondary" className={`${badgeClass} flex-shrink-0`}>
+                  {sourceLabel}
+                </Badge>
+              </div>
+            </div>
+          )}
         </div>
       )}
-      <CardHeader className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-sm font-medium truncate">{item.name}</CardTitle>
-            {item.brand && (
-              <CardDescription className="text-xs truncate">{item.brand}</CardDescription>
+      {!useOverlay && (
+        <>
+          <CardHeader className={headerClass}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <CardTitle className={`${titleClass} font-medium truncate`}>{item.name}</CardTitle>
+                {item.brand && (
+                  <CardDescription className={`${descClass} truncate`}>{item.brand}</CardDescription>
+                )}
+              </div>
+              <Badge variant="secondary" className={`${badgeClass} flex-shrink-0`}>
+                {sourceLabel}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className={contentClass}>
+            <div className="flex items-center justify-between">
+              {item.price && (
+                <span className="text-sm font-semibold text-foreground">
+                  ${item.price.toFixed(2)}
+                </span>
+              )}
+              {item.productUrl && (
+                <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
+                  <a href={item.productUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    View
+                  </a>
+                </Button>
+              )}
+            </div>
+            {item.colorHex && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <div
+                  className="w-4 h-4 rounded-full border border-border"
+                  style={{ backgroundColor: item.colorHex }}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {item.category || "Item"}
+                </span>
+              </div>
             )}
-          </div>
-          <Badge variant="secondary" className="text-xs flex-shrink-0">
-            {sourceLabel}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="p-3 pt-0">
-        <div className="flex items-center justify-between">
-          {item.price && (
-            <span className="text-sm font-semibold text-foreground">
-              ${item.price.toFixed(2)}
-            </span>
-          )}
-          {item.productUrl && (
-            <Button variant="ghost" size="sm" className="h-7 px-2" asChild>
-              <a href={item.productUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3 w-3 mr-1" />
-                View
-              </a>
-            </Button>
-          )}
-        </div>
-        {item.colorHex && (
-          <div className="flex items-center gap-1.5 mt-2">
-            <div
-              className="w-4 h-4 rounded-full border border-border"
-              style={{ backgroundColor: item.colorHex }}
-            />
-            <span className="text-xs text-muted-foreground">
-              {item.category || "Item"}
-            </span>
-          </div>
-        )}
-      </CardContent>
+          </CardContent>
+        </>
+      )}
     </Card>
   )
 }

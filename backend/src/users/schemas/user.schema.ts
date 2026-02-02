@@ -69,6 +69,9 @@ export class User {
       allowFacialAnalysis: { type: Boolean, default: true },
       storeColorHistory: { type: Boolean, default: true },
       contributeToTrendLearning: { type: Boolean, default: false },
+
+      // Feedback & Personalization
+      feedbackDecayDays: { type: Number, default: 7 },
       
       // Appearance
       theme: { type: String, enum: Theme, default: Theme.SYSTEM },
@@ -81,6 +84,7 @@ export class User {
       allowFacialAnalysis: true,
       storeColorHistory: true,
       contributeToTrendLearning: false,
+      feedbackDecayDays: 7,
       theme: Theme.SYSTEM,
     },
   })
@@ -95,6 +99,9 @@ export class User {
     allowFacialAnalysis: boolean;
     storeColorHistory: boolean;
     contributeToTrendLearning: boolean;
+
+    // Feedback & Personalization
+    feedbackDecayDays: number;
     
     // Appearance
     theme: Theme;

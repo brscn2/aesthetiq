@@ -129,6 +129,7 @@ export interface DoneEvent extends BaseStreamEvent {
   response: string;
   intent: "general" | "clothing" | null;
   items: ClothingItem[];
+  response_item_ids?: string[];
   workflow_status: "active" | "awaiting_clarification" | "completed";
   needs_clarification: boolean;
   clarification_question: string | null;

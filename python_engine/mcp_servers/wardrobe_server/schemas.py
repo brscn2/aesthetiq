@@ -2,44 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
-# -----------------------------------------------------------------------------
-# Enums (matching backend/src/wardrobe/schemas/wardrobe-item.schema.ts)
-# -----------------------------------------------------------------------------
-
-class Category(str, Enum):
-    TOP = "TOP"
-    BOTTOM = "BOTTOM"
-    SHOE = "SHOE"
-    ACCESSORY = "ACCESSORY"
-
-
-# -----------------------------------------------------------------------------
-# SeasonalPaletteScores type (matching backend)
-# -----------------------------------------------------------------------------
-
-class SeasonalPaletteScores(BaseModel):
-    """Seasonal color palette compatibility scores (0-1)."""
-    DARK_AUTUMN: Optional[float] = None
-    DARK_WINTER: Optional[float] = None
-    LIGHT_SPRING: Optional[float] = None
-    LIGHT_SUMMER: Optional[float] = None
-    MUTED_AUTUMN: Optional[float] = None
-    MUTED_SUMMER: Optional[float] = None
-    BRIGHT_SPRING: Optional[float] = None
-    BRIGHT_WINTER: Optional[float] = None
-    WARM_AUTUMN: Optional[float] = None
-    WARM_SPRING: Optional[float] = None
-    COOL_WINTER: Optional[float] = None
-    COOL_SUMMER: Optional[float] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields for flexibility
+from mcp_servers.shared.schemas import Category, SeasonalPaletteScores
 
 
 # -----------------------------------------------------------------------------
@@ -125,3 +92,66 @@ class FilterWardrobeItemsRequest(BaseModel):
 class FilterWardrobeItemsResponse(BaseModel):
     user_id: str
     items: List[WardrobeItem]
+
+
+# -----------------------------------------------------------------------------
+# Feedback request/response models
+# -----------------------------------------------------------------------------
+
+class SaveItemFeedbackRequest(BaseModel):
+    user_id: str
+    item_id: str
+    feedback: str
+    reason: Optional[str] = None
+    reason_text: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class SaveItemFeedbackResponse(BaseModel):
+    success: bool
+
+
+class GetDislikedItemsForSearchRequest(BaseModel):
+    user_id: str
+    limit: int = 500
+    decay_days: Optional[int] = None
+
+
+class GetDislikedItemsForSearchResponse(BaseModel):
+    item_ids: List[str]
+
+
+class ItemFeedbackMetadata(BaseModel):
+    item_id: str
+    feedback: str
+    reason: Optional[str] = None
+    reason_text: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class DislikedWardrobeItemRecord(BaseModel):
+    item: WardrobeItem
+    feedback: ItemFeedbackMetadata
+
+
+class ListDislikedWardrobeItemsRequest(BaseModel):
+    user_id: str
+    limit: int = 20
+    offset: int = 0
+
+
+class ListDislikedWardrobeItemsResponse(BaseModel):
+    user_id: str
+    items: List[DislikedWardrobeItemRecord]
+    limit: int
+    offset: int
+
+
+class DeleteItemFeedbackRequest(BaseModel):
+    user_id: str
+    item_id: str
+
+
+class DeleteItemFeedbackResponse(BaseModel):
+    success: bool

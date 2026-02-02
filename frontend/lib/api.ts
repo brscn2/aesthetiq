@@ -27,6 +27,7 @@ import type {
   UpdateWardrobeItemDto,
   User,
   WardrobeItem,
+  DislikedWardrobeItemsResponse,
   PersonaAnalysisStatus,
 } from "@/types/api";
 
@@ -143,6 +144,19 @@ const createWardrobeApi = (client: AxiosInstance) => ({
     client.patch(`/wardrobe/${id}`, data).then((res) => res.data),
   delete: (id: string): Promise<void> =>
     client.delete(`/wardrobe/${id}`).then(() => undefined),
+  getDislikedFeedback: (
+    limit = 20,
+    offset = 0,
+  ): Promise<DislikedWardrobeItemsResponse> =>
+    client
+      .get(`/wardrobe/feedback/disliked?limit=${limit}&offset=${offset}`)
+      .then((res) => res.data),
+  deleteFeedback: (itemId: string): Promise<void> =>
+    client.delete(`/wardrobe/feedback/${itemId}`).then(() => undefined),
+  getIntelligence: (): Promise<any> =>
+    client.get(`/wardrobe/intelligence/analysis`).then((res) => res.data),
+  getGapAnalysis: (): Promise<any> =>
+    client.get(`/wardrobe/intelligence/gap-analysis`).then((res) => res.data),
 });
 
 const createAnalysisApi = (client: AxiosInstance) => ({

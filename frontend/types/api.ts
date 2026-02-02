@@ -39,6 +39,9 @@ export interface UserSettings {
   allowFacialAnalysis: boolean;
   storeColorHistory: boolean;
   contributeToTrendLearning: boolean;
+
+  // Feedback & Personalization
+  feedbackDecayDays: number;
   
   // Appearance
   theme: Theme;
@@ -144,6 +147,28 @@ export interface UpdateWardrobeItemDto {
   notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
+}
+
+// Wardrobe Feedback Types
+export interface WardrobeFeedbackMetadata {
+  itemId: string;
+  feedback: 'dislike' | 'irrelevant' | 'like';
+  reason?: string;
+  reasonText?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DislikedWardrobeItemEntry {
+  item: WardrobeItem;
+  feedback: WardrobeFeedbackMetadata;
+}
+
+export interface DislikedWardrobeItemsResponse {
+  items: DislikedWardrobeItemEntry[];
+  limit: number;
+  offset: number;
+  total: number;
 }
 
 // Color Analysis Types

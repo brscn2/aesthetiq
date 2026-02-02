@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     # Crawler service
     CRAWLER_TARGET_URLS_PATH: Optional[str] = None  # Path to target URLs YAML file
     CACHE_FRESHNESS_DAYS: int = 30  # Days for cache freshness threshold
+    ENABLE_RETAILITEMS_FALLBACK: bool = False  # Enable fallback to retailitems if commerceitems empty
 
     # Server
     HOST: str = "0.0.0.0"

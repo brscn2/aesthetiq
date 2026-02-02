@@ -187,6 +187,16 @@ async def chat(
         
         # Always save the conversation turn, even if response is empty or error
         try:
+            response_item_ids = final_state.get("response_item_ids") or []
+            retrieved_items = final_state.get("retrieved_items") or []
+            if response_item_ids:
+                response_item_ids_set = {str(item_id) for item_id in response_item_ids}
+                retrieved_items = [
+                    item
+                    for item in retrieved_items
+                    if str(item.get("id") or item.get("_id")) in response_item_ids_set
+                ]
+
             await session_service.save_conversation_turn(
                 session_id=session_data.session_id,
                 user_message=request.message,
@@ -197,6 +207,8 @@ async def chat(
                     "intent": final_state.get("intent"),
                     "iteration": final_state.get("iteration", 0),
                     "workflow_status": workflow_status,
+                    "items": retrieved_items,
+                    "response_item_ids": response_item_ids,
                 },
             )
         except Exception as save_error:
@@ -391,10 +403,12 @@ async def chat_stream(
                 if event.type == "done":
                     final_response = event.content.get("response", "")
                     final_intent = event.content.get("intent")
+                    response_item_ids = event.content.get("response_item_ids", [])
                     final_state = {
                         "workflow_status": event.content.get("workflow_status", "completed"),
                         "intent": final_intent,
                         "retrieved_items": event.content.get("items", []),
+                        "response_item_ids": response_item_ids,
                         "extracted_filters": None,  # Not in done event, would need to track
                         "style_dna": None,  # Not in done event, would need to track
                         "user_profile": None,  # Not in done event, would need to track
@@ -405,6 +419,15 @@ async def chat_stream(
             try:
                 logger.info(f"Streaming: Saving conversation turn for session {session_data.session_id}")
                 response_to_save = final_response or "I apologize, but I encountered an issue processing your request. Please try again."
+                retrieved_items = (final_state or {}).get("retrieved_items") or []
+                response_item_ids = (final_state or {}).get("response_item_ids") or []
+                if response_item_ids:
+                    response_item_ids_set = {str(item_id) for item_id in response_item_ids}
+                    retrieved_items = [
+                        item
+                        for item in retrieved_items
+                        if str(item.get("id") or item.get("_id")) in response_item_ids_set
+                    ]
                 await session_service.save_conversation_turn(
                     session_id=session_data.session_id,
                     user_message=request.message,
@@ -414,6 +437,8 @@ async def chat_stream(
                         "intent": final_intent,
                         "streaming": True,
                         "workflow_status": final_state.get("workflow_status", "completed") if final_state else "completed",
+                        "items": retrieved_items,
+                        "response_item_ids": response_item_ids,
                     },
                 )
                 logger.info(f"Streaming: Successfully saved conversation turn for session {session_data.session_id}")
