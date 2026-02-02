@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { SettingsNav } from "@/components/settings/settings-nav";
 import { SettingsPanel } from "@/components/settings/settings-panel";
@@ -13,8 +14,24 @@ import { Button } from "@/components/ui/button";
 import { Settings as SettingsIcon, X } from "lucide-react";
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] = useState("Account");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+
+  // Map tab parameter to section name
+  const getInitialSection = () => {
+    if (tabParam === "virtual-try-on") return "Virtual Try-On";
+    return "Account";
+  };
+
+  const [activeSection, setActiveSection] = useState(getInitialSection());
   const [navOpen, setNavOpen] = useState(false);
+
+  // Update active section when tab parameter changes
+  useEffect(() => {
+    if (tabParam === "virtual-try-on") {
+      setActiveSection("Virtual Try-On");
+    }
+  }, [tabParam]);
 
   return (
     <DashboardLayout>
