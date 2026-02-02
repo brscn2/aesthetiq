@@ -4,15 +4,13 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
 
 from app.services.try_on_service import TryOnService
-from app.services.prompt_builder import PromptBuilder
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Initialize services
+# Initialize service
 try_on_service = TryOnService()
-prompt_builder = PromptBuilder()
 
 
 class TryOnItem(BaseModel):
@@ -44,11 +42,10 @@ class TryOnResponse(BaseModel):
 @router.post("/generate", response_model=TryOnResponse)
 async def generate_try_on(request: TryOnRequest):
     """
-    Generate a virtual try-on image.
+    Generate a virtual try-on image using IDM-VTON.
     
-    This endpoint takes a user photo and clothing items, then uses OpenAI's
-    Image Edit API to generate a photorealistic image of the person wearing
-    the selected clothing items.
+    This endpoint takes a user photo and clothing items, then uses IDM-VTON
+    to generate a photorealistic image of the person wearing the selected clothing.
     """
     try:
         # Validate input
@@ -69,25 +66,30 @@ async def generate_try_on(request: TryOnRequest):
             f"with {len(request.items)} items"
         )
         
-        # Convert items to dict for prompt builder
-        items_dict = {
-            category: item.model_dump()
-            for category, item in request.items.items()
-        }
-        
-        # Build prompt
-        prompt = prompt_builder.build_try_on_prompt(items_dict)
-        
         # Extract clothing image URLs
         clothing_image_urls = [item.imageUrl for item in request.items.values()]
         
-        logger.info(f"Calling OpenAI service with {len(clothing_image_urls)} clothing items")
+        # Build simple description for IDM-VTON
+        first_item = list(request.items.values())[0]
+        description_parts = []
+        if first_item.color:
+            description_parts.append(first_item.color)
+        if first_item.material:
+            description_parts.append(first_item.material)
+        if first_item.subCategory:
+            description_parts.append(first_item.subCategory)
+        elif first_item.name:
+            description_parts.append(first_item.name)
+        
+        garment_description = ' '.join(description_parts) if description_parts else "clothing item"
+        
+        logger.info(f"Calling IDM-VTON with {len(clothing_image_urls)} clothing items")
         
         # Generate try-on image
         image_base64 = await try_on_service.generate_try_on(
             user_photo_url=request.userPhotoUrl,
             clothing_image_urls=clothing_image_urls,
-            prompt=prompt
+            prompt=garment_description
         )
         
         logger.info("Try-on generation successful")
