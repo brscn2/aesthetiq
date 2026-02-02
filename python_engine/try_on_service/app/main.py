@@ -1,9 +1,8 @@
 """
 Virtual Try-On FastAPI application entry point.
 
-This service handles virtual try-on image generation using OpenAI's Image Edit API.
+This service handles virtual try-on image generation using IDM-VTON via Replicate API.
 """
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -22,14 +21,9 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown events."""
     # Startup
-    logger.info("Starting Virtual Try-On Service")
-    logger.info(f"OpenAI Model: {settings.OPENAI_MODEL}")
+    logger.info("Starting Virtual Try-On Service (IDM-VTON)")
+    logger.info(f"IDM-VTON Model: {settings.IDM_VTON_MODEL}")
     logger.info(f"Port: {settings.PORT}")
-    
-    # Create temp directory if it doesn't exist
-    os.makedirs(settings.TEMP_DIR, exist_ok=True)
-    logger.info(f"Temp directory: {settings.TEMP_DIR}")
-    
     logger.info("Virtual Try-On startup complete")
     
     yield
@@ -42,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Virtual Try-On service using OpenAI Image Edit API",
+    description="Virtual Try-On service using IDM-VTON via Replicate API",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",

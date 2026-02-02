@@ -2,21 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for health checks and MediaPipe/OpenCV
-# Using multiple attempts to handle different Debian versions
+# Install system dependencies for health checks
 RUN apt-get update && \
-    (apt-get install -y --no-install-recommends \
-        curl \
-        libglib2.0-0 \
-        libgomp1 \
-        libsm6 \
-        libxext6 \
-        libxrender1 \
-        libgl1 \
-        || apt-get install -y --no-install-recommends \
-        curl \
-        libglib2.0-0 \
-        libgomp1) && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

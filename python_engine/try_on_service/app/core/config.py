@@ -31,10 +31,6 @@ class Settings(BaseSettings):
     REPLICATE_API_TOKEN: str
     IDM_VTON_MODEL: str = "cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4"
     
-    # Image Processing
-    MAX_IMAGE_SIZE_MB: int = 10
-    TEMP_DIR: str = "/tmp/try_on_images"
-    
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "console"

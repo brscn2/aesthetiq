@@ -3,14 +3,14 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
 
-from app.services.try_on_service import TryOnService
+from app.services.idm_vton_service import IDMVTONService
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 # Initialize service
-try_on_service = TryOnService()
+idm_vton_service = IDMVTONService()
 
 
 class TryOnItem(BaseModel):
@@ -86,7 +86,7 @@ async def generate_try_on(request: TryOnRequest):
         logger.info(f"Calling IDM-VTON with {len(clothing_image_urls)} clothing items")
         
         # Generate try-on image
-        image_base64 = await try_on_service.generate_try_on(
+        image_base64 = await idm_vton_service.generate_try_on(
             user_photo_url=request.userPhotoUrl,
             clothing_image_urls=clothing_image_urls,
             prompt=garment_description
