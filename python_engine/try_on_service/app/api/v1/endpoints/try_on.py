@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
 
-from app.services.openai_service import OpenAIService
+from app.services.try_on_service import TryOnService
 from app.services.prompt_builder import PromptBuilder
 from app.core.logger import get_logger
 
@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Initialize services
-openai_service = OpenAIService()
+try_on_service = TryOnService()
 prompt_builder = PromptBuilder()
 
 
@@ -84,7 +84,7 @@ async def generate_try_on(request: TryOnRequest):
         logger.info(f"Calling OpenAI service with {len(clothing_image_urls)} clothing items")
         
         # Generate try-on image
-        image_base64 = await openai_service.edit_image(
+        image_base64 = await try_on_service.generate_try_on(
             user_photo_url=request.userPhotoUrl,
             clothing_image_urls=clothing_image_urls,
             prompt=prompt

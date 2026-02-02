@@ -11,7 +11,7 @@ class PromptBuilder:
     @staticmethod
     def build_try_on_prompt(items: Dict[str, Any]) -> str:
         """
-        Build a detailed prompt for virtual try-on based on clothing items.
+        Build a detailed, restrictive prompt for virtual try-on based on clothing items.
         
         Args:
             items: Dictionary of clothing items by category
@@ -46,34 +46,45 @@ class PromptBuilder:
             
             item_descriptions.append(' '.join(desc_parts))
         
-        # Build prompt based on item count
+        # Build restrictive prompt based on item count
         if item_count == 1:
             item_desc = item_descriptions[0]
-            prompt = f"""Create a photorealistic virtual try-on by seamlessly having the person in the first image wear the {item_desc} from the second image.
+            prompt = f"""Replace ONLY the clothing with the {item_desc} from the reference image.
 
-Instructions:
-- Replace or add ONLY the specific clothing piece, keeping everything else identical
-- Maintain the person's exact face, skin tone, body proportions, and pose
-- Ensure the new clothing fits naturally on their body with realistic shadows, wrinkles, and fabric draping
-- Match the lighting and color temperature of the original photo
-- Preserve the background and overall composition
-- Make the clothing appear as if it was originally worn in the photo
-- The final image should be indistinguishable from a real photograph of the person wearing this item."""
+ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
+1. DO NOT change, modify, or alter the person's FACE in any way
+2. DO NOT change hair, skin tone, facial features, or head shape
+3. DO NOT change the background, walls, floor, or any environmental elements
+4. DO NOT change the person's body proportions or pose
+5. ONLY modify the specific clothing area to match the reference garment
+
+The new {item_desc} must:
+- Fit naturally on the person's body with realistic wrinkles and fabric draping
+- Match the original photo's lighting, shadows, and color temperature
+- Appear as if it was originally worn in this exact photo
+- Maintain all original textures and details outside the clothing area
+
+CRITICAL: The face must remain 100% identical to the original. This is the highest priority."""
         
         else:
             items_list = ', '.join(item_descriptions[:-1]) + f', and {item_descriptions[-1]}'
-            prompt = f"""Create a photorealistic virtual try-on by seamlessly dressing the person in the first image with the provided {item_type}: {items_list}.
+            prompt = f"""Replace ONLY the specified clothing items with: {items_list}.
 
-Instructions:
-- Replace ONLY the clothing with the new {item_type}, keeping everything else identical
-- Maintain the person's exact face, skin tone, body proportions, and pose
-- Ensure the new clothing fits naturally on their body with realistic shadows, wrinkles, and fabric draping
-- Match the lighting and color temperature of the original photo
-- Preserve the background and overall composition
-- Make the clothing appear as if it was originally worn in the photo
-- For multiple items: coordinate them as a cohesive outfit
-- Result should look like a professional fashion photograph, not a digital overlay
-- The final image should be indistinguishable from a real photograph of the person wearing these {item_type}."""
+ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
+1. DO NOT change, modify, or alter the person's FACE in any way
+2. DO NOT change hair, skin tone, facial features, or head shape
+3. DO NOT change the background, walls, floor, or any environmental elements
+4. DO NOT change the person's body proportions or pose
+5. ONLY modify the specific clothing areas to match the reference garments
+
+The new {item_type} must:
+- Fit naturally on the person's body with realistic wrinkles and fabric draping
+- Coordinate together as a cohesive, stylish outfit
+- Match the original photo's lighting, shadows, and color temperature
+- Appear as if they were originally worn in this exact photo
+- Maintain all original textures and details outside the clothing areas
+
+CRITICAL: The face must remain 100% identical to the original. This is the highest priority."""
         
-        logger.debug(f"Built prompt for {item_count} items: {prompt[:100]}...")
+        logger.debug(f"Built restrictive prompt for {item_count} items")
         return prompt

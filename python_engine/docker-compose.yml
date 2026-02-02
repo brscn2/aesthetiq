@@ -171,6 +171,9 @@ services:
       - OPENAI_INPUT_FIDELITY=high
       - OPENAI_QUALITY=low
       - OPENAI_RESPONSE_FORMAT=b64_json
+    volumes:
+      # Mount uploads directory for mask debugging
+      - ./uploads:/app/uploads:rw
     networks:
       - aesthetiq-network
     healthcheck:

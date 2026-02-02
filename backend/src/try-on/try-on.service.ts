@@ -42,7 +42,7 @@ export class TryOnService {
             userId: dto.userId,
           },
           {
-            timeout: 60000, // 60 second timeout for image generation
+            timeout: 180000, // 180 seconds (3 minutes) for large images + OpenAI processing
           },
         ),
       );

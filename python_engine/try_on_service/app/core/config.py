@@ -29,10 +29,28 @@ class Settings(BaseSettings):
     
     # OpenAI Configuration
     OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4.1"
+    OPENAI_MODEL: str = "gpt-image-1.5"
     OPENAI_INPUT_FIDELITY: str = "high"
     OPENAI_QUALITY: str = "low"
     OPENAI_RESPONSE_FORMAT: str = "b64_json"
+    
+    # Replicate Configuration (IDM-VTON)
+    REPLICATE_API_TOKEN: str = ""  # Optional: Leave empty to use OpenAI
+    USE_IDM_VTON: bool = False  # Set to True to use IDM-VTON instead of OpenAI
+    IDM_VTON_MODEL: str = "cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4"
+    
+    # Masking Configuration
+    USE_MASKING: bool = True
+    MASK_FACE_PROTECTION: bool = True
+    MASK_BACKGROUND_PROTECTION: bool = True
+    MASK_FACE_HEIGHT_RATIO: float = 0.25  # Face area: top 25% of image
+    MASK_EDGE_MARGIN_RATIO: float = 0.05  # Background edge: 5% margin
+    MASK_HANDS_HEIGHT_RATIO: float = 0.15  # Hands area: bottom 15%
+    
+    # MediaPipe Segmentation
+    USE_MEDIAPIPE: bool = True  # Use MediaPipe instead of heuristic masking
+    MEDIAPIPE_MODEL_SELECTION: int = 1  # 0=general (faster), 1=landscape (better quality for full-body)
+    MEDIAPIPE_SEGMENTATION_THRESHOLD: float = 0.3  # Lower threshold = more person pixels detected
     
     # Image Processing
     MAX_IMAGE_SIZE_MB: int = 10
