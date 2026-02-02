@@ -42,14 +42,8 @@ export class IntelligenceService {
 
     // Fetch user data in parallel
     const [items, styleProfile, latestColorAnalysis] = await Promise.all([
-      this.wardrobeItemModel
-        .find({ userId })
-        .lean()
-        .exec(),
-      this.styleProfileModel
-        .findOne({ userId })
-        .lean()
-        .exec(),
+      this.wardrobeItemModel.find({ userId }).lean().exec(),
+      this.styleProfileModel.findOne({ userId }).lean().exec(),
       this.colorAnalysisModel
         .findOne({ userId })
         .sort({ scanDate: -1, createdAt: -1 })
@@ -63,7 +57,9 @@ export class IntelligenceService {
     }
 
     // Calculate all dimensions
-    const userPalette = this.normalizeSeasonToPalette(latestColorAnalysis?.season);
+    const userPalette = this.normalizeSeasonToPalette(
+      latestColorAnalysis?.season,
+    );
     const dimensions: DimensionalMetrics = {
       variety: calculateVarietyScore(items),
       seasonalCompatibility: calculateSeasonalCompatibility(items, userPalette),
@@ -80,10 +76,10 @@ export class IntelligenceService {
     // Identify primary strengths and opportunities
     const dimensionEntries = Object.entries(dimensions);
     const strongest = dimensionEntries.reduce((max, [key, val]) =>
-      val > max[1] ? [key, val] : max
+      val > max[1] ? [key, val] : max,
     )[0];
     const weakest = dimensionEntries.reduce((min, [key, val]) =>
-      val < min[1] ? [key, val] : min
+      val < min[1] ? [key, val] : min,
     )[0];
 
     // Calculate item rotation risk for underused pieces
@@ -108,12 +104,11 @@ export class IntelligenceService {
   /**
    * Calculate usage patterns based on last-worn dates
    */
-  private normalizeSeasonToPalette(season?: string | null): SeasonalPalette | undefined {
+  private normalizeSeasonToPalette(
+    season?: string | null,
+  ): SeasonalPalette | undefined {
     if (!season) return undefined;
-    const normalized = season
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, '_');
+    const normalized = season.trim().toUpperCase().replace(/\s+/g, '_');
     return (Object.values(SeasonalPalette) as string[]).includes(normalized)
       ? (normalized as SeasonalPalette)
       : undefined;
@@ -125,14 +120,14 @@ export class IntelligenceService {
    */
   private calculateComboPotential(items: any[]): number {
     const topCount = items.filter((i) => i.category === 'TOP').length || 1;
-    const bottomCount = items.filter((i) => i.category === 'BOTTOM').length || 1;
+    const bottomCount =
+      items.filter((i) => i.category === 'BOTTOM').length || 1;
     const shoeCount = items.filter((i) => i.category === 'SHOE').length || 1;
 
     // Conservative estimate: cap at reasonable number to avoid inflated metrics
     const combos = Math.min(topCount * bottomCount * shoeCount, 999);
     return combos;
   }
-
 
   async getSmartGapAnalysis(userId: string): Promise<SmartGapAnalysis> {
     const [items, styleProfile] = await Promise.all([
@@ -160,7 +155,8 @@ export class IntelligenceService {
 
     const score =
       (dimensions.variety as number) * weights.variety +
-      (dimensions.seasonalCompatibility as number) * weights.seasonalCompatibility +
+      (dimensions.seasonalCompatibility as number) *
+        weights.seasonalCompatibility +
       (dimensions.archetypeAlignment as number) * weights.archetypeAlignment +
       (dimensions.colorHarmony as number) * weights.colorHarmony;
 

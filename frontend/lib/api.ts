@@ -31,7 +31,6 @@ import type {
   DislikedWardrobeItemsResponse,
   PersonaAnalysisStatus,
 } from "@/types/api";
-} from "@/types/api";
 
 // Re-export types for admin use
 export type {
@@ -39,7 +38,6 @@ export type {
   WardrobeItem,
   CreateWardrobeItemDto,
   UpdateWardrobeItemDto,
-};
 };
 
 // Import additional types for admin
@@ -55,7 +53,6 @@ import type {
   CommerceSearchOptions,
   CommerceStats,
 } from "@/types/api";
-} from "@/types/api";
 
 // Re-export commerce and retailer types
 export type {
@@ -70,10 +67,7 @@ export type {
   CommerceSearchOptions,
   CommerceStats,
 };
-};
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -83,7 +77,6 @@ const createHttpClient = () => {
     headers: {
       "Content-Type": "application/json",
     },
-  });
   });
 
   client.interceptors.response.use(
@@ -96,22 +89,12 @@ const createHttpClient = () => {
       return Promise.reject(error);
     },
   );
-  );
 
-  return client;
-};
   return client;
 };
 
 const createUserApi = (client: AxiosInstance) => ({
   // Current user endpoints (authenticated)
-  getCurrentUser: (): Promise<User> =>
-    client.get("/users/me").then((res) => res.data),
-  getCurrentUserSettings: (): Promise<User["settings"]> =>
-    client.get("/users/me/settings").then((res) => res.data),
-  updateCurrentUserSettings: (
-    data: Partial<User["settings"]>,
-  ): Promise<User["settings"]> =>
   getCurrentUser: (): Promise<User> =>
     client.get("/users/me").then((res) => res.data),
   getCurrentUserSettings: (): Promise<User["settings"]> =>
@@ -158,17 +141,6 @@ const createWardrobeApi = (client: AxiosInstance) => ({
     if (colorHex) params.append("colorHex", colorHex);
     if (search) params.append("search", search);
     return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data);
-  getAll: (
-    userId: string,
-    category?: Category,
-    colorHex?: string,
-    search?: string,
-  ): Promise<WardrobeItem[]> => {
-    const params = new URLSearchParams({ userId });
-    if (category) params.append("category", category);
-    if (colorHex) params.append("colorHex", colorHex);
-    if (search) params.append("search", search);
-    return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data);
   },
   getById: (id: string): Promise<WardrobeItem> =>
     client.get(`/wardrobe/${id}`).then((res) => res.data),
@@ -202,25 +174,9 @@ const createAnalysisApi = (client: AxiosInstance) => ({
     client.get(`/analysis/${id}`).then((res) => res.data),
   create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> =>
     client.post("/analysis", data).then((res) => res.data),
-  getLatest: (): Promise<ColorAnalysis> =>
-    client.get(`/analysis/latest`).then((res) => res.data),
-  getAllByUserId: (): Promise<ColorAnalysis[]> =>
-    client.get(`/analysis/user`).then((res) => res.data),
-  getById: (id: string): Promise<ColorAnalysis> =>
-    client.get(`/analysis/${id}`).then((res) => res.data),
-  create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> =>
-    client.post("/analysis", data).then((res) => res.data),
   analyzeImage: (file: File): Promise<ColorAnalysis> => {
     const formData = new FormData();
     formData.append("file", file);
-    return client
-      .post("/analysis/analyze-image", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        timeout: 60000, // 60 second timeout for analysis
-      })
-      .then((res) => res.data);
     return client
       .post("/analysis/analyze-image", formData, {
         headers: {
