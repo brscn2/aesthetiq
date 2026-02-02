@@ -14,7 +14,9 @@ import {
 } from '@nestjs/swagger';
 import { CommerceService } from './commerce.service';
 import { SearchCommerceItemsDto } from './dto/search-commerce-items.dto';
+import { FindStyleItemsDto } from './dto/find-style-items.dto';
 import { CommerceItem } from './schemas/commerce-item.schema';
+import { ScrapedCommerceItem } from './schemas/scraped-commerce-item.schema';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 
 @ApiTags('commerce')
@@ -33,6 +35,16 @@ export class CommerceController {
     @Query() searchDto: SearchCommerceItemsDto,
   ): Promise<{ items: CommerceItem[]; total: number }> {
     return this.commerceService.findAll(searchDto);
+  }
+
+  @Get('find-your-style')
+  @ApiOperation({ summary: 'Get items from scraped commerce collection for style discovery' })
+  @ApiResponse({ status: 200, description: 'Style items retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Authentication required' })
+  async findYourStyle(
+    @Query() findStyleDto: FindStyleItemsDto,
+  ): Promise<{ items: ScrapedCommerceItem[]; total: number; page: number; limit: number }> {
+    return this.commerceService.findStyleItems(findStyleDto);
   }
 
   @Get(':id')

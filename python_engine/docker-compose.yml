@@ -128,11 +128,17 @@ services:
     networks:
       - aesthetiq-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8004/health').raise_for_status()"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8004/health').raise_for_status()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s  # Model loading takes time
+      start_period: 60s # Model loading takes time
     restart: unless-stopped
     deploy:
       resources:
@@ -145,6 +151,44 @@ services:
           #   - driver: nvidia
           #     count: 1
           #     capabilities: [gpu]
+
+  # =============================================================================
+  # VIRTUAL TRY-ON SERVICE - OpenAI Image Edit (Port 8005 - Internal Only)
+  # =============================================================================
+  try_on_service:
+    build:
+      context: ./try_on_service
+      dockerfile: Dockerfile
+    container_name: aesthetiq-try-on
+    # No external port exposure - internal only
+    expose:
+      - "8005"
+    env_file:
+      - .env
+    environment:
+      - PORT=8005
+      - OPENAI_MODEL=gpt-image-1
+      - OPENAI_INPUT_FIDELITY=high
+      - OPENAI_QUALITY=low
+      - OPENAI_RESPONSE_FORMAT=b64_json
+    volumes:
+      # Mount uploads directory for mask debugging
+      - ./uploads:/app/uploads:rw
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
 
   # =============================================================================
   # MCP SERVERS - Unified MCP tool service (Port 8010 - Internal Only)

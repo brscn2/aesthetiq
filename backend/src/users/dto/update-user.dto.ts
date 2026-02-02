@@ -4,6 +4,9 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsInt,
+  Min,
+  Max,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -42,6 +45,14 @@ class UserSettingsDto {
   @ApiProperty({ required: false })
   @IsOptional()
   contributeToTrendLearning?: boolean;
+
+  // Feedback & Personalization
+  @ApiProperty({ required: false, description: 'Days before disliked feedback decays (1-30)' })
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  @IsOptional()
+  feedbackDecayDays?: number;
 
   // Appearance
   @ApiProperty({ enum: Theme, required: false })

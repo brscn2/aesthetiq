@@ -4,10 +4,13 @@ This agent handles the "clothing" intent path:
 - Fetches user context (profile, style DNA)
 - Searches commerce, wardrobe, or both based on scope
 - Uses web search as fallback when no items found
+- Integrates user feedback to soft-de-rank disliked items
+- Handles outfit decomposition for occasion-based requests
 """
 from typing import Any, Dict, List, Optional
 import hashlib
 import json
+import asyncio
 
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
@@ -21,6 +24,65 @@ from app.core.logger import get_logger
 from app.utils.color_utils import get_color_name, get_color_name_from_hex_list
 
 logger = get_logger(__name__)
+
+
+async def _get_user_feedback_decay_days(user_id: str) -> int:
+    """
+    Fetch user-configured decay days for disliked feedback.
+    Defaults to 7 days if unavailable.
+    """
+    try:
+        tools_dict = await get_mcp_tools()
+        for tool in tools_dict:
+            if hasattr(tool, 'name') and tool.name == 'get_user_profile':
+                result = await tool.ainvoke({"user_id": user_id})
+                profile = result.get("profile") if isinstance(result, dict) else result
+                settings = (profile or {}).get("settings", {}) if isinstance(profile, dict) else {}
+                decay_days = settings.get("feedbackDecayDays") or settings.get("feedback_decay_days")
+                if isinstance(decay_days, int) and decay_days > 0:
+                    return decay_days
+                return 7
+        return 7
+    except Exception as e:
+        logger.error(f"Error fetching feedback decay days: {e}")
+        return 7
+
+
+async def _get_user_disliked_items(user_id: str, decay_days: Optional[int] = None) -> List[str]:
+    """
+    Fetch list of user's disliked items for soft-de-ranking in search.
+    
+    Args:
+        user_id: The user's ID
+        
+    Returns:
+        List of disliked item IDs
+    """
+    try:
+        # Get MCP tools to access wardrobe server
+        tools_dict = await get_mcp_tools()
+        
+        # Look for the get_disliked_items_for_search tool
+        for tool in tools_dict:
+            if hasattr(tool, 'name') and tool.name == 'get_disliked_items_for_search':
+                logger.info(f"Found get_disliked_items_for_search tool")
+                # Invoke the tool
+                result = await tool.ainvoke({"user_id": user_id, "decay_days": decay_days})
+                if isinstance(result, list):
+                    logger.info(f"Retrieved {len(result)} disliked items for user {user_id}")
+                    return result
+                if isinstance(result, dict):
+                    item_ids = result.get("item_ids") or []
+                    if isinstance(item_ids, list):
+                        logger.info(f"Retrieved {len(item_ids)} disliked items for user {user_id}")
+                        return item_ids
+                return []
+        
+        logger.debug("get_disliked_items_for_search tool not available")
+        return []
+    except Exception as e:
+        logger.error(f"Error fetching disliked items: {e}")
+        return []
 
 
 def convert_filters_to_mcp_format(filters: Dict[str, Any]) -> Dict[str, Any]:
@@ -65,23 +127,79 @@ def convert_filters_to_mcp_format(filters: Dict[str, Any]) -> Dict[str, Any]:
 RECOMMENDER_AGENT_PROMPT = """You are the Clothing Recommender for AesthetIQ, a fashion AI assistant.
 
 Your role is to find and recommend clothing items based on the user's request.
+**WARDROBE-FIRST PHILOSOPHY**: Suggest items users already own before showing new purchases.
+
+**CRITICAL: Valid Category Values**
+The system ONLY supports these 4 categories (case-sensitive, all caps):
+- TOP (for all upper body items including jackets, coats, sweaters, shirts, blouses, dresses)
+- BOTTOM (for all lower body items including pants, jeans, shorts, skirts)
+- SHOE (for all footwear including sneakers, boots, heels, sandals)
+- ACCESSORY (for all accessories including bags, jewelry, belts, scarves, hats, sunglasses)
+
+**Category Mapping Rules - READ CAREFULLY:**
+- Jackets, Coats, Blazers, Cardigans → category: "TOP", subCategory: "Jacket" (or "Coat", "Blazer")
+- Dresses → category: "TOP", subCategory: "Dress"
+- Shirts, T-Shirts, Blouses → category: "TOP", subCategory: "Shirt" (or "T-Shirt", "Blouse")
+- Sweaters → category: "TOP", subCategory: "Sweater"
+- Jeans, Pants, Trousers → category: "BOTTOM", subCategory: "Jeans" (or "Pants")
+- Shorts → category: "BOTTOM", subCategory: "Shorts"
+- Skirts → category: "BOTTOM", subCategory: "Skirt"
+- Bags, Purses, Backpacks → category: "ACCESSORY", subCategory: "Bag"
+- Jewelry → category: "ACCESSORY", subCategory: "Jewelry"
+- Belts → category: "ACCESSORY", subCategory: "Belt"
+- Scarves → category: "ACCESSORY", subCategory: "Scarf"
+- Hats → category: "ACCESSORY", subCategory: "Hat"
+- Sneakers, Boots, Shoes → category: "SHOE", subCategory: "Sneakers" (or "Boots", "Heels")
+
+NEVER use categories like "OUTERWEAR", "CLOTHING", "APPAREL" - these are INVALID and will cause errors.
+If user asks for outerwear/jacket/coat → use category "TOP"
 
 **Tool Usage Guidelines:**
 
 1. Get user's style_dna FIRST to personalize recommendations
 
-2. For clothing searches:
-   - For wardrobe scope: use `search_wardrobe_items`
-   - For retailer scope: **ALWAYS use `search_retailer_items`** - This searches the retailitems collection with fresh, crawler-scraped items from retailers like UNIQLO and Zalando
+2. **WARDROBE-FIRST APPROACH** (for "both" or "wardrobe" scope):
+    - ALWAYS search `search_wardrobe_items` first if user has items in their wardrobe
+    - This finds items they already own (fastest, free, sustainable)
+    - If wardrobe search returns good results, return those immediately
+    - Only add retailer items if wardrobe search returns few results (<3 items)
 
-3. **IMPORTANT: Handle outfit decomposition**
+3. **For clothing searches**:
+   - For wardrobe scope: use `search_wardrobe_items` with filters (category, subCategory)
+    - For commerce scope: use `search_retailer_items` - This searches the retailitems collection with fresh, crawler-scraped items from retailers like UNIQLO and Zalando
+    - For both scope: Search wardrobe FIRST, then commerce if needed
+   
+   **MANDATORY: ALWAYS use filters parameter with category and subCategory**
+   - You MUST extract the category and subCategory from the user's query using the mapping rules above
+   - Category must be EXACTLY one of: "TOP", "BOTTOM", "SHOE", "ACCESSORY" (all caps, as written)
+   - SubCategory is the specific item type (use title case, e.g., "Bag", "Jacket", "Jeans")
+   - **IMPORTANT: Only include filter fields that have actual values**
+   - DO NOT pass None or empty values for optional list fields (colors, disliked_item_ids)
+   - Only include: category (required), subCategory (required) in the filters dict
+   - Omit optional fields like colors, brand if not being used
+   - Example correct filters: {"category": "ACCESSORY", "subCategory": "Bag"}
+   - Example WRONG filters: {"category": "ACCESSORY", "subCategory": "Bag", "colors": None} ← Do NOT do this
+   - NEVER call search_retailer_items or search_wardrobe_items without the filters parameter
+   - This prevents returning wrong item categories (e.g., jeans when searching for bags)
+
+4. **IMPORTANT: Handle outfit decomposition**
    - If you receive decomposed sub_categories (e.g., for a gym outfit: ["T-shirt", "Sweatpants", "Sneakers"]):
-     * Search for EACH sub_category separately
-     * Combine the results from all searches
-     * Return items from all searches together
-   - Example: For gym outfit, make 3 searches: one for T-shirt, one for Sweatpants, one for Sneakers
+      * Search for EACH sub_category separately in wardrobe first
+      * Then search commerce if wardrobe results are sparse
+      * Combine results prioritizing wardrobe items over new items
+    - Example: For gym outfit with "both" scope:
+      1. Search wardrobe for T-shirt with filters: {category: "TOP", subCategory: "T-Shirt"}
+      2. Search wardrobe for Sweatpants with filters: {category: "BOTTOM", subCategory: "Sweatpants"}
+      3. Search wardrobe for Sneakers with filters: {category: "SHOE", subCategory: "Sneakers"}
+      4. If any category missing from wardrobe, search commerce for that category only with proper filters
 
-4. Keep tool usage minimal - ideally 2-3 calls maximum (style_dna + one or more searches).
+5. **Graceful Fallback Ranking**:
+   - Search tools return results ranked by relevance + Style DNA alignment (70% semantic + 30% color season)
+   - If NO items match the user's Style DNA palette: Return all results ranked by semantic relevance alone
+   - NEVER return zero results - keep searching with broader terms if needed
+   - If Style DNA search fails: Fall back to semantic search without color filtering
+
+6. Keep tool usage minimal - ideally 2-5 calls maximum (style_dna + searches for each item type).
 Return results immediately after finding items.
 """
 
@@ -806,6 +924,52 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             }
         
         logger.info(f"Clothing recommender has {len(tools)} tools available")
+
+        # Prefetch user profile + style DNA for personalization (even if agent doesn’t call tools)
+        prefetched_user_profile = state.get("user_profile")
+        prefetched_style_dna = state.get("style_dna")
+        tools_by_name = {tool.name: tool for tool in tools if hasattr(tool, "name")}
+
+        if not prefetched_user_profile and "get_user_profile" in tools_by_name:
+            try:
+                tool_result = await tools_by_name["get_user_profile"].ainvoke({"user_id": user_id})
+                prefetched_user_profile = _extract_dict_value(tool_result, "profile") or tool_result
+                if trace_id:
+                    tracing_service.log_tool_call(
+                        trace_id=trace_id,
+                        tool_name="get_user_profile",
+                        input_params={"user_id": user_id},
+                        output=str(tool_result)[:500],
+                    )
+            except Exception as e:
+                logger.warning(f"[RECOMMENDER] Failed to prefetch user profile: {e}")
+
+        if not prefetched_style_dna:
+            for tool_name in ("get_style_dna", "get_color_season", "get_recommended_colors"):
+                tool = tools_by_name.get(tool_name)
+                if not tool:
+                    continue
+                try:
+                    tool_result = await tool.ainvoke({"user_id": user_id})
+                    extracted = _extract_dict_value(tool_result, "style_dna", "color_season", "colors")
+                    if extracted:
+                        prefetched_style_dna = {**(prefetched_style_dna or {}), **extracted} if prefetched_style_dna else extracted
+                    if trace_id:
+                        tracing_service.log_tool_call(
+                            trace_id=trace_id,
+                            tool_name=tool_name,
+                            input_params={"user_id": user_id},
+                            output=str(tool_result)[:500],
+                        )
+                except Exception as e:
+                    logger.warning(f"[RECOMMENDER] Failed to prefetch {tool_name}: {e}")
+        
+        # Fetch user's disliked items for soft de-ranking in search results
+        decay_days = await _get_user_feedback_decay_days(user_id)
+        disliked_items = await _get_user_disliked_items(user_id, decay_days=decay_days)
+        disliked_context = ""
+        if disliked_items:
+            disliked_context = f"\n\nNote: User has previously disliked {len(disliked_items)} items. These will be soft-de-ranked (reduced priority) in results if they appear."
         
         # Create and invoke the ReAct agent
         agent = create_react_agent(llm_service.llm, tools, prompt=RECOMMENDER_AGENT_PROMPT)
@@ -823,10 +987,13 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
         if refinement_notes and iteration > 0:
             refinement_context = f"\n\nRefinement needed (attempt {iteration + 1}): {', '.join(refinement_notes)}"
         
+        profile_context = f"\n\nUser profile: {prefetched_user_profile}" if prefetched_user_profile else ""
+        style_context = f"\n\nUser style DNA: {prefetched_style_dna}" if prefetched_style_dna else ""
+
         search_request = f"""User request: {message}
-User ID: {user_id}
-Search scope: {search_scope}
-Filters: {filter_str}{decomposition_context}{refinement_context}"""
+    User ID: {user_id}
+    Search scope: {search_scope}
+    Filters: {filter_str}{decomposition_context}{refinement_context}{disliked_context}{profile_context}{style_context}"""
         
         agent_result = await agent.ainvoke({"messages": [HumanMessage(content=search_request)]})
         
@@ -843,8 +1010,8 @@ Filters: {filter_str}{decomposition_context}{refinement_context}"""
             logger.info(f"[RECOMMENDER] Starting fresh search for iteration {iteration + 1} (previous had {len(previous_items)} items)")
         else:
             retrieved_items = []
-        user_profile = None
-        style_dna = None
+        user_profile = prefetched_user_profile
+        style_dna = prefetched_style_dna
         tool_call_ids = {}
         
         for msg in agent_result["messages"]:
@@ -1044,6 +1211,7 @@ Filters: {filter_str}{decomposition_context}{refinement_context}"""
             "style_dna": style_dna,
             "search_sources_used": search_sources_used,
             "fallback_used": fallback_used,
+            "item_feedback_applied": len(disliked_items) > 0,  # Track if feedback was applied
         }
         
     except Exception as e:

@@ -7,6 +7,7 @@ import {
   AnalyzeClothingResponse,
 } from './dto/analyze-clothing.dto';
 import { ImageAnalysis } from '../style-profile/schemas/image-analysis-cache.schema';
+import { SmartGapAnalysis, GapRecommendation } from '../wardrobe/intelligence/intelligence.types';
 
 // CSS color names to hex mapping (+ custom fashion colors)
 const COLOR_MAP: Record<string, string> = {
@@ -55,8 +56,15 @@ interface CacheEntry {
   timestamp: number;
 }
 
+interface GapCacheEntry {
+  result: SmartGapAnalysis;
+  timestamp: number;
+}
+
 // Cache TTL: 1 hour (in milliseconds)
 const CACHE_TTL = 60 * 60 * 1000;
+// Gap analysis cache TTL: 24 hours
+const GAP_CACHE_TTL = 24 * 60 * 60 * 1000;
 // Max cache size to prevent memory issues
 const MAX_CACHE_SIZE = 500;
 
@@ -66,6 +74,7 @@ export class AiService {
   private openai: OpenAI;
   // In-memory cache for analysis results
   private analysisCache: Map<string, CacheEntry> = new Map();
+  private gapAnalysisCache: Map<string, GapCacheEntry> = new Map();
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -81,6 +90,37 @@ export class AiService {
   private generateCacheKey(dto: AnalyzeClothingDto): string {
     const data = dto.imageUrl || dto.imageBase64 || '';
     return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  private generateGapCacheKey(input: {
+    userId: string;
+    styleProfile: any;
+    wardrobeItems: any[];
+  }): string {
+    const style = input.styleProfile
+      ? {
+          archetype: input.styleProfile.archetype,
+          sliders: input.styleProfile.sliders,
+          negativeConstraints: input.styleProfile.negativeConstraints,
+          favoriteBrands: input.styleProfile.favoriteBrands,
+          sizes: input.styleProfile.sizes,
+          fitPreferences: input.styleProfile.fitPreferences,
+          budgetRange: input.styleProfile.budgetRange,
+          maxPricePerItem: input.styleProfile.maxPricePerItem,
+          updatedAt: input.styleProfile.updatedAt,
+        }
+      : {};
+
+    const wardrobe = input.wardrobeItems.map((item) => ({
+      category: item.category,
+      subCategory: item.subCategory,
+      brand: item.brand,
+      colors: item.colors,
+      notes: item.notes,
+    }));
+
+    const payload = JSON.stringify({ userId: input.userId, style, wardrobe });
+    return crypto.createHash('sha256').update(payload).digest('hex');
   }
 
   /**
@@ -117,6 +157,32 @@ export class AiService {
       timestamp: Date.now(),
     });
     this.logger.log(`Cached analysis result (key: ${key.substring(0, 8)}...)`);
+  }
+
+  private getGapCachedResult(key: string): SmartGapAnalysis | null {
+    const entry = this.gapAnalysisCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > GAP_CACHE_TTL) {
+      this.gapAnalysisCache.delete(key);
+      return null;
+    }
+    this.logger.log(`Cache hit for gap analysis (key: ${key.substring(0, 8)}...)`);
+    return entry.result;
+  }
+
+  private setGapCachedResult(key: string, result: SmartGapAnalysis): void {
+    if (this.gapAnalysisCache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = this.gapAnalysisCache.keys().next().value;
+      if (oldestKey) {
+        this.gapAnalysisCache.delete(oldestKey);
+      }
+    }
+
+    this.gapAnalysisCache.set(key, {
+      result,
+      timestamp: Date.now(),
+    });
+    this.logger.log(`Cached gap analysis result (key: ${key.substring(0, 8)}...)`);
   }
 
   async analyzeClothing(dto: AnalyzeClothingDto): Promise<AnalyzeClothingResponse> {
@@ -545,5 +611,131 @@ The description should be personalized and specific to their style, not generic.
     };
 
     return defaultDescriptions[archetype] || 'Your unique style profile is being developed based on your preferences and wardrobe.';
+  }
+
+  async generateWardrobeGapAnalysis(input: {
+    userId: string;
+    styleProfile: any;
+    wardrobeItems: any[];
+  }): Promise<SmartGapAnalysis> {
+    if (!process.env.OPENAI_API_KEY) {
+      return { recommendations: [], generatedAt: new Date() };
+    }
+
+    const cacheKey = this.generateGapCacheKey(input);
+    const cached = this.getGapCachedResult(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const styleProfile = input.styleProfile || {};
+    const wardrobeSummary = (input.wardrobeItems || []).map((item) => ({
+      category: item.category,
+      subCategory: item.subCategory,
+      brand: item.brand,
+      colors: item.colors,
+      notes: item.notes,
+    }));
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a fashion stylist. Recommend wardrobe gaps based on style profile, preferences, and current wardrobe. Return ONLY valid JSON.',
+          },
+          {
+            role: 'user',
+            content: `Generate 3-5 wardrobe gap recommendations as JSON with fields:
+{
+  "recommendations": [
+    {
+      "title": string,
+      "category": string,
+      "reason": string,
+      "alignmentScore": number (0-100),
+      "priceRange": string (optional)
+    }
+  ]
+}
+
+Rules:
+- Use the user's budget range if provided (budget/mid-range/premium/luxury) to set priceRange.
+- Respect negative constraints and style preferences.
+- Favor items that increase outfit versatility and align with their archetype.
+
+Style Profile:
+${JSON.stringify({
+  archetype: styleProfile.archetype,
+  sliders: styleProfile.sliders,
+  negativeConstraints: styleProfile.negativeConstraints,
+  favoriteBrands: styleProfile.favoriteBrands,
+  sizes: styleProfile.sizes,
+  fitPreferences: styleProfile.fitPreferences,
+  budgetRange: styleProfile.budgetRange,
+  maxPricePerItem: styleProfile.maxPricePerItem,
+})}
+
+Wardrobe Items:
+${JSON.stringify(wardrobeSummary)}
+`,
+          },
+        ],
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      const parsed = this.parseGapAnalysisResponse(content);
+      const result: SmartGapAnalysis = {
+        recommendations: parsed,
+        generatedAt: new Date(),
+      };
+
+      this.setGapCachedResult(cacheKey, result);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`OpenAI gap analysis failed: ${error.message}`, error.stack);
+      return { recommendations: [], generatedAt: new Date() };
+    }
+  }
+
+  private parseGapAnalysisResponse(content: string): GapRecommendation[] {
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith('```json')) {
+      jsonStr = jsonStr.slice(7);
+    }
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.slice(3);
+    }
+    if (jsonStr.endsWith('```')) {
+      jsonStr = jsonStr.slice(0, -3);
+    }
+    jsonStr = jsonStr.trim();
+
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const recommendations = Array.isArray(parsed.recommendations)
+        ? parsed.recommendations
+        : [];
+
+      return recommendations
+        .map((rec: any) => ({
+          title: typeof rec.title === 'string' ? rec.title : 'Recommendation',
+          category: typeof rec.category === 'string' ? rec.category : undefined,
+          reason: typeof rec.reason === 'string' ? rec.reason : 'Complements your wardrobe',
+          alignmentScore: typeof rec.alignmentScore === 'number' ? rec.alignmentScore : undefined,
+          priceRange: typeof rec.priceRange === 'string' ? rec.priceRange : undefined,
+        }))
+        .slice(0, 5);
+    } catch (error) {
+      this.logger.warn('Failed to parse gap analysis JSON');
+      return [];
+    }
   }
 }

@@ -33,7 +33,9 @@ export default function DashboardPage() {
           session.messages.map((msg) => ({
             role: msg.role,
             content: msg.content,
-            timestamp: msg.timestamp,
+                timestamp: msg.timestamp,
+                items: msg.metadata?.items,
+                metadata: msg.metadata,
           }))
         )
       } catch (error) {

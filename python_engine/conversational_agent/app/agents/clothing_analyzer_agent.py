@@ -2,6 +2,7 @@
 
 This agent evaluates the retrieved clothing items and decides:
 - APPROVE: Items match the query and style DNA well
+- APPROVE_WITH_FEEDBACK: Items are acceptable, but user wants to mark some as disliked before showing
 - REFINE: Items don't match well, provide improvement suggestions
 - CLARIFY: Query is too vague, ask clarifying question
 """
@@ -9,13 +10,22 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from app.workflows.state import ConversationState
+from app.workflows.state import ConversationState, ItemFeedback, ItemFeedbackType, ItemFeedbackReason
 from app.services.llm_service import get_llm_service
 from app.services.tracing.langfuse_service import get_tracing_service
+from app.mcp import get_mcp_tools
 from app.core.config import get_settings
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class ItemFeedbackRecord(BaseModel):
+    """Item feedback to save."""
+    item_id: str = Field(description="ID of the item")
+    feedback: Literal["like", "dislike", "irrelevant"] = Field(description="Type of feedback")
+    reason: Optional[str] = Field(None, description="Reason code: wrong_color, wrong_size, too_expensive, not_style, not_occasion, already_have, other")
+    reason_text: Optional[str] = Field(None, description="Free-form reason text if reason is 'other'")
 
 
 class RefinementFilters(BaseModel):
@@ -31,8 +41,8 @@ class RefinementFilters(BaseModel):
 
 class AnalysisDecision(BaseModel):
     """Structured output for analysis decision."""
-    decision: Literal["approve", "refine", "clarify"] = Field(
-        description="Decision: 'approve' if items are good, 'refine' if need improvement, 'clarify' if query is vague"
+    decision: Literal["approve", "approve_with_feedback", "refine", "clarify"] = Field(
+        description="Decision: 'approve' if items are good, 'approve_with_feedback' if user wants to mark items before approval, 'refine' if need improvement, 'clarify' if query is vague"
     )
     confidence: float = Field(
         description="Confidence score between 0 and 1",
@@ -50,6 +60,10 @@ class AnalysisDecision(BaseModel):
         None,
         description="Question to ask the user (if decision is 'clarify')"
     )
+    item_feedback: Optional[List[ItemFeedbackRecord]] = Field(
+        None,
+        description="Items to mark as disliked before showing results (if decision is 'approve_with_feedback')"
+    )
 
 
 ANALYZER_PROMPT = """You are the Clothing Analyzer for AesthetIQ, a fashion AI assistant.
@@ -63,32 +77,36 @@ Your task is to evaluate the retrieved clothing items and decide what to do next
    - Items align with the user's style DNA
    - There are enough relevant results
    - Confidence is high (>0.7)
+   - No items need to be marked as disliked
 
-2. **REFINE** - Use when:
-   - Items don't quite match the query
-   - There are too few results or wrong category
-   - Style DNA suggests different options would be better
+2. **APPROVE_WITH_FEEDBACK** - Use when:
+   - Overall items are acceptable and match the query
+   - BUT you notice 1-3 specific items that clearly DON'T match (wrong color, wrong occasion, too expensive)
+   - Instead of refining the whole search, mark those items for the user to dislike them
+   - This helps personalize future searches while still showing good options
+   - Only use this if there are clearly wrong items mixed with good ones
+
+3. **REFINE** - Use when:
+   - Most items don't match the query well
+   - Category is entirely wrong
+   - There are too few results (<3 items)
+   - Style DNA suggests very different options would be better
    - Provide structured filter_updates with specific values to improve search
 
-3. **CLARIFY** - Use when:
+4. **CLARIFY** - Use when:
    - The query is too vague
    - Essential information is missing (size, budget, specific style)
    - Provide a specific question to ask the user
 
+**For APPROVE_WITH_FEEDBACK:**
+  - item_id: The exact ID from the retrieved items
+  - feedback: Always "dislike"
+  - reason: Code like 'wrong_color', 'wrong_size', 'too_expensive', 'not_style', 'not_occasion', etc.
+  - reason_text: Optional explanation
+
 **For REFINE decisions, provide filter_updates with specific values:**
-- category: TOP, BOTTOM, SHOE, ACCESSORY
-- sub_category: Jacket, Shirt, Dress, Pants, Jeans, Sneakers, etc.
-- occasion: casual, formal, business, party, wedding, interview
-- style: classic, modern, minimalist, bold, elegant
-- color: specific color name
-- price_range: budget, mid-range, luxury
-- brand: specific brand name
 
 **Guidelines:**
-- Be lenient on first iteration - approve if items are reasonably relevant
-- Only ask for clarification if truly necessary
-- For refinement, only include filter_updates that need to change
-- Consider iteration count - don't loop forever
 """
 
 
@@ -254,13 +272,53 @@ Consider that this is iteration {iteration + 1} - be more lenient with approval 
         result = {
             "analysis_result": {
                 "decision": analysis.decision,
-                "approved": analysis.decision == "approve",
+                "approved": analysis.decision in ["approve", "approve_with_feedback"],
                 "confidence": analysis.confidence,
                 "notes": [analysis.reasoning],
             },
             "iteration": iteration + 1,
             "needs_clarification": analysis.decision == "clarify",
         }
+        
+        # Handle APPROVE_WITH_FEEDBACK - save item feedback before approving
+        if analysis.decision == "approve_with_feedback" and analysis.item_feedback:
+            user_id = state.get("user_id", "")
+            session_id = state.get("session_id", "")
+            
+            # Save feedback for each item
+            feedback_list = []
+            for item_feedback in analysis.item_feedback:
+                try:
+                    # Get MCP tools to access wardrobe feedback save function
+                    tools_dict = await get_mcp_tools()
+                    
+                    for tool in tools_dict:
+                        if hasattr(tool, 'name') and tool.name == 'save_item_feedback':
+                            # Save feedback
+                            success = await tool.ainvoke({
+                                "user_id": user_id,
+                                "item_id": item_feedback.item_id,
+                                "feedback": item_feedback.feedback,
+                                "reason": item_feedback.reason,
+                                "reason_text": item_feedback.reason_text,
+                                "session_id": session_id,
+                            })
+                            
+                            if success:
+                                feedback_list.append({
+                                    "item_id": item_feedback.item_id,
+                                    "feedback": item_feedback.feedback,
+                                    "reason": item_feedback.reason,
+                                })
+                                logger.info(f"Saved feedback for item {item_feedback.item_id}: {item_feedback.feedback}")
+                            break
+                except Exception as e:
+                    logger.error(f"Error saving item feedback: {e}")
+            
+            # Store feedback in state for reference
+            if feedback_list:
+                result["item_feedback_pending"] = feedback_list
+                result["analysis_result"]["notes"].append(f"Marked {len(feedback_list)} items as disliked")
         
         # Add structured filter updates if refining
         if analysis.decision == "refine" and analysis.filter_updates:

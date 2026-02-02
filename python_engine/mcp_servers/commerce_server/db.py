@@ -93,7 +93,7 @@ async def find_commerce_items(
     filters: Optional[Dict[str, Any]] = None,
     *,
     limit: int = 100,
-    use_retail_collection: bool = True
+    use_retail_collection: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Find items with optional filters.
@@ -101,7 +101,7 @@ async def find_commerce_items(
     Args:
         filters: Optional filters (category, brand, price range, etc.)
         limit: Maximum number of items to return
-        use_retail_collection: If True, query retailitems collection; otherwise commerceitems
+        use_retail_collection: If True, query retailitems collection; otherwise commerceitems (default)
     
     Returns:
         List of item documents
@@ -114,13 +114,13 @@ async def find_commerce_items(
     return await cursor.to_list(length=limit)
 
 
-async def get_commerce_item(item_id: str, use_retail_collection: bool = True) -> Optional[Dict[str, Any]]:
+async def get_commerce_item(item_id: str, use_retail_collection: bool = False) -> Optional[Dict[str, Any]]:
     """
     Get a single item by ID.
     
     Args:
         item_id: The item's _id (as string)
-        use_retail_collection: If True, query retailitems collection; otherwise commerceitems
+        use_retail_collection: If True, query retailitems collection; otherwise commerceitems (default)
     
     Returns:
         Item document or None if not found
@@ -139,7 +139,7 @@ async def find_items_with_embeddings(
     filters: Optional[Dict[str, Any]] = None,
     *,
     limit: int = 200,
-    use_retail_collection: bool = True
+    use_retail_collection: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Find items that have CLIP embeddings.
@@ -149,7 +149,7 @@ async def find_items_with_embeddings(
     Args:
         filters: Optional filters
         limit: Maximum number of items to return
-        use_retail_collection: If True, query retailitems collection; otherwise commerceitems
+        use_retail_collection: If True, query retailitems collection; otherwise commerceitems (default)
     
     Returns:
         List of item documents with embeddings

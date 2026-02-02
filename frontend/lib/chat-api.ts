@@ -289,6 +289,17 @@ export interface UseChatApiReturn {
   resetSession: () => void;
 }
 
+function filterItemsByResponseIds(
+  items: ClothingItem[] | undefined,
+  responseItemIds: string[] | undefined,
+): ClothingItem[] {
+  if (!items || items.length === 0) return [];
+  if (!responseItemIds || responseItemIds.length === 0) return items;
+
+  const idSet = new Set(responseItemIds.map((id) => id.toString()));
+  return items.filter((item) => idSet.has(item.id));
+}
+
 /**
  * React hook for using the conversational agent chat API.
  * Handles streaming, session management, and multi-turn conversations.
@@ -484,7 +495,11 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
               setStreamedText((prev) => prev + content);
             },
             onDone: (event) => {
-              setFoundItems(event.items || []);
+              const filteredItems = filterItemsByResponseIds(
+                event.items,
+                event.response_item_ids,
+              );
+              setFoundItems(filteredItems);
 
               // Handle clarification context
               if (event.needs_clarification && event.clarification_question) {
@@ -495,7 +510,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
                     clarification_question: event.clarification_question!,
                     extracted_filters: null,
                     search_scope: null,
-                    retrieved_items: event.items || [],
+                    retrieved_items: filteredItems,
                     iteration: 0,
                   },
                 }));

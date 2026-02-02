@@ -1,20 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { WardrobeControlBar, WardrobeFilters } from "@/components/virtual-wardrobe/control-bar"
 import { InventoryGrid } from "@/components/virtual-wardrobe/inventory-grid"
-import { WardrobeIntelligence } from "@/components/virtual-wardrobe/wardrobe-intelligence"
+import { WardrobeIntelligenceComponent } from "@/components/virtual-wardrobe/wardrobe-intelligence-new"
 import { AddItemModal } from "@/components/virtual-wardrobe/add-item-modal"
 import { OutfitCreator } from "@/components/virtual-wardrobe/outfit-creator"
 import { OutfitGrid } from "@/components/virtual-wardrobe/outfit-grid"
 import { FashionCardGenerator } from "@/components/virtual-wardrobe/fashion-card-generator"
+import { DislikedItemsPanel } from "@/components/virtual-wardrobe/disliked-items-panel"
 import { Button } from "@/components/ui/button"
 import { Brain, X } from "lucide-react"
 import { useApi } from "@/lib/api"
 import { Outfit } from "@/types/api"
 
 export default function VirtualWardrobePage() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState("all-items")
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
@@ -26,8 +29,13 @@ export default function VirtualWardrobePage() {
   const [editingOutfit, setEditingOutfit] = useState<Outfit | null>(null)
   const [viewingOutfit, setViewingOutfit] = useState<Outfit | null>(null)
   const [isCreatingOutfit, setIsCreatingOutfit] = useState(false)
+  const [prefillItemIds, setPrefillItemIds] = useState<string[] | null>(null)
+  const [prefillKey, setPrefillKey] = useState<string | null>(null)
   
   const { brandsApi } = useApi()
+
+  const tabParam = searchParams.get("tab")
+  const prefillParam = searchParams.get("prefillItems")
 
   // Load available brands for filter
   useEffect(() => {
@@ -35,6 +43,31 @@ export default function VirtualWardrobePage() {
       setAvailableBrands(brands.map(b => b.name))
     }).catch(() => {})
   }, [brandsApi])
+
+  // Handle query params for prefilled outfit creation
+  useEffect(() => {
+    if (tabParam === "outfits" || prefillParam) {
+      setActiveTab("outfits")
+      setIsCreatingOutfit(true)
+      setEditingOutfit(null)
+    }
+
+    if (prefillParam) {
+      const ids = prefillParam
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean)
+
+      if (ids.length > 0) {
+        const uniqueIds = Array.from(new Set(ids))
+        setPrefillItemIds(uniqueIds)
+        setPrefillKey(uniqueIds.join(","))
+      }
+    } else {
+      setPrefillItemIds(null)
+      setPrefillKey(null)
+    }
+  }, [tabParam, prefillParam])
 
   // Handle tab changes
   const handleTabChange = (tab: string) => {
@@ -54,6 +87,8 @@ export default function VirtualWardrobePage() {
       return (
         <OutfitCreator
           editOutfit={editingOutfit}
+          prefillItemIds={prefillItemIds}
+          prefillKey={prefillKey}
           onSaved={() => {
             setIsCreatingOutfit(false)
             setEditingOutfit(null)
@@ -79,6 +114,10 @@ export default function VirtualWardrobePage() {
           onView={(outfit) => setViewingOutfit(outfit)}
         />
       )
+    }
+
+    if (activeTab === "disliked") {
+      return <DislikedItemsPanel />
     }
 
     return <InventoryGrid searchQuery={searchQuery} filters={filters} />
@@ -107,8 +146,8 @@ export default function VirtualWardrobePage() {
 
           {/* Intelligence Sidebar - Desktop (hide when creating outfit) */}
           {activeTab !== "outfits" && (
-            <aside className="hidden w-[350px] overflow-y-auto border-l border-border bg-background p-6 lg:block">
-              <WardrobeIntelligence />
+            <aside className="hidden w-[480px] overflow-y-auto border-l border-border bg-background p-7 lg:block">
+              <WardrobeIntelligenceComponent />
             </aside>
           )}
         </div>
@@ -134,7 +173,7 @@ export default function VirtualWardrobePage() {
               onClick={() => setShowIntelligence(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:hidden">
-              <div className="w-full max-w-md rounded-lg border border-border bg-background p-6 max-h-[90vh] overflow-y-auto">
+              <div className="w-full max-w-xl rounded-lg border border-border bg-background p-7 max-h-[90vh] overflow-y-auto">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="font-serif text-xl font-bold text-foreground">Wardrobe Intelligence</h2>
                   <Button
@@ -145,7 +184,7 @@ export default function VirtualWardrobePage() {
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
-                <WardrobeIntelligence />
+                <WardrobeIntelligenceComponent />
               </div>
             </div>
           </>

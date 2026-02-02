@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsBoolean } from 'class-validator';
+import { IsEnum, IsOptional, IsBoolean, IsInt, Min, Max } from 'class-validator';
 import { Units, Theme, Currency, ShoppingRegion } from '../schemas/user.schema';
 
 export class UpdateSettingsDto {
@@ -39,6 +39,14 @@ export class UpdateSettingsDto {
   @IsBoolean()
   @IsOptional()
   contributeToTrendLearning?: boolean;
+
+  // Feedback & Personalization
+  @ApiProperty({ required: false, description: 'Days before disliked feedback decays (1-30)' })
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  @IsOptional()
+  feedbackDecayDays?: number;
 
   // Appearance
   @ApiProperty({ enum: Theme, required: false, description: 'Theme preference' })

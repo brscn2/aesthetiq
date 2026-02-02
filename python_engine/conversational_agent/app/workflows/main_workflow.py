@@ -59,7 +59,7 @@ def route_after_intent(state: ConversationState) -> Literal["general", "clothing
     return intent
 
 
-def route_after_analysis(state: ConversationState) -> Literal["approve", "refine", "clarify", "error"]:
+def route_after_analysis(state: ConversationState) -> Literal["approve", "approve_with_feedback", "refine", "clarify", "error"]:
     """Route based on analyzer decision."""
     iteration = state.get("iteration", 0)
     max_iterations = get_settings().MAX_REFINEMENT_ITERATIONS
@@ -71,10 +71,10 @@ def route_after_analysis(state: ConversationState) -> Literal["approve", "refine
     
     decision = analysis.get("decision", "approve")
     
-    # If analyzer approved, respect that decision
-    if decision == "approve":
-        logger.debug(f"Analyzer approved (iteration {iteration})")
-        return "approve"
+    # If analyzer approved or approved with feedback, respect that decision
+    if decision in ["approve", "approve_with_feedback"]:
+        logger.debug(f"Analyzer {decision} (iteration {iteration})")
+        return decision if decision == "approve_with_feedback" else "approve"
     
     # For non-approve decisions, check if we've hit max iterations
     if iteration >= max_iterations:
@@ -496,6 +496,7 @@ def create_workflow() -> StateGraph:
         route_after_analysis,
         {
             "approve": "output_guardrails",
+            "approve_with_feedback": "output_guardrails",  # Feedback saved, show results
             "refine": "clothing_recommender",  # Loop back for refinement
             "clarify": "save_clarification",   # Save context before sending question
             "error": "error_response",
@@ -951,6 +952,7 @@ async def run_workflow_streaming(
                 "response": final_response,
                 "intent": final_state.get("intent"),
                 "items": final_state.get("retrieved_items", []),
+                "response_item_ids": final_state.get("response_item_ids", []),
                 "workflow_status": workflow_status,
                 "needs_clarification": needs_clarification,
                 "clarification_question": final_state.get("clarification_question"),

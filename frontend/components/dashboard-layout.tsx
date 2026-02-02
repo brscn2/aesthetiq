@@ -48,7 +48,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             Aesthet<span className="text-gradient-ai">IQ</span>
           </h1>
         </div>
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   )

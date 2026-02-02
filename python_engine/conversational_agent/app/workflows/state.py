@@ -4,6 +4,43 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 
+class ItemFeedbackType(str, Enum):
+    """Type of feedback for an item."""
+    LIKE = "like"
+    DISLIKE = "dislike"
+    IRRELEVANT = "irrelevant"
+
+
+class ItemFeedbackReason(str, Enum):
+    """Reason for disliking an item."""
+    WRONG_COLOR = "wrong_color"
+    WRONG_SIZE = "wrong_size"
+    TOO_EXPENSIVE = "too_expensive"
+    POOR_QUALITY = "poor_quality"
+    NOT_STYLE = "not_style"
+    NOT_OCCASION = "not_occasion"
+    ALREADY_HAVE = "already_have"
+    OTHER = "other"
+
+
+@dataclass
+class ItemFeedback:
+    """Feedback for a single item."""
+    item_id: str
+    feedback: ItemFeedbackType
+    reason: Optional[ItemFeedbackReason] = None
+    reason_text: Optional[str] = None  # Free-form reason if "other"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "item_id": self.item_id,
+            "feedback": self.feedback.value,
+            "reason": self.reason.value if self.reason else None,
+            "reason_text": self.reason_text,
+        }
+
+
 class Intent(str, Enum):
     """User intent classification."""
     GENERAL = "general"
@@ -311,7 +348,7 @@ class ConversationState(TypedDict, total=False):
     # Analysis Result (Clothing Analyzer Agent)
     # =========================================================================
     analysis_result: Optional[Dict[str, Any]]
-    # Contains: {"decision": "approve"|"refine"|"clarify", "approved": bool, "confidence": float, "notes": []}
+    # Contains: {"decision": "approve"|"refine"|"clarify"|"approve_with_feedback", "approved": bool, "confidence": float, "notes": []}
     
     refinement_notes: Optional[List[str]]
     # Only set if analysis_result.decision == "refine"
@@ -323,6 +360,17 @@ class ConversationState(TypedDict, total=False):
     clarification_question: Optional[str]
     # Only set if needs_clarification == True
     # Example: "What occasion is this outfit for?"
+    
+    # =========================================================================
+    # Item-Level Feedback (User feedback on individual items)
+    # =========================================================================
+    item_feedback_pending: Optional[List[Dict[str, Any]]]
+    # Items in current session that user has liked/disliked
+    # Example: [{"item_id": "123", "feedback": "dislike", "reason": "wrong_color"}]
+    # Only used during current conversation; persisted to DB separately
+    
+    item_feedback_applied: bool
+    # True if disliked items were soft-de-ranked in the last search
     
     # =========================================================================
     # Output Fields
@@ -395,6 +443,9 @@ def create_initial_state(
         refinement_notes=None,
         needs_clarification=False,
         clarification_question=None,
+        # Item feedback
+        item_feedback_pending=None,
+        item_feedback_applied=False,
         # Output
         final_response="",
         streaming_events=[],

@@ -57,32 +57,85 @@ def _parse_seasonal_scores(doc: Dict[str, Any]) -> Optional[SeasonalPaletteScore
 
 
 def _doc_to_item(doc: Dict[str, Any]) -> CommerceItem:
-    """Convert MongoDB document to CommerceItem model."""
-    raw = _sanitize_mongo_doc(doc)
-    item_id = str(doc.get("_id") or doc.get("id") or "")
+    """Convert MongoDB document to CommerceItem model.
+    
+    Handles both commerceitems and retailitems schema formats:
+    - commerceitems: nested price object, primaryImageUrl, sourceUrl
+    - retailitems: flat price, imageUrl, productUrl
+    """
+    # Normalize fields to handle commerceitems schema
+    normalized_doc = _normalize_item_fields(doc)
+    
+    raw = _sanitize_mongo_doc(normalized_doc)
+    item_id = str(normalized_doc.get("_id") or normalized_doc.get("id") or "")
     
     return CommerceItem(
         id=item_id,
-        name=doc.get("name", ""),
-        description=doc.get("description"),
-        imageUrl=doc.get("imageUrl", ""),
-        category=_parse_category(doc),
-        subCategory=doc.get("subCategory"),
-        brand=doc.get("brand"),
-        brandId=str(doc["brandId"]) if doc.get("brandId") else None,
-        retailerId=str(doc.get("retailerId", "")),
-        colors=list(doc.get("colors") or []),
-        price=doc.get("price"),
-        currency=doc.get("currency", "USD"),
-        productUrl=doc.get("productUrl", ""),
-        sku=doc.get("sku"),
-        tags=list(doc.get("tags") or []),
-        inStock=doc.get("inStock", True),
-        seasonalPaletteScores=_parse_seasonal_scores(doc),
-        embedding=doc.get("embedding"),
-        metadata=doc.get("metadata", {}),
+        name=normalized_doc.get("name", ""),
+        description=normalized_doc.get("description"),
+        imageUrl=normalized_doc.get("imageUrl", ""),
+        category=_parse_category(normalized_doc),
+        subCategory=normalized_doc.get("subCategory"),
+        brand=normalized_doc.get("brand"),
+        brandId=str(normalized_doc["brandId"]) if normalized_doc.get("brandId") else None,
+        retailerId=str(normalized_doc.get("retailerId", "")),
+        colors=list(normalized_doc.get("colors") or []),
+        price=normalized_doc.get("price"),
+        currency=normalized_doc.get("currency", "USD"),
+        productUrl=normalized_doc.get("productUrl", ""),
+        sku=normalized_doc.get("sku"),
+        tags=list(normalized_doc.get("tags") or []),
+        inStock=normalized_doc.get("inStock", True),
+        seasonalPaletteScores=_parse_seasonal_scores(normalized_doc),
+        embedding=normalized_doc.get("embedding"),
+        metadata=normalized_doc.get("metadata", {}),
         raw=raw,
     )
+
+
+def _normalize_item_fields(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize commerceitems schema fields to flat structure expected by CommerceItem model.
+    
+    Converts:
+    - price.amount/100 → price (float, handles None gracefully → 0.0)
+    - price.currency → currency (default "USD")
+    - primaryImageUrl or imageUrls[0] → imageUrl
+    - sourceUrl → productUrl
+    
+    Args:
+        item: Raw item document from MongoDB (commerceitems or retailitems)
+    
+    Returns:
+        Normalized item dict with flat field structure
+    """
+    normalized = item.copy()
+    
+    # Handle nested price structure (commerceitems) vs flat price (retailitems)
+    if "price" in item and isinstance(item["price"], dict):
+        # commerceitems: {amount: 2995, currency: "EUR", formatted: "29.95 €"}
+        price_obj = item["price"]
+        normalized["price"] = price_obj.get("amount", 0) / 100.0 if price_obj.get("amount") is not None else 0.0
+        normalized["currency"] = price_obj.get("currency", "USD")
+    elif "price" not in item or item.get("price") is None:
+        # Handle missing price
+        normalized["price"] = 0.0
+        normalized.setdefault("currency", "USD")
+    
+    # Handle image URL mapping: primaryImageUrl or imageUrls[0] → imageUrl
+    if "primaryImageUrl" in item:
+        normalized["imageUrl"] = item["primaryImageUrl"]
+    elif "imageUrls" in item and isinstance(item["imageUrls"], list) and len(item["imageUrls"]) > 0:
+        normalized["imageUrl"] = item["imageUrls"][0]
+    elif "imageUrl" not in item:
+        normalized["imageUrl"] = ""
+    
+    # Handle product URL mapping: sourceUrl → productUrl
+    if "sourceUrl" in item:
+        normalized["productUrl"] = item["sourceUrl"]
+    elif "productUrl" not in item:
+        normalized["productUrl"] = ""
+    
+    return normalized
 
 
 def _item_to_text(item: CommerceItem) -> str:
@@ -132,7 +185,7 @@ async def filter_commerce_items(
     limit: int = 100
 ) -> List[CommerceItem]:
     """
-    Filter items by criteria (searches retailitems collection).
+    Filter items by criteria (searches commerceitems collection).
     
     Args:
         filters: Optional filters (category, brand, price range, etc.)
@@ -142,13 +195,13 @@ async def filter_commerce_items(
         List of items matching the filters
     """
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
-    docs = await db.find_commerce_items(filters=filter_dict, limit=limit, use_retail_collection=True)
+    docs = await db.find_commerce_items(filters=filter_dict, limit=limit, use_retail_collection=False)
     return [_doc_to_item(d) for d in docs]
 
 
 async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     """
-    Get a single item by ID (searches retailitems collection).
+    Get a single item by ID (searches commerceitems collection).
     
     Args:
         item_id: The item's _id
@@ -156,7 +209,7 @@ async def get_commerce_item(item_id: str) -> Optional[CommerceItem]:
     Returns:
         CommerceItem or None if not found
     """
-    doc = await db.get_commerce_item(item_id=item_id, use_retail_collection=True)
+    doc = await db.get_commerce_item(item_id=item_id, use_retail_collection=False)
     if not doc:
         return None
     return _doc_to_item(doc)
@@ -179,6 +232,11 @@ async def search_commerce_items(
     Style DNA ranking uses pre-computed seasonalPaletteScores for accurate
     color season matching.
     
+    Implements commerceitems-first strategy with optional retailitems fallback:
+    1. Check commerceitems collection for items with embeddings
+    2. If empty and ENABLE_RETAILITEMS_FALLBACK=True, check retailitems collection
+    3. Perform semantic search and ranking
+    
     Args:
         query: Search query text
         style_dna: User's color season (e.g., "WARM_AUTUMN" or "warm_autumn")
@@ -190,22 +248,42 @@ async def search_commerce_items(
         List of {"item": CommerceItem, "score": float, "breakdown": dict}
         sorted by relevance
     """
+    from mcp_servers.core.config import get_settings
+    settings = get_settings()
+    
     filter_dict = filters.model_dump(exclude_none=True) if filters else None
     
-    # First, try to get items with pre-computed embeddings from retailitems collection
+    # First, try to get items with pre-computed embeddings from commerceitems collection
     docs = await db.find_items_with_embeddings(
         filters=filter_dict,
         limit=candidate_pool,
-        use_retail_collection=True  # Use retailitems collection
+        use_retail_collection=False  # Use commerceitems collection
     )
     
-    # If no items with embeddings, fall back to all items from retailitems collection
+    # If no items with embeddings in commerceitems, fall back to all commerceitems
     if not docs:
         docs = await db.find_commerce_items(
             filters=filter_dict,
             limit=candidate_pool,
+            use_retail_collection=False  # Use commerceitems collection
+        )
+    
+    # If still no items and retailitems fallback is enabled, try retailitems collection
+    if not docs and settings.ENABLE_RETAILITEMS_FALLBACK:
+        # Try retailitems with embeddings first
+        docs = await db.find_items_with_embeddings(
+            filters=filter_dict,
+            limit=candidate_pool,
             use_retail_collection=True  # Use retailitems collection
         )
+        
+        # If still no items with embeddings, fall back to all retailitems
+        if not docs:
+            docs = await db.find_commerce_items(
+                filters=filter_dict,
+                limit=candidate_pool,
+                use_retail_collection=True  # Use retailitems collection
+            )
     
     if not docs:
         return []

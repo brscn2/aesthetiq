@@ -201,6 +201,12 @@ export function WardrobeControlBar({
             >
               Wishlist
             </TabsTrigger>
+            <TabsTrigger
+              value="disliked"
+              className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
+            >
+              Disliked
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 

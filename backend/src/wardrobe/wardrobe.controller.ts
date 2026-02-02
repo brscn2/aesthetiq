@@ -20,6 +20,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { WardrobeService } from './wardrobe.service';
+import { IntelligenceService } from './intelligence/intelligence.service';
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { Category } from './schemas/wardrobe-item.schema';
@@ -31,7 +32,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @UseGuards(ClerkAuthGuard)
 @ApiBearerAuth()
 export class WardrobeController {
-  constructor(private readonly wardrobeService: WardrobeService) {}
+  constructor(
+    private readonly wardrobeService: WardrobeService,
+    private readonly intelligenceService: IntelligenceService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new wardrobe item' })
@@ -95,6 +99,23 @@ export class WardrobeController {
     );
   }
 
+  @Get('feedback/disliked')
+  @ApiOperation({ summary: 'Get disliked wardrobe items (feedback list)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size (default 20, max 50)' })
+  @ApiQuery({ name: 'offset', required: false, description: 'Offset for pagination (default 0)' })
+  @ApiResponse({ status: 200, description: 'List of disliked wardrobe items with feedback metadata' })
+  async getDislikedFeedback(
+    @CurrentUser() user: { clerkId: string },
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.wardrobeService.getDislikedWardrobeFeedback(
+      user.clerkId,
+      limit ? parseInt(limit, 10) : 20,
+      offset ? parseInt(offset, 10) : 0,
+    );
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a wardrobe item by ID' })
   @ApiParam({ name: 'id', description: 'Wardrobe item ID' })
@@ -116,6 +137,18 @@ export class WardrobeController {
     return this.wardrobeService.update(id, updateWardrobeItemDto);
   }
 
+  @Delete('feedback/:itemId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a feedback record for a wardrobe item' })
+  @ApiParam({ name: 'itemId', description: 'Wardrobe item ID associated with feedback' })
+  @ApiResponse({ status: 204, description: 'Feedback record deleted (if exists)' })
+  async deleteFeedback(
+    @CurrentUser() user: { clerkId: string },
+    @Param('itemId') itemId: string,
+  ) {
+    await this.wardrobeService.deleteItemFeedback(user.clerkId, itemId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a wardrobe item' })
@@ -125,5 +158,48 @@ export class WardrobeController {
   async remove(@Param('id') id: string) {
     return this.wardrobeService.remove(id);
   }
+
+  @Get('intelligence/analysis')
+  @ApiOperation({ summary: 'Get comprehensive wardrobe intelligence metrics and insights' })
+  @ApiResponse({ status: 200, description: 'Wardrobe intelligence data with all dimensions' })
+  @ApiResponse({ status: 400, description: 'Failed to calculate intelligence' })
+  async getIntelligence(@CurrentUser() user: { clerkId: string }) {
+    try {
+      const intelligence = await this.intelligenceService.calculateIntelligence(
+        user.clerkId,
+      );
+      return {
+        success: true,
+        data: intelligence,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  @Get('intelligence/gap-analysis')
+  @ApiOperation({ summary: 'Get AI-powered wardrobe gap recommendations' })
+  @ApiResponse({ status: 200, description: 'Smart gap analysis recommendations' })
+  @ApiResponse({ status: 400, description: 'Failed to generate gap analysis' })
+  async getGapAnalysis(@CurrentUser() user: { clerkId: string }) {
+    try {
+      const analysis = await this.intelligenceService.getSmartGapAnalysis(
+        user.clerkId,
+      );
+      return {
+        success: true,
+        data: analysis,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
+
 

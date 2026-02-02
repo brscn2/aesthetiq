@@ -1,4 +1,5 @@
 "use client";
+"use client";
 
 import { useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -27,7 +28,9 @@ import type {
   UpdateWardrobeItemDto,
   User,
   WardrobeItem,
+  DislikedWardrobeItemsResponse,
   PersonaAnalysisStatus,
+} from "@/types/api";
 } from "@/types/api";
 
 // Re-export types for admin use
@@ -36,6 +39,7 @@ export type {
   WardrobeItem,
   CreateWardrobeItemDto,
   UpdateWardrobeItemDto,
+};
 };
 
 // Import additional types for admin
@@ -51,6 +55,7 @@ import type {
   CommerceSearchOptions,
   CommerceStats,
 } from "@/types/api";
+} from "@/types/api";
 
 // Re-export commerce and retailer types
 export type {
@@ -65,7 +70,10 @@ export type {
   CommerceSearchOptions,
   CommerceStats,
 };
+};
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -76,6 +84,7 @@ const createHttpClient = () => {
       "Content-Type": "application/json",
     },
   });
+  });
 
   client.interceptors.response.use(
     (response) => response,
@@ -84,9 +93,13 @@ const createHttpClient = () => {
         // Clerk middleware will handle redirecting unauthenticated users.
       }
       return Promise.reject(error);
+      return Promise.reject(error);
     },
   );
+  );
 
+  return client;
+};
   return client;
 };
 
@@ -99,11 +112,22 @@ const createUserApi = (client: AxiosInstance) => ({
   updateCurrentUserSettings: (
     data: Partial<User["settings"]>,
   ): Promise<User["settings"]> =>
+  getCurrentUser: (): Promise<User> =>
+    client.get("/users/me").then((res) => res.data),
+  getCurrentUserSettings: (): Promise<User["settings"]> =>
+    client.get("/users/me/settings").then((res) => res.data),
+  updateCurrentUserSettings: (
+    data: Partial<User["settings"]>,
+  ): Promise<User["settings"]> =>
     client.patch("/users/me/settings", data).then((res) => res.data),
   updateCurrentUser: (data: {
     name?: string;
     avatarUrl?: string;
   }): Promise<User> => client.patch("/users/me", data).then((res) => res.data),
+  updateTryOnPhoto: (photoUrl: string): Promise<User> =>
+    client
+      .patch("/users/me/try-on-photo", { photoUrl })
+      .then((res) => res.data),
 
   // Admin endpoints (by ID)
   getAll: (): Promise<User[]> => client.get("/users").then((res) => res.data),
@@ -134,6 +158,17 @@ const createWardrobeApi = (client: AxiosInstance) => ({
     if (colorHex) params.append("colorHex", colorHex);
     if (search) params.append("search", search);
     return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data);
+  getAll: (
+    userId: string,
+    category?: Category,
+    colorHex?: string,
+    search?: string,
+  ): Promise<WardrobeItem[]> => {
+    const params = new URLSearchParams({ userId });
+    if (category) params.append("category", category);
+    if (colorHex) params.append("colorHex", colorHex);
+    if (search) params.append("search", search);
+    return client.get(`/wardrobe?${params.toString()}`).then((res) => res.data);
   },
   getById: (id: string): Promise<WardrobeItem> =>
     client.get(`/wardrobe/${id}`).then((res) => res.data),
@@ -143,6 +178,19 @@ const createWardrobeApi = (client: AxiosInstance) => ({
     client.patch(`/wardrobe/${id}`, data).then((res) => res.data),
   delete: (id: string): Promise<void> =>
     client.delete(`/wardrobe/${id}`).then(() => undefined),
+  getDislikedFeedback: (
+    limit = 20,
+    offset = 0,
+  ): Promise<DislikedWardrobeItemsResponse> =>
+    client
+      .get(`/wardrobe/feedback/disliked?limit=${limit}&offset=${offset}`)
+      .then((res) => res.data),
+  deleteFeedback: (itemId: string): Promise<void> =>
+    client.delete(`/wardrobe/feedback/${itemId}`).then(() => undefined),
+  getIntelligence: (): Promise<any> =>
+    client.get(`/wardrobe/intelligence/analysis`).then((res) => res.data),
+  getGapAnalysis: (): Promise<any> =>
+    client.get(`/wardrobe/intelligence/gap-analysis`).then((res) => res.data),
 });
 
 const createAnalysisApi = (client: AxiosInstance) => ({
@@ -154,9 +202,25 @@ const createAnalysisApi = (client: AxiosInstance) => ({
     client.get(`/analysis/${id}`).then((res) => res.data),
   create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> =>
     client.post("/analysis", data).then((res) => res.data),
+  getLatest: (): Promise<ColorAnalysis> =>
+    client.get(`/analysis/latest`).then((res) => res.data),
+  getAllByUserId: (): Promise<ColorAnalysis[]> =>
+    client.get(`/analysis/user`).then((res) => res.data),
+  getById: (id: string): Promise<ColorAnalysis> =>
+    client.get(`/analysis/${id}`).then((res) => res.data),
+  create: (data: CreateColorAnalysisDto): Promise<ColorAnalysis> =>
+    client.post("/analysis", data).then((res) => res.data),
   analyzeImage: (file: File): Promise<ColorAnalysis> => {
     const formData = new FormData();
     formData.append("file", file);
+    return client
+      .post("/analysis/analyze-image", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 60000, // 60 second timeout for analysis
+      })
+      .then((res) => res.data);
     return client
       .post("/analysis/analyze-image", formData, {
         headers: {

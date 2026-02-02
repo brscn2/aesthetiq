@@ -61,6 +61,9 @@ class UserSettings(BaseModel):
     allowFacialAnalysis: bool = True
     storeColorHistory: bool = True
     contributeToTrendLearning: bool = False
+
+    # Feedback & Personalization
+    feedbackDecayDays: int = 7
     
     # Appearance
     theme: Theme = Theme.SYSTEM

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from mcp_servers.shared.schemas import Category
 
 
 class WebSearchResult(BaseModel):
@@ -39,7 +41,47 @@ class BlogsRequest(BaseModel):
     max_results: int = 5
 
 
+class RetailerFilters(BaseModel):
+    """Filters for querying retailer items."""
+    category: Optional[Category] = Field(
+        None,
+        description="Item category: TOP, BOTTOM, SHOE, or ACCESSORY. Required for filtering."
+    )
+    subCategory: Optional[str] = Field(
+        None,
+        description="Specific item type like 'Bag', 'Jacket', 'Jeans'. Required for filtering."
+    )
+    brand: Optional[str] = Field(
+        None,
+        description="Brand name filter (optional, case-insensitive)"
+    )
+    colors: Optional[List[str]] = Field(
+        default=None,
+        description="List of hex color codes to filter by (optional)"
+    )
+    extra: Dict[str, Any] = Field(default_factory=dict)
+    
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_none_values(cls, data: Any) -> Any:
+        """Convert None values to be omitted from the model."""
+        if isinstance(data, dict):
+            # Remove None values from the dict before validation
+            # This prevents "None is not of type 'array'" errors
+            return {k: v for k, v in data.items() if v is not None or k in ('category', 'subCategory')}
+        return data
+    
+    class Config:
+        # Allow validation to succeed with None for optional fields
+        validate_default = True
+
+
 class RetailerSearchRequest(BaseModel):
     query: str
     max_results: int = 5
+    disliked_item_ids: Optional[List[str]] = None
+    filters: Optional[RetailerFilters] = Field(
+        None,
+        description="Optional filters for category, subCategory, brand, and colors"
+    )
 
