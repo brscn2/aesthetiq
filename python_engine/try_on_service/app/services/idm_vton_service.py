@@ -116,8 +116,8 @@ class IDMVTONService:
             output = replicate.run(
                 settings.IDM_VTON_MODEL,
                 input={
-                   "human_img": human_img,
-                        "garm_img": garm_img,
+                    "human_img": human_img,
+                    "garm_img": garm_img,
                     "denoise_steps": 30,  # Quality vs speed (20-50)
                     "seed": 42  # For reproducibility
                 }
