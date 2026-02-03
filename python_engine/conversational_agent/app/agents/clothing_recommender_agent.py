@@ -167,15 +167,16 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
 
 **Tool Usage Guidelines:**
 
-1. Get user's style_dna FIRST to personalize recommendations
+1. **When to fetch context:** Call get_user_profile, get_style_dna, or get_disliked_items_for_search **only when** you need personalization or de-ranking (e.g. user asks for recommendations that match their style, color season, or to avoid disliked items). **Do not** fetch user data if the request is generic or outside the user's domain (e.g. "show me black jackets", "what's trending") with no ask for personalized recommendations.
+2. **When cached:** If the request message includes **cached** user profile or style DNA, do **not** call get_user_profile or get_style_dna again for this turn; use the cached context.
 
-2. **WARDROBE-FIRST APPROACH** (for "both" or "wardrobe" scope):
+3. **WARDROBE-FIRST APPROACH** (for "both" or "wardrobe" scope):
     - ALWAYS search `search_wardrobe_items` first if user has items in their wardrobe
     - This finds items they already own (fastest, free, sustainable)
     - If wardrobe search returns good results, return those immediately
     - Only add retailer items if wardrobe search returns few results (<3 items)
 
-3. **For clothing searches**:
+4. **For clothing searches**:
    - For wardrobe scope: use `search_wardrobe_items` with filters (category, subCategory)
     - For commerce scope: use `search_retailer_items` - This searches the retailitems collection with fresh, crawler-scraped items from retailers like UNIQLO and Zalando
     - For both scope: Search wardrobe FIRST, then commerce if needed
@@ -193,7 +194,7 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
    - NEVER call search_retailer_items or search_wardrobe_items without the filters parameter
    - This prevents returning wrong item categories (e.g., jeans when searching for bags)
 
-4. **IMPORTANT: Handle outfit decomposition**
+5. **IMPORTANT: Handle outfit decomposition**
    - If you receive decomposed sub_categories (e.g., for a gym outfit: ["T-shirt", "Sweatpants", "Sneakers"]):
       * Search for EACH sub_category separately in wardrobe first
       * Then search commerce if wardrobe results are sparse
@@ -204,14 +205,13 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
       3. Search wardrobe for Sneakers with filters: {category: "FOOTWEAR", subCategory: "Sneakers"}
       4. If any category missing from wardrobe, search commerce for that category only with proper filters
 
-5. **Graceful Fallback Ranking**:
+6. **Graceful Fallback Ranking**:
    - Search tools return results ranked by relevance + Style DNA alignment (70% semantic + 30% color season)
    - If NO items match the user's Style DNA palette: Return all results ranked by semantic relevance alone
    - NEVER return zero results - keep searching with broader terms if needed
    - If Style DNA search fails: Fall back to semantic search without color filtering
 
-6. Keep tool usage minimal - ideally 2-5 calls maximum (style_dna + searches for each item type).
-Return results immediately after finding items.
+7. Keep tool usage minimal: only call context tools (get_user_profile, get_style_dna, get_disliked_items_for_search) when needed; then search. Prefer fewer tool calls for follow-ups or simple queries. Return results immediately after finding items.
 """
 
 
@@ -1139,65 +1139,9 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
 
         logger.info(f"Clothing recommender has {len(tools)} tools available")
 
-        # Prefetch user profile + style DNA for personalization (even if agent doesn’t call tools)
-        prefetched_user_profile = state.get("user_profile")
-        prefetched_style_dna = state.get("style_dna")
-        tools_by_name = {tool.name: tool for tool in tools if hasattr(tool, "name")}
-
-        if not prefetched_user_profile and "get_user_profile" in tools_by_name:
-            try:
-                tool_result = await tools_by_name["get_user_profile"].ainvoke(
-                    {"user_id": user_id}
-                )
-                prefetched_user_profile = (
-                    _extract_dict_value(tool_result, "profile") or tool_result
-                )
-                if trace_id:
-                    tracing_service.log_tool_call(
-                        trace_id=trace_id,
-                        tool_name="get_user_profile",
-                        input_params={"user_id": user_id},
-                        output=str(tool_result)[:500],
-                    )
-            except Exception as e:
-                logger.warning(f"[RECOMMENDER] Failed to prefetch user profile: {e}")
-
-        if not prefetched_style_dna:
-            for tool_name in (
-                "get_style_dna",
-                "get_color_season",
-                "get_recommended_colors",
-            ):
-                tool = tools_by_name.get(tool_name)
-                if not tool:
-                    continue
-                try:
-                    tool_result = await tool.ainvoke({"user_id": user_id})
-                    extracted = _extract_dict_value(
-                        tool_result, "style_dna", "color_season", "colors"
-                    )
-                    if extracted:
-                        prefetched_style_dna = (
-                            {**(prefetched_style_dna or {}), **extracted}
-                            if prefetched_style_dna
-                            else extracted
-                        )
-                    if trace_id:
-                        tracing_service.log_tool_call(
-                            trace_id=trace_id,
-                            tool_name=tool_name,
-                            input_params={"user_id": user_id},
-                            output=str(tool_result)[:500],
-                        )
-                except Exception as e:
-                    logger.warning(f"[RECOMMENDER] Failed to prefetch {tool_name}: {e}")
-
-        # Fetch user's disliked items for soft de-ranking in search results
-        decay_days = await _get_user_feedback_decay_days(user_id)
-        disliked_items = await _get_user_disliked_items(user_id, decay_days=decay_days)
-        disliked_context = ""
-        if disliked_items:
-            disliked_context = f"\n\nNote: User has previously disliked {len(disliked_items)} items. These will be soft-de-ranked (reduced priority) in results if they appear."
+        # Cache = state; inject cached profile/style_dna into prompt; tell agent not to re-fetch for personalization (even if agent doesn’t call tools)
+        cached_user_profile = state.get("user_profile")
+        cached_style_dna = state.get("style_dna")
 
         # Create and invoke the ReAct agent
         agent = create_react_agent(
@@ -1299,21 +1243,22 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                 swap_descriptions.append(f"{category} for outfit {outfit_id}")
             swap_context = f"\n\nSwap intents: {', '.join(swap_descriptions)}"
 
-        profile_context = (
-            f"\n\nUser profile: {prefetched_user_profile}"
-            if prefetched_user_profile
-            else ""
-        )
-        style_context = (
-            f"\n\nUser style DNA: {prefetched_style_dna}"
-            if prefetched_style_dna
-            else ""
-        )
+        # Cached block: inject cached profile/style_dna and tell agent not to re-fetch. No-cache: tell agent to call tools only when needed.
+        if cached_user_profile or cached_style_dna:
+            context_parts = ["\n\nCached context (do not re-fetch):"]
+            if cached_user_profile:
+                context_parts.append(f" User profile: {cached_user_profile}.")
+            if cached_style_dna:
+                context_parts.append(f" Style DNA: {cached_style_dna}.")
+            context_parts.append(" Do NOT call get_user_profile or get_style_dna for this request.")
+            context_block = "".join(context_parts)
+        else:
+            context_block = "\n\nCall get_user_profile, get_style_dna, or get_disliked_items_for_search only when you need personalization or de-ranking; do not fetch user data for generic or outside-domain requests."
 
         search_request = f"""User request: {enhanced_message}
     User ID: {user_id}
     Search scope: {search_scope}
-    Filters: {filter_str}{decomposition_context}{hint_context}{refinement_context}{disliked_context}{profile_context}{style_context}{outfit_context}{swap_context}"""
+    Filters: {filter_str}{decomposition_context}{hint_context}{refinement_context}{context_block}{outfit_context}{swap_context}"""
 
         agent_result = await agent.ainvoke(
             {"messages": [HumanMessage(content=search_request)]}
@@ -1334,8 +1279,8 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             )
         else:
             retrieved_items = []
-        user_profile = prefetched_user_profile
-        style_dna = prefetched_style_dna
+        user_profile = state.get("user_profile")
+        style_dna = state.get("style_dna")
         tool_call_ids = {}
 
         for msg in agent_result["messages"]:
@@ -1676,8 +1621,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             "style_dna": style_dna,
             "search_sources_used": search_sources_used,
             "fallback_used": fallback_used,
-            "item_feedback_applied": len(disliked_items)
-            > 0,  # Track if feedback was applied
+            "item_feedback_applied": "get_disliked_items_for_search" in tools_used,
         }
 
     except Exception as e:
