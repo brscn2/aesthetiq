@@ -135,7 +135,7 @@ export class GenerateTryOnDto {
 
   @ApiProperty({
     description:
-      'Record of clothing items by category (TOP, BOTTOM, SHOE, ACCESSORY)',
+      'Record of clothing items by category (TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY)',
     example: {
       TOP: {
         imageUrl: 'https://example.com/jacket.jpg',

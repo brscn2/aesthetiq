@@ -213,7 +213,7 @@ export interface StyleProfile {
   sizes: {
     top?: string;
     bottom?: string;
-    shoe?: string;
+    footwear?: string;
   };
   fitPreferences?: {
     top?: FitPreference;
@@ -236,7 +236,7 @@ export interface CreateStyleProfileDto {
   sizes?: {
     top?: string;
     bottom?: string;
-    shoe?: string;
+    footwear?: string;
   };
   fitPreferences?: {
     top?: FitPreference;
@@ -256,7 +256,7 @@ export interface UpdateStyleProfileDto {
   sizes?: {
     top?: string;
     bottom?: string;
-    shoe?: string;
+    footwear?: string;
   };
   fitPreferences?: {
     top?: FitPreference;

@@ -120,7 +120,7 @@ async def delete_item_feedback(req: DeleteItemFeedbackRequest):
 async def test_search(
     query: str = Query(..., description="Search query"),
     user_id: str = Query(..., description="User's clerkId"),
-    category: Optional[str] = Query(None, description="Category filter (TOP, BOTTOM, SHOE, ACCESSORY)"),
+    category: Optional[str] = Query(None, description="Category filter (TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY)"),
     brand: Optional[str] = Query(None, description="Brand filter (partial match)"),
     is_favorite: Optional[bool] = Query(None, description="Filter by favorites"),
 ):

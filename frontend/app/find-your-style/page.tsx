@@ -337,7 +337,9 @@ export default function FindYourStylePage() {
                   <SelectItem value="all">All Categories</SelectItem>
                   <SelectItem value="TOP">Tops</SelectItem>
                   <SelectItem value="BOTTOM">Bottoms</SelectItem>
-                  <SelectItem value="SHOE">Shoes</SelectItem>
+                  <SelectItem value="FOOTWEAR">Footwear</SelectItem>
+                  <SelectItem value="OUTERWEAR">Outerwear</SelectItem>
+                  <SelectItem value="DRESS">Dress</SelectItem>
                   <SelectItem value="ACCESSORY">Accessories</SelectItem>
                 </SelectContent>
               </Select>

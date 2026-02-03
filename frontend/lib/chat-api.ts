@@ -310,7 +310,9 @@ function filterItemsByResponseIds(
  * React hook for using the conversational agent chat API.
  * Handles streaming, session management, and multi-turn conversations.
  */
-export function useChatApi(hookOptions: UseChatApiOptions = {}): UseChatApiReturn {
+export function useChatApi(
+  hookOptions: UseChatApiOptions = {},
+): UseChatApiReturn {
   const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 

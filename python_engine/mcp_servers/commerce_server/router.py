@@ -72,7 +72,7 @@ async def filter_commerce_items(req: FilterCommerceItemsRequest):
 async def test_search(
     query: str = Query(..., description="Search query"),
     style_dna: Optional[str] = Query(None, description="User's color season (e.g., WARM_AUTUMN)"),
-    category: Optional[str] = Query(None, description="Category filter (TOP, BOTTOM, SHOE, ACCESSORY)"),
+    category: Optional[str] = Query(None, description="Category filter (TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY)"),
     brand: Optional[str] = Query(None, description="Brand filter (partial match)"),
     price_min: Optional[float] = Query(None, description="Minimum price"),
     price_max: Optional[float] = Query(None, description="Maximum price"),

@@ -221,42 +221,42 @@ services:
   # =============================================================================
   # CRAWLER SERVICE - Nightly product crawler (Port 8005 - Internal Only)
   # =============================================================================
-  crawler_service:
-    build:
-      context: .
-      dockerfile: ./crawler_service/Dockerfile
-    container_name: aesthetiq-crawler
-    ports:
-      - "8005:8005"
-    env_file:
-      - .env
-    environment:
-      - PORT=8005
-      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
-      - CRAWLER_TARGET_URLS_PATH=/app/config/target_urls.yaml
-    volumes:
-      # Mount config directory
-      - ./crawler_service/config:/app/config:ro
-    networks:
-      - aesthetiq-network
-    depends_on:
-      embedding_service:
-        condition: service_healthy
-      mcp_servers:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
+  # crawler_service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./crawler_service/Dockerfile
+  #   container_name: aesthetiq-crawler
+  #   ports:
+  #     - "8005:8005"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - PORT=8005
+  #     - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+  #     - CRAWLER_TARGET_URLS_PATH=/app/config/target_urls.yaml
+  #   volumes:
+  #     # Mount config directory
+  #     - ./crawler_service/config:/app/config:ro
+  #   networks:
+  #     - aesthetiq-network
+  #   depends_on:
+  #     embedding_service:
+  #       condition: service_healthy
+  #     mcp_servers:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #       reservations:
+  #         memory: 1G
 
 networks:
   aesthetiq-network:

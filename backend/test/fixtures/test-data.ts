@@ -55,7 +55,7 @@ export const testWardrobeItems = [
   },
   {
     userId: 'test-user-2',
-    category: 'SHOE',
+    category: 'FOOTWEAR',
     subCategory: 'Sneakers',
     brand: 'Adidas',
     colorHex: '#FFFFFF',

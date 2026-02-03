@@ -56,7 +56,7 @@ export class UpdateStyleProfileDto {
   sizes?: {
     top?: string;
     bottom?: string;
-    shoe?: string;
+    footwear?: string;
   };
 
   @ApiProperty({ required: false, description: 'Fit preferences for different clothing types' })

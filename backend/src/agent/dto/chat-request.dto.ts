@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength, MinLength, IsObject, IsArray, ValidateNested, IsIn } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  IsObject,
+  IsArray,
+  ValidateNested,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PendingContextDto {
@@ -11,17 +21,23 @@ class PendingContextDto {
   @IsString()
   clarification_question: string;
 
-  @ApiPropertyOptional({ description: 'Extracted filters from previous workflow' })
+  @ApiPropertyOptional({
+    description: 'Extracted filters from previous workflow',
+  })
   @IsOptional()
   @IsObject()
   extracted_filters?: Record<string, any>;
 
-  @ApiPropertyOptional({ description: 'Search scope (commerce, wardrobe, both)' })
+  @ApiPropertyOptional({
+    description: 'Search scope (commerce, wardrobe, both)',
+  })
   @IsOptional()
   @IsString()
   search_scope?: string;
 
-  @ApiPropertyOptional({ description: 'Retrieved items from previous workflow' })
+  @ApiPropertyOptional({
+    description: 'Retrieved items from previous workflow',
+  })
   @IsOptional()
   @IsArray()
   retrieved_items?: any[];
@@ -50,7 +66,10 @@ class OutfitItemSnapshotDto {
   @IsString()
   category?: string;
 
-  @ApiProperty({ description: 'Item source', enum: ['wardrobe', 'commerce', 'web'] })
+  @ApiProperty({
+    description: 'Item source',
+    enum: ['wardrobe', 'commerce', 'web'],
+  })
   @IsIn(['wardrobe', 'commerce', 'web'])
   source: string;
 }
@@ -70,9 +89,11 @@ class OutfitAttachmentDto {
   })
   @IsObject()
   items: {
+    outerwear?: OutfitItemSnapshotDto;
     top?: OutfitItemSnapshotDto;
     bottom?: OutfitItemSnapshotDto;
-    shoe?: OutfitItemSnapshotDto;
+    footwear?: OutfitItemSnapshotDto;
+    dress?: OutfitItemSnapshotDto;
     accessories: OutfitItemSnapshotDto[];
   };
 }
@@ -82,8 +103,11 @@ class OutfitSwapIntentDto {
   @IsString()
   outfitId: string;
 
-  @ApiProperty({ description: 'Swap category', enum: ['TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'] })
-  @IsIn(['TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'])
+  @ApiProperty({
+    description: 'Swap category',
+    enum: ['TOP', 'BOTTOM', 'FOOTWEAR', 'OUTERWEAR', 'DRESS', 'ACCESSORY'],
+  })
+  @IsIn(['TOP', 'BOTTOM', 'FOOTWEAR', 'OUTERWEAR', 'DRESS', 'ACCESSORY'])
   category: string;
 }
 

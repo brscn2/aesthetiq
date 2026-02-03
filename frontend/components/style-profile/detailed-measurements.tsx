@@ -24,7 +24,7 @@ interface DetailedMeasurementsProps {
   currentSizes?: {
     top?: string
     bottom?: string
-    shoe?: string
+    footwear?: string
   }
   onSizesUpdate?: () => void
 }
@@ -43,22 +43,22 @@ type SizeRegion = "EU" | "US" | "UK"
 const SIZE_OPTIONS: Record<SizeRegion, {
   top: string[]
   bottom: string[]
-  shoe: string[]
+  footwear: string[]
 }> = {
   EU: {
     top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
     bottom: ["38", "40", "42", "44", "46", "48", "50", "52"],
-    shoe: ["38", "39", "40", "41", "42", "43", "44", "45", "46"],
+    footwear: ["38", "39", "40", "41", "42", "43", "44", "45", "46"],
   },
   US: {
     top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
     bottom: ["24", "26", "28", "30", "32", "34", "36", "38"],
-    shoe: ["5", "6", "7", "8", "9", "10", "11", "12", "13"],
+    footwear: ["5", "6", "7", "8", "9", "10", "11", "12", "13"],
   },
   UK: {
     top: ["XS", "S", "M", "L", "XL", "XXL", "3X"],
     bottom: ["24", "26", "28", "30", "32", "34", "36", "38"],
-    shoe: ["3", "4", "5", "6", "7", "8", "9", "10", "11"],
+    footwear: ["3", "4", "5", "6", "7", "8", "9", "10", "11"],
   },
 }
 
@@ -72,8 +72,8 @@ export function DetailedMeasurements({
   const { styleProfileApi } = useApi()
 
   // Helper function to detect region from saved sizes
-  const detectRegionFromSizes = (sizes: { top?: string; bottom?: string; shoe?: string }): SizeRegion | "" => {
-    if (!sizes.top && !sizes.bottom && !sizes.shoe) return ""
+  const detectRegionFromSizes = (sizes: { top?: string; bottom?: string; footwear?: string }): SizeRegion | "" => {
+    if (!sizes.top && !sizes.bottom && !sizes.footwear) return ""
 
     // Check each region to see if the sizes match
     for (const [reg, options] of Object.entries(SIZE_OPTIONS)) {
@@ -89,9 +89,9 @@ export function DetailedMeasurements({
         total++
         if (options.bottom.includes(sizes.bottom)) matches++
       }
-      if (sizes.shoe) {
+      if (sizes.footwear) {
         total++
-        if (options.shoe.includes(sizes.shoe)) matches++
+        if (options.footwear.includes(sizes.footwear)) matches++
       }
 
       // If at least one size matches and all provided sizes match, this is likely the region
@@ -111,7 +111,7 @@ export function DetailedMeasurements({
   const [sizes, setSizes] = useState({
     top: currentSizes?.top || "",
     bottom: currentSizes?.bottom || "",
-    shoe: currentSizes?.shoe || "",
+    footwear: currentSizes?.footwear || "",
   })
 
   const [measurements, setMeasurements] = useState<BodyMeasurements>({
@@ -133,7 +133,7 @@ export function DetailedMeasurements({
       setSizes({
         top: currentSizes.top || "",
         bottom: currentSizes.bottom || "",
-        shoe: currentSizes.shoe || "",
+        footwear: currentSizes.footwear || "",
       })
       // Only set region if we haven't manually changed it, or if no region is set
       if (!hasManuallyChangedRegion || !region) {
@@ -150,14 +150,14 @@ export function DetailedMeasurements({
       const options = SIZE_OPTIONS[region]
       const topValid = !sizes.top || options.top.includes(sizes.top)
       const bottomValid = !sizes.bottom || options.bottom.includes(sizes.bottom)
-      const shoeValid = !sizes.shoe || options.shoe.includes(sizes.shoe)
+      const shoeValid = !sizes.footwear || options.footwear.includes(sizes.footwear)
 
       // Only reset if sizes don't match the new region
       if (!topValid || !bottomValid || !shoeValid) {
         setSizes({
           top: "",
           bottom: "",
-          shoe: "",
+          footwear: "",
         })
       }
     }
@@ -168,7 +168,7 @@ export function DetailedMeasurements({
     setRegion(value)
   }
 
-  const handleSizeChange = (type: "top" | "bottom" | "shoe", value: string) => {
+  const handleSizeChange = (type: "top" | "bottom" | "footwear", value: string) => {
     setSizes((prev) => ({ ...prev, [type]: value }))
   }
 
@@ -233,7 +233,7 @@ export function DetailedMeasurements({
   }
 
   const getSizeOptions = () => {
-    if (!region) return { top: [], bottom: [], shoe: [] }
+    if (!region) return { top: [], bottom: [], footwear: [] }
     return SIZE_OPTIONS[region]
   }
 
@@ -321,17 +321,17 @@ export function DetailedMeasurements({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="shoe-size">Shoe Size {region && `(${region})`}</Label>
+                <Label htmlFor="footwear-size">Footwear Size {region && `(${region})`}</Label>
                 <Select
-                  value={sizes.shoe}
-                  onValueChange={(value) => handleSizeChange("shoe", value)}
+                  value={sizes.footwear}
+                  onValueChange={(value) => handleSizeChange("footwear", value)}
                   disabled={!region}
                 >
-                  <SelectTrigger id="shoe-size">
+                  <SelectTrigger id="footwear-size">
                     <SelectValue placeholder={region ? "Select size" : "Select region first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {sizeOptions.shoe.map((size) => (
+                    {sizeOptions.footwear.map((size) => (
                       <SelectItem key={size} value={size}>
                         {size}
                       </SelectItem>

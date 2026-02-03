@@ -1,4 +1,5 @@
 """Wardrobe server schemas - aligned with backend WardrobeItem schema."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,8 +15,10 @@ from mcp_servers.shared.schemas import Category, SeasonalPaletteScores
 # Collection: wardrobeitems
 # -----------------------------------------------------------------------------
 
+
 class WardrobeItem(BaseModel):
     """Wardrobe item as stored in MongoDB 'wardrobeitems' collection."""
+
     id: str = Field(..., description="Wardrobe item id (stringified ObjectId)")
     userId: str
     imageUrl: str
@@ -23,7 +26,9 @@ class WardrobeItem(BaseModel):
     category: Category
     subCategory: Optional[str] = None
     brand: Optional[str] = None
-    retailerId: Optional[str] = None  # References Retailer collection (matches backend schema)
+    retailerId: Optional[str] = (
+        None  # References Retailer collection (matches backend schema)
+    )
     colors: List[str] = Field(default_factory=list, description="Hex color codes")
     notes: Optional[str] = None
     isFavorite: bool = False
@@ -41,8 +46,10 @@ class WardrobeItem(BaseModel):
 # Filter models
 # -----------------------------------------------------------------------------
 
+
 class WardrobeFilters(BaseModel):
     """Filters for querying wardrobe items."""
+
     category: Optional[Category] = None
     subCategory: Optional[str] = None
     brand: Optional[str] = None
@@ -55,6 +62,7 @@ class WardrobeFilters(BaseModel):
 # -----------------------------------------------------------------------------
 # Request/Response models for MCP tool endpoints
 # -----------------------------------------------------------------------------
+
 
 class SearchWardrobeItemsRequest(BaseModel):
     query: str
@@ -97,6 +105,7 @@ class FilterWardrobeItemsResponse(BaseModel):
 # -----------------------------------------------------------------------------
 # Feedback request/response models
 # -----------------------------------------------------------------------------
+
 
 class SaveItemFeedbackRequest(BaseModel):
     user_id: str

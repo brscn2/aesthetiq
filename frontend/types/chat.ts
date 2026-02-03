@@ -201,8 +201,8 @@ export interface OutfitAttachment {
   items: {
     top?: OutfitItemSnapshot;
     bottom?: OutfitItemSnapshot;
-    outerwear?: OutfitItemSnapshot;
     footwear?: OutfitItemSnapshot;
+    outerwear?: OutfitItemSnapshot;
     dress?: OutfitItemSnapshot;
     accessories: OutfitItemSnapshot[];
   };
@@ -210,7 +210,7 @@ export interface OutfitAttachment {
 
 export interface OutfitSwapIntent {
   outfitId: string;
-  category: "TOP" | "BOTTOM" | "OUTERWEAR" | "FOOTWEAR" | "DRESS" | "ACCESSORY";
+  category: "TOP" | "BOTTOM" | "FOOTWEAR" | "OUTERWEAR" | "ACCESSORY" | "DRESS";
 }
 
 // =============================================================================

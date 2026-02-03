@@ -130,7 +130,7 @@ async def test_get_commerce_item_returns_item(monkeypatch):
 
     assert item is not None
     assert item.id == "item123"
-    assert item.category == Category.SHOE
+    assert item.category == Category.FOOTWEAR
     assert item.brand == "Nike"
     assert item.price == 12999
     assert item.inStock is True

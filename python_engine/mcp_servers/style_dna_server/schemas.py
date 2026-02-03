@@ -32,7 +32,7 @@ class BudgetRange(str, Enum):
 class Sizes(BaseModel):
     top: Optional[str] = None
     bottom: Optional[str] = None
-    shoe: Optional[str] = None
+    footwear: Optional[str] = None
 
 
 class FitPreferences(BaseModel):
