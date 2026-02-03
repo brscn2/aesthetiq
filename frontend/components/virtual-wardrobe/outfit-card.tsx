@@ -48,6 +48,7 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
 
   const totalItems = Math.max(gridItems.length, 1)
   const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
+  const rows = Math.ceil(totalItems / columns)
 
   const hasDeletedItems = 
     isItemDeleted(outfit.items.top) ||
@@ -67,7 +68,10 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
         <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-muted">
           <div
             className="grid gap-1 h-full p-2"
-            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+            }}
           >
             {gridItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex items-center justify-center bg-background/50 rounded">
