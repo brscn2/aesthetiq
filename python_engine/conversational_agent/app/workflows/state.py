@@ -332,6 +332,7 @@ class ConversationState(TypedDict, total=False):
     # Intent Classification (Intent Classifier Node)
     # =========================================================================
     intent: Literal["general", "clothing"]
+    task_type: Literal["general", "item_search", "outfit_analysis"]
 
     # =========================================================================
     # Query Analysis (Query Analyzer Node)
@@ -586,6 +587,10 @@ def validate_state(state: ConversationState) -> List[str]:
     intent = state.get("intent")
     if intent and intent not in ["general", "clothing"]:
         errors.append(f"invalid intent: {intent}")
+
+    task_type = state.get("task_type")
+    if task_type and task_type not in ["general", "item_search", "outfit_analysis"]:
+        errors.append(f"invalid task_type: {task_type}")
 
     # Search scope validation
     scope = state.get("search_scope")

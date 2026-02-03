@@ -46,7 +46,7 @@ class ExtractedFilters(BaseModel):
 
     category: Optional[str] = Field(
         None,
-        description="Clothing category: TOP, BOTTOM, SHOE, ACCESSORY (jackets/blazers/coats are TOP with sub_category)",
+        description="Clothing category: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY (jackets/blazers/coats are OUTERWEAR with sub_category)",
     )
     sub_category: Optional[str] = Field(
         None,
@@ -187,7 +187,7 @@ Your task is to analyze the user's clothing-related query and extract:
    - If unclear/ambiguous → "both" (wardrobe-first is the safest default)
 
 3. **Filters** - Extract any specific requirements:
-   - category: TOP, BOTTOM, SHOE, ACCESSORY (Note: jackets, blazers, coats are categorized as TOP with appropriate sub_category)
+   - category: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY (Note: jackets, blazers, coats are categorized as OUTERWEAR with appropriate sub_category)
    - sub_category: Jacket, Blazer, Coat, Shirt, T-shirt, Pants, Jeans, Dress, Skirt, Sneakers, Boots, etc. (for directly mentioned items)
    - sub_categories: DECOMPOSED OUTFIT ITEMS - If user asks for an outfit concept, decompose it into concrete items:
      * "gym outfit" -> ["T-shirt", "Sweatpants", "Sneakers"]
@@ -314,9 +314,13 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 missing.append("TOP")
             if not items.get("bottom"):
                 missing.append("BOTTOM")
+            if not items.get("outerwear"):
+                missing.append("OUTERWEAR")
             if not items.get("footwear"):
                 missing.append("FOOTWEAR")
-            if not items.get("accessories"):
+            if not items.get("dress"):
+                missing.append("DRESS")
+            if not (items.get("accessories") or []):
                 missing.append("ACCESSORY")
             return missing
 

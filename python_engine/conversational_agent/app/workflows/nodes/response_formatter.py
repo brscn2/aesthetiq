@@ -5,7 +5,6 @@ This node formats the final response based on the workflow results:
 - Handles clarification requests
 - Generates fallback responses when needed
 """
-
 from typing import Any, Dict, List, Optional
 
 from app.workflows.state import ConversationState
@@ -55,7 +54,7 @@ Your task is to create a natural, helpful response based on the workflow results
 async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
     """
     Response formatter node - formats final response.
-
+    
     Reads:
         - state["final_response"]: Pre-existing response (from conversation agent)
         - state["retrieved_items"]: Clothing items found
@@ -64,14 +63,14 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
         - state["clarification_question"]: Question to ask
         - state["message"]: Original user message
         - state["style_dna"]: User's style preferences
-
+        
     Writes:
         - state["final_response"]: Formatted response string
     """
     message = state.get("message", "")
     retrieved_items = state.get("retrieved_items") or []
     response_item_ids = _get_response_item_ids(retrieved_items)
-
+    
     # If we already have a final response (from conversation agent), just return
     existing_response = state.get("final_response")
     if existing_response:
@@ -87,22 +86,20 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
     attached_outfits = state.get("attached_outfits") or []
     swap_intents = state.get("swap_intents") or []
     outfit_context = _build_outfit_context(attached_outfits, swap_intents)
-
-    logger.info(
-        f"Formatting response: {len(retrieved_items)} items, clarification={needs_clarification}"
-    )
-
+    
+    logger.info(f"Formatting response: {len(retrieved_items)} items, clarification={needs_clarification}")
+    
     # Get services
     llm_service = get_llm_service()
     tracing_service = get_tracing_service()
-
+    
     # Check for errors in metadata first
     metadata = state.get("metadata", {})
     if metadata.get("error"):
         error_type = metadata.get("error_type", "unknown")
         error_info = metadata.get("error", "")
         logger.warning(f"Response formatter detected error in metadata: {error_type}")
-
+        
         # Generate error response based on error type
         error_str = str(error_info).lower() if error_info else ""
         if "timeout" in error_str or "time" in error_str:
@@ -111,7 +108,7 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
             error_response = "I apologize, but I'm having trouble connecting to my services. Please try again in a moment."
         else:
             error_response = "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
-
+        
         return {
             "final_response": error_response,
             "workflow_status": "completed",
@@ -120,20 +117,18 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 "error_handled": True,
             },
         }
-
+    
     try:
         # Handle clarification case - workflow will pause waiting for user response
         if needs_clarification and clarification_question:
-            logger.info(
-                "Generating clarification response - workflow will await user input"
-            )
+            logger.info("Generating clarification response - workflow will await user input")
             response = await _format_clarification(
-                llm_service,
-                message,
+                llm_service, 
+                message, 
                 clarification_question,
                 outfit_context,
             )
-
+            
             # Log to Langfuse
             if trace_id:
                 tracing_service.log_llm_call(
@@ -146,19 +141,19 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                         "clarification_question": clarification_question,
                     },
                 )
-
+            
             return {
                 "final_response": response,
                 "workflow_status": "awaiting_clarification",
                 "response_item_ids": [],
             }
-
+        
         # Handle no items case
         elif not retrieved_items or len(retrieved_items) == 0:
             logger.info("Generating no-results response")
             response = await _format_no_results(llm_service, message, outfit_context)
             response_item_ids = []
-
+        
         # Handle items found case
         else:
             logger.info(f"Generating items response for {len(retrieved_items)} items")
@@ -172,7 +167,7 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 outfit_context,
             )
             response_item_ids = _get_response_item_ids(retrieved_items)
-
+        
         # Log to Langfuse
         if trace_id:
             tracing_service.log_llm_call(
@@ -186,12 +181,10 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                     "sources": search_sources_used,
                 },
             )
-
+        
         # Validate response is not empty
         if not response or not response.strip():
-            logger.warning(
-                "Response formatter generated empty response, using fallback"
-            )
+            logger.warning("Response formatter generated empty response, using fallback")
             if retrieved_items:
                 response = (
                     "I found some options for you! Here's what I discovered:\n\n"
@@ -201,26 +194,24 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
                 response = "I apologize, but I'm having trouble generating a response. Please try rephrasing your question."
 
         # Match response item IDs to items explicitly mentioned in the response
-        matched_response_ids = _extract_response_item_ids_from_text(
-            response, retrieved_items
-        )
+        matched_response_ids = _extract_response_item_ids_from_text(response, retrieved_items)
         response_item_ids = matched_response_ids if matched_response_ids else []
-
+        
         logger.info(f"Formatted response: {len(response)} chars")
-
+        
         return {
             "final_response": response,
             "workflow_status": "completed",
             "response_item_ids": response_item_ids,
         }
-
+        
     except Exception as e:
         logger.error(f"Response formatting failed: {e}", exc_info=True)
-
+        
         # Log error
         if trace_id:
             tracing_service.log_error(trace_id=trace_id, error=e)
-
+        
         # Fallback response - ensure it's never empty
         if retrieved_items:
             response = (
@@ -229,11 +220,11 @@ async def response_formatter_node(state: ConversationState) -> Dict[str, Any]:
             )
         else:
             response = "I apologize, but I encountered an issue formatting the response. Please try again or rephrase your question."
-
+        
         # Ensure response is never empty
         if not response or not response.strip():
             response = "I apologize, but I'm having trouble generating a response. Please try again or rephrase your question."
-
+        
         return {
             "final_response": response,
             "workflow_status": "completed",
@@ -316,9 +307,7 @@ def _build_outfit_context(
             accessory_names = []
             for acc in accessories:
                 if isinstance(acc, dict):
-                    accessory_names.append(
-                        acc.get("name") or acc.get("category") or "Accessory"
-                    )
+                    accessory_names.append(acc.get("name") or acc.get("category") or "Accessory")
             if accessory_names:
                 lines.append(f"  - Accessories: {', '.join(accessory_names)}")
 
@@ -346,9 +335,7 @@ def _extract_response_item_ids_from_text(
         return []
 
     def normalize(text: str) -> str:
-        return "".join(
-            ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in text
-        ).strip()
+        return "".join(ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in text).strip()
 
     normalized_response = normalize(response)
     allowlist = {
@@ -451,12 +438,12 @@ We need clarification. The question to ask is: {clarification_question}
 Create a natural, friendly response that asks this clarification question.
 Keep it brief and conversational.
 """
-
+    
     response = await llm_service.chat_with_history(
         system_prompt=FORMATTER_PROMPT,
         user_message=prompt,
     )
-
+    
     return response
 
 
@@ -475,12 +462,12 @@ We couldn't find any matching items. Create a helpful response that:
 2. Suggests alternatives or asks if the user wants to broaden their search
 3. Stays positive and helpful
 """
-
+    
     response = await llm_service.chat_with_history(
         system_prompt=FORMATTER_PROMPT,
         user_message=prompt,
     )
-
+    
     return response
 
 
@@ -495,7 +482,7 @@ async def _format_items(
 ) -> str:
     """Format a response with clothing items."""
     from app.utils.color_utils import get_color_name, get_color_name_from_hex_list
-
+    
     # Build items summary - handle both structured items and agent response format
     items_text = ""
     for i, item in enumerate(retrieved_items[:5], 1):
@@ -505,7 +492,7 @@ async def _format_items(
                 name = item.get("name", "Unknown Item")
                 brand = item.get("brand", "")
                 price = item.get("price")
-
+                
                 # Get color - prefer descriptive name, fallback to hex conversion
                 color = item.get("color")  # This should already be set by normalization
                 if not color:
@@ -529,20 +516,16 @@ async def _format_items(
                             raw = item.get("raw", {})
                             if isinstance(raw, dict):
                                 raw_colors = raw.get("colors") or []
-                                if (
-                                    raw_colors
-                                    and isinstance(raw_colors, list)
-                                    and len(raw_colors) > 0
-                                ):
+                                if raw_colors and isinstance(raw_colors, list) and len(raw_colors) > 0:
                                     try:
                                         color = get_color_name_from_hex_list(raw_colors)
                                     except Exception:
                                         color = raw_colors[0] if raw_colors else ""
-
+                
                 category = item.get("category", "")
                 source = item.get("source", "")
                 product_url = item.get("productUrl", "")
-
+                
                 # Build item description
                 item_desc = f"{name}"
                 if brand:
@@ -555,9 +538,9 @@ async def _format_items(
                     item_desc += f" [from {source}]"
                 if product_url:
                     item_desc += f" [Link: {product_url}]"
-
+                
                 items_text += f"\n{i}. {item_desc}"
-
+            
             # Handle agent response format (legacy)
             elif "type" in item or "content" in item:
                 item_type = item.get("type", "unknown")
@@ -566,25 +549,23 @@ async def _format_items(
                 items_text += f"\n{i}. [{item_type}] {content[:300]}"
                 if sources:
                     items_text += f" (from: {', '.join(sources)})"
-
+            
             # Handle raw dict (fallback)
             else:
                 items_text += f"\n{i}. {str(item)[:300]}"
         else:
             items_text += f"\n{i}. {str(item)[:300]}"
-
+    
     style_text = ""
     if style_dna:
         style_text = f"\n\nUser's Style DNA: {style_dna}"
-
+    
     source_note = ""
     if fallback_used:
-        source_note = (
-            "\nNote: These recommendations are based on general fashion knowledge."
-        )
+        source_note = "\nNote: These recommendations are based on general fashion knowledge."
     elif "web" in search_sources:
         source_note = "\nNote: Some of these suggestions come from web search results."
-
+    
     prompt = f"""
 Original user request: {original_message}
 {outfit_context}
@@ -597,12 +578,12 @@ Create a helpful, natural response presenting these recommendations.
 Format it nicely and include personalized touches if style DNA is available.
 Keep it concise but informative.
 """
-
+    
     response = await llm_service.chat_with_history(
         system_prompt=FORMATTER_PROMPT,
         user_message=prompt,
     )
-
+    
     return response
 
 
@@ -630,5 +611,5 @@ def _simple_format_items(items: List[Dict[str, Any]]) -> str:
                 result.append(f"{i}. {str(item)[:200]}")
         else:
             result.append(f"{i}. {str(item)[:200]}")
-
+    
     return "\n".join(result)

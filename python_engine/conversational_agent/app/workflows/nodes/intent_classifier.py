@@ -23,6 +23,9 @@ class IntentClassification(BaseModel):
     intent: Literal["general", "clothing"] = Field(
         description="The classified intent: 'general' for fashion questions/advice, 'clothing' for specific item recommendations"
     )
+    task_type: Literal["general", "item_search", "outfit_analysis"] = Field(
+        description="Task type: 'general' for non-item questions, 'item_search' for finding/recommending items, 'outfit_analysis' for analyzing/comparing attached outfits without searching"
+    )
     confidence: float = Field(
         description="Confidence score between 0 and 1",
         ge=0.0,
@@ -35,22 +38,22 @@ class IntentClassification(BaseModel):
 
 INTENT_CLASSIFIER_PROMPT = """You are an intent classifier for AesthetIQ, a fashion AI assistant.
 
-Your task is to classify the user's message into one of two intents:
+Your task is to classify the user's message into:
 
-1. **general** - Use this for:
-   - General fashion questions (e.g., "What are the latest trends?")
-   - Style advice and tips (e.g., "What colors suit warm skin tones?")
-   - Fashion knowledge questions (e.g., "What is capsule wardrobe?")
-   - Greetings and casual conversation about fashion
+1) intent: **general** or **clothing**
+2) task_type: **general**, **item_search**, or **outfit_analysis**
 
-2. **clothing** - Use this for:
-   - Specific clothing item requests (e.g., "Find me a jacket")
-   - Shopping requests (e.g., "I want to buy a new dress")
-   - Wardrobe queries (e.g., "What can I wear from my closet?")
-   - Outfit recommendations (e.g., "What should I wear to a job interview?")
-    - Outfit-specific edits or swaps (e.g., "Swap the top in this outfit")
-    - Requests referencing attached outfits (e.g., "Find a top for that outfit")
-   - Combining wardrobe items with new purchases
+Definitions:
+- general: fashion questions, advice, trends, or discussion that do not require searching items.
+- item_search: requests to find/recommend/buy/swap/add/replace items (wardrobe/commerce search).
+- outfit_analysis: requests to analyze, compare, or evaluate attached outfits without requesting new items.
+
+Examples:
+- "Compare the two outfits I attached" -> intent: general, task_type: outfit_analysis
+- "Which outfit fits my style profile better?" (with attached outfits) -> intent: general, task_type: outfit_analysis
+- "Find a bag for this outfit" -> intent: clothing, task_type: item_search
+- "I need a jacket" -> intent: clothing, task_type: item_search
+- "What are the latest trends?" -> intent: general, task_type: general
 
 Analyze the user's message carefully and provide your classification.
 """
@@ -99,6 +102,7 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
         )
 
         intent = classification.intent
+        task_type = classification.task_type
 
         # Log to Langfuse
         if trace_id:
@@ -106,12 +110,12 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
                 trace_id=trace_id,
                 agent_name="intent_classifier",
                 input_text=user_prompt,
-                output_text=f"intent={intent}, confidence={classification.confidence}, reasoning={classification.reasoning}",
+                output_text=f"intent={intent}, task_type={task_type}, confidence={classification.confidence}, reasoning={classification.reasoning}",
                 metadata={"classification": classification.model_dump()},
             )
 
         logger.info(
-            f"Intent classified as '{intent}' with confidence {classification.confidence:.2f}"
+            f"Intent classified as '{intent}' (task_type={task_type}) with confidence {classification.confidence:.2f}"
         )
 
         # Update metadata
@@ -120,6 +124,7 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
 
         return {
             "intent": intent,
+            "task_type": task_type,
             "metadata": metadata,
         }
 
@@ -128,13 +133,15 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
 
         # Minimal fallback - default to clothing (more specific intent)
         intent = "clothing"
-        logger.warning(f"Fallback intent: {intent}")
+        task_type = "item_search"
+        logger.warning(f"Fallback intent: {intent} (task_type={task_type})")
 
         metadata = state.get("metadata", {})
         metadata["intent_classification"] = {
             "intent": intent,
+            "task_type": task_type,
             "confidence": 0.5,
             "error": str(e),
         }
 
-        return {"intent": intent, "metadata": metadata}
+        return {"intent": intent, "task_type": task_type, "metadata": metadata}

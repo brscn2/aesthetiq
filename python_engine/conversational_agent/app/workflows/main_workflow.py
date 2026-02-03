@@ -16,6 +16,7 @@ from app.workflows.nodes.intent_classifier import intent_classifier_node
 from app.workflows.nodes.query_analyzer import query_analyzer_node
 from app.workflows.nodes.response_formatter import response_formatter_node
 from app.agents.conversation_agent import conversation_agent_node
+from app.agents.outfit_analysis_agent import outfit_analysis_agent_node
 from app.agents.clothing_recommender_agent import clothing_recommender_node
 from app.agents.clothing_analyzer_agent import clothing_analyzer_node
 from app.core.config import get_settings
@@ -51,7 +52,8 @@ class ClarificationExtraction(BaseModel):
         None, description="Size if mentioned: XS, S, M, L, XL, XXL"
     )
     category: Optional[str] = Field(
-        None, description="Clothing category: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY"
+        None,
+        description="Clothing category: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY",
     )
     sub_category: Optional[str] = Field(
         None, description="Specific type like Jacket, Dress, Sneakers, etc."
@@ -76,9 +78,18 @@ def route_after_input_guardrails(state: ConversationState) -> Literal["safe", "u
     return "safe" if is_safe else "unsafe"
 
 
-def route_after_intent(state: ConversationState) -> Literal["general", "clothing"]:
-    """Route based on intent classification."""
+def route_after_intent(
+    state: ConversationState,
+) -> Literal["general", "clothing", "outfit_analysis"]:
+    """Route based on intent classification and task type."""
+    task_type = state.get("task_type")
     intent = state.get("intent", "general")
+    if task_type == "outfit_analysis":
+        logger.debug("Routing to outfit_analysis based on task_type")
+        return "outfit_analysis"
+    if task_type == "item_search":
+        logger.debug("Routing to clothing based on task_type")
+        return "clothing"
     logger.debug(f"Routing based on intent: {intent}")
     return intent
 
@@ -500,6 +511,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("intent_classifier", intent_classifier_node)
     workflow.add_node("query_analyzer", query_analyzer_node)
     workflow.add_node("conversation_agent", conversation_agent_node)
+    workflow.add_node("outfit_analysis_agent", outfit_analysis_agent_node)
     workflow.add_node("clothing_recommender", clothing_recommender_node)
     workflow.add_node("clothing_analyzer", clothing_analyzer_node)
     workflow.add_node("output_guardrails", output_guardrails_node)
@@ -508,7 +520,6 @@ def create_workflow() -> StateGraph:
 
     # Set entry point - always check for pending clarification first
     workflow.set_entry_point("check_clarification")
-
     # Route after clarification check
     workflow.add_conditional_edges(
         "check_clarification",
@@ -539,6 +550,7 @@ def create_workflow() -> StateGraph:
         {
             "general": "conversation_agent",
             "clothing": "query_analyzer",
+            "outfit_analysis": "outfit_analysis_agent",
         },
     )
 
