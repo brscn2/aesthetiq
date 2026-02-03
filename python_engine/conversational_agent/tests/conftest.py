@@ -6,7 +6,6 @@ from typing import Dict, Any, List
 from app.services.backend_client import BackendClient
 from app.services.session.session_service import SessionService
 from app.services.tracing.langfuse_service import LangfuseTracingService
-from app.mcp.client import MCPClient
 
 
 @pytest.fixture
