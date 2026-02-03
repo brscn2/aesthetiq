@@ -10,6 +10,9 @@
 **/aesthetiq-env/**
 
 .env
+.env.prod
+.env.local
+.env.*.local
 /logs/app.log
 
 .venv*/
