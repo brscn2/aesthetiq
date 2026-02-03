@@ -47,6 +47,7 @@ export interface FindStyleItemsParams {
   limit?: number;
   brand?: string;
   category?: string;
+  subCategory?: string;
   gender?: string;
   store?: string;
 }

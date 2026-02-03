@@ -54,4 +54,11 @@ export class FindStyleItemsDto {
   @IsOptional()
   @IsString()
   store?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by subcategory',
+  })
+  @IsOptional()
+  @IsString()
+  subCategory?: string;
 }

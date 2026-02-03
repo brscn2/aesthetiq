@@ -463,10 +463,10 @@ export class CommerceService {
     findStyleDto: FindStyleItemsDto,
   ): Promise<{ items: ScrapedCommerceItem[]; total: number; page: number; limit: number }> {
     try {
-      const { page = 1, limit = 50, brand, category, gender, store } = findStyleDto;
+      const { page = 1, limit = 50, brand, category, gender, store, subCategory } = findStyleDto;
       const skip = (page - 1) * limit;
 
-      this.logger.log(`Finding style items: page=${page}, limit=${limit}, brand=${brand}, category=${category}, gender=${gender}, store=${store}`);
+      this.logger.log(`Finding style items: page=${page}, limit=${limit}, brand=${brand}, category=${category}, subCategory=${subCategory}, gender=${gender}, store=${store}`);
 
       // Build filter query
       const filter: any = { isActive: true };
@@ -476,6 +476,9 @@ export class CommerceService {
       }
       if (category) {
         filter.category = category;
+      }
+      if (subCategory) {
+        filter.subCategory = subCategory;
       }
       if (gender) {
         filter.gender = gender;

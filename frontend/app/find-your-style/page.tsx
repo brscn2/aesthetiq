@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useAuth } from "@clerk/nextjs"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { StyleItemCard } from "@/components/style-item-card"
@@ -8,6 +8,30 @@ import { findYourStyle, StyleItem, FindStyleItemsParams } from "@/lib/style-api"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
+
+// Category and Subcategory structure based on scraped data
+const CATEGORY_SUBCATEGORIES: Record<string, string[]> = {
+  ACCESSORY: [
+    "Bag", "Belt", "Bowling Bag", "Cap", "Crossbody Bag", "Gloves", 
+    "Hat", "Jewelry", "Scarf", "Shoulder Bag", "Socks", "Tote Bag"
+  ],
+  BOTTOM: [
+    "Jeans", "Joggers", "Leggings", "Shorts", "Skirt", "Skort", "Trousers"
+  ],
+  DRESS: ["Dress"],
+  FOOTWEAR: [
+    "Ankle Boots", "Boots", "Heels", "Sandals", "Shoes", "Sneakers"
+  ],
+  OUTERWEAR: [
+    "Anorak", "Blazer", "Bomber Jacket", "Coat", "Denim Jacket", 
+    "Faux Leather Jacket", "Fur Coat", "Jacket", "Leather Jacket", 
+    "Parka", "Puffer Jacket"
+  ],
+  TOP: [
+    "Blouse", "Bodysuit", "Cardigan", "Hoodie", "Overshirt", "Shirt", 
+    "Sweater", "Sweatshirt", "T-Shirt", "Tank Top", "Top"
+  ]
+}
 
 export default function FindYourStylePage() {
   const { getToken } = useAuth()
@@ -59,11 +83,26 @@ export default function FindYourStylePage() {
 
   const handleFilterChange = (key: keyof FindStyleItemsParams, value: string) => {
     setPage(1)
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value === "all" ? undefined : value,
-    }))
+    setFilters((prev) => {
+      const newFilters = {
+        ...prev,
+        [key]: value === "all" ? undefined : value,
+      }
+      
+      // Reset subcategory when category changes
+      if (key === "category") {
+        newFilters.subCategory = undefined
+      }
+      
+      return newFilters
+    })
   }
+
+  // Get available subcategories based on selected category
+  const availableSubcategories = useMemo(() => {
+    if (!filters.category) return []
+    return CATEGORY_SUBCATEGORIES[filters.category] || []
+  }, [filters.category])
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage)
@@ -111,12 +150,33 @@ export default function FindYourStylePage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="TOP">Tops</SelectItem>
-              <SelectItem value="BOTTOM">Bottoms</SelectItem>
-              <SelectItem value="SHOE">Shoes</SelectItem>
-              <SelectItem value="ACCESSORY">Accessories</SelectItem>
+              <SelectItem value="ACCESSORY">Accessory</SelectItem>
+              <SelectItem value="BOTTOM">Bottom</SelectItem>
+              <SelectItem value="DRESS">Dress</SelectItem>
+              <SelectItem value="FOOTWEAR">Footwear</SelectItem>
+              <SelectItem value="OUTERWEAR">Outerwear</SelectItem>
+              <SelectItem value="TOP">Top</SelectItem>
             </SelectContent>
           </Select>
+
+          {filters.category && availableSubcategories.length > 0 && (
+            <Select
+              value={filters.subCategory || "all"}
+              onValueChange={(value) => handleFilterChange("subCategory", value)}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Subcategory" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Subcategories</SelectItem>
+                {availableSubcategories.map((subcat) => (
+                  <SelectItem key={subcat} value={subcat}>
+                    {subcat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Select
             value={filters.store || "all"}
