@@ -21,7 +21,9 @@ export class Outfit {
     type: {
       top: { type: Types.ObjectId, ref: 'WardrobeItem' },
       bottom: { type: Types.ObjectId, ref: 'WardrobeItem' },
-      shoe: { type: Types.ObjectId, ref: 'WardrobeItem' },
+      outerwear: { type: Types.ObjectId, ref: 'WardrobeItem' },
+      footwear: { type: Types.ObjectId, ref: 'WardrobeItem' },
+      dress: { type: Types.ObjectId, ref: 'WardrobeItem' },
       accessories: [{ type: Types.ObjectId, ref: 'WardrobeItem' }],
     },
     required: true,
@@ -29,7 +31,9 @@ export class Outfit {
   items: {
     top?: Types.ObjectId;
     bottom?: Types.ObjectId;
-    shoe?: Types.ObjectId;
+    outerwear?: Types.ObjectId;
+    footwear?: Types.ObjectId;
+    dress?: Types.ObjectId;
     accessories: Types.ObjectId[];
   };
 

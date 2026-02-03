@@ -15,8 +15,10 @@ class Category(str, Enum):
     """Item category enum - used across wardrobe, commerce, and web search."""
     TOP = "TOP"
     BOTTOM = "BOTTOM"
-    SHOE = "SHOE"
+    OUTERWEAR = "OUTERWEAR"
+    FOOTWEAR = "FOOTWEAR"
     ACCESSORY = "ACCESSORY"
+    DRESS = "DRESS"
 
 
 # -----------------------------------------------------------------------------

@@ -46,7 +46,7 @@ def _parse_sizes(doc: Dict[str, Any]) -> Optional[Sizes]:
     return Sizes(
         top=sizes_data.get("top"),
         bottom=sizes_data.get("bottom"),
-        shoe=sizes_data.get("shoe"),
+        footwear=sizes_data.get("shoe"),
     )
 
 

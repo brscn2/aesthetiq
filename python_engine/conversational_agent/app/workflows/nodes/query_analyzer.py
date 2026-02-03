@@ -295,10 +295,12 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 This helps the agent construct proper search queries instead of searching for generic terms like 'BOTTOM'.
                 """
                 guidance = {
-                    "TOP": "tops, shirts, blouses, sweaters, jackets",
+                    "TOP": "tops, shirts, blouses, sweaters",
                     "BOTTOM": "bottoms, jeans, pants, shorts, skirts",
-                    "SHOE": "shoes, sneakers, boots, sandals, heels",
+                    "OUTERWEAR": "outerwear, jackets, coats, blazers",
+                    "FOOTWEAR": "footwear, sneakers, boots, sandals, heels",
                     "ACCESSORY": "accessories, bags, jewelry, belts, scarves, hats",
+                    "DRESS": "dresses, maxi, midi, mini, cocktail",
                 }
                 return guidance.get(category, category.lower())
 
@@ -310,8 +312,8 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                     missing.append("TOP")
                 if not items.get("bottom"):
                     missing.append("BOTTOM")
-                if not items.get("shoe"):
-                    missing.append("SHOE")
+                if not items.get("footwear"):
+                    missing.append("FOOTWEAR")
                 if not items.get("accessories"):
                     missing.append("ACCESSORY")
                 return missing

@@ -70,15 +70,19 @@ interface UserInfo {
 const categoryColors: Record<string, string> = {
   TOP: "bg-blue-50 text-blue-700",
   BOTTOM: "bg-green-50 text-green-700",
-  SHOE: "bg-purple-50 text-purple-700",
+  OUTERWEAR: "bg-indigo-50 text-indigo-700",
+  FOOTWEAR: "bg-purple-50 text-purple-700",
   ACCESSORY: "bg-orange-50 text-orange-700",
+  DRESS: "bg-pink-50 text-pink-700",
 }
 
 const categoryLabels: Record<string, string> = {
   TOP: "Top",
   BOTTOM: "Bottom",
-  SHOE: "Shoe",
+  OUTERWEAR: "Outerwear",
+  FOOTWEAR: "Footwear",
   ACCESSORY: "Accessory",
+  DRESS: "Dress",
 }
 
 export function ClothingList({ onEdit, onAdd }: ClothingListProps) {

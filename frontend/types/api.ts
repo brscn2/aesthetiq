@@ -101,8 +101,10 @@ export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
 export enum Category {
   TOP = 'TOP',
   BOTTOM = 'BOTTOM',
-  SHOE = 'SHOE',
+  OUTERWEAR = 'OUTERWEAR',
+  FOOTWEAR = 'FOOTWEAR',
   ACCESSORY = 'ACCESSORY',
+  DRESS = 'DRESS',
 }
 
 export interface WardrobeItem {

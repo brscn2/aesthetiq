@@ -26,12 +26,14 @@ export class OutfitService {
     const hasItems =
       items.top ||
       items.bottom ||
-      items.shoe ||
+      items.outerwear ||
+      items.footwear ||
+      items.dress ||
       (items.accessories && items.accessories.length > 0);
 
     if (!hasItems) {
       throw new BadRequestException(
-        'Outfit must contain at least one item (top, bottom, shoe, or accessory)',
+        'Outfit must contain at least one item (top, bottom, outerwear, footwear, dress, or accessory)',
       );
     }
 
@@ -42,7 +44,9 @@ export class OutfitService {
       items: {
         top: items.top ? new Types.ObjectId(items.top) : undefined,
         bottom: items.bottom ? new Types.ObjectId(items.bottom) : undefined,
-        shoe: items.shoe ? new Types.ObjectId(items.shoe) : undefined,
+        outerwear: items.outerwear ? new Types.ObjectId(items.outerwear) : undefined,
+        footwear: items.footwear ? new Types.ObjectId(items.footwear) : undefined,
+        dress: items.dress ? new Types.ObjectId(items.dress) : undefined,
         accessories: items.accessories
           ? items.accessories.map((id) => new Types.ObjectId(id))
           : [],
@@ -62,7 +66,9 @@ export class OutfitService {
       .find(filter)
       .populate('items.top')
       .populate('items.bottom')
-      .populate('items.shoe')
+      .populate('items.outerwear')
+      .populate('items.footwear')
+      .populate('items.dress')
       .populate('items.accessories')
       .sort({ createdAt: -1 })
       .exec();
@@ -73,7 +79,9 @@ export class OutfitService {
       .findById(id)
       .populate('items.top')
       .populate('items.bottom')
-      .populate('items.shoe')
+      .populate('items.outerwear')
+      .populate('items.footwear')
+      .populate('items.dress')
       .populate('items.accessories')
       .exec();
 
@@ -111,7 +119,9 @@ export class OutfitService {
       const newItems = {
         top: items.top !== undefined ? items.top : existingOutfit.items.top,
         bottom: items.bottom !== undefined ? items.bottom : existingOutfit.items.bottom,
-        shoe: items.shoe !== undefined ? items.shoe : existingOutfit.items.shoe,
+        outerwear: items.outerwear !== undefined ? items.outerwear : existingOutfit.items.outerwear,
+        footwear: items.footwear !== undefined ? items.footwear : existingOutfit.items.footwear,
+        dress: items.dress !== undefined ? items.dress : existingOutfit.items.dress,
         accessories: items.accessories !== undefined 
           ? items.accessories 
           : existingOutfit.items.accessories,
@@ -120,7 +130,9 @@ export class OutfitService {
       const hasItems =
         newItems.top ||
         newItems.bottom ||
-        newItems.shoe ||
+        newItems.outerwear ||
+        newItems.footwear ||
+        newItems.dress ||
         (newItems.accessories && newItems.accessories.length > 0);
 
       if (!hasItems) {
@@ -132,7 +144,9 @@ export class OutfitService {
       updateData.items = {
         top: items.top ? new Types.ObjectId(items.top) : (items.top === null ? undefined : existingOutfit.items.top),
         bottom: items.bottom ? new Types.ObjectId(items.bottom) : (items.bottom === null ? undefined : existingOutfit.items.bottom),
-        shoe: items.shoe ? new Types.ObjectId(items.shoe) : (items.shoe === null ? undefined : existingOutfit.items.shoe),
+        outerwear: items.outerwear ? new Types.ObjectId(items.outerwear) : (items.outerwear === null ? undefined : existingOutfit.items.outerwear),
+        footwear: items.footwear ? new Types.ObjectId(items.footwear) : (items.footwear === null ? undefined : existingOutfit.items.footwear),
+        dress: items.dress ? new Types.ObjectId(items.dress) : (items.dress === null ? undefined : existingOutfit.items.dress),
         accessories: items.accessories
           ? items.accessories.map((id) => new Types.ObjectId(id))
           : existingOutfit.items.accessories,

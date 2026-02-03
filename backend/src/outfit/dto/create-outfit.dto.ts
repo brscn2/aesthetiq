@@ -26,9 +26,19 @@ class OutfitItemsDto {
   @ApiProperty({ required: false, example: '507f1f77bcf86cd799439013' })
   @IsMongoId()
   @IsOptional()
-  shoe?: string;
+  outerwear?: string;
 
-  @ApiProperty({ required: false, type: [String], example: ['507f1f77bcf86cd799439014'] })
+  @ApiProperty({ required: false, example: '507f1f77bcf86cd799439014' })
+  @IsMongoId()
+  @IsOptional()
+  footwear?: string;
+
+  @ApiProperty({ required: false, example: '507f1f77bcf86cd799439015' })
+  @IsMongoId()
+  @IsOptional()
+  dress?: string;
+
+  @ApiProperty({ required: false, type: [String], example: ['507f1f77bcf86cd799439016'] })
   @IsArray()
   @IsMongoId({ each: true })
   @IsOptional()

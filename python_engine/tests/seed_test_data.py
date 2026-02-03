@@ -211,10 +211,10 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "imageUrl": "https://via.placeholder.com/400x600?text=Black+Pants",
             "seasonalPaletteScores": {"WARM_AUTUMN": 0.4, "COOL_WINTER": 0.95, "COOL_SUMMER": 0.8, "WARM_SPRING": 0.3},
         },
-        # SHOES
+        # FOOTWEAR
         {
             "name": "Brown Leather Oxford Shoes",
-            "category": "SHOE",
+            "category": "FOOTWEAR",
             "subCategory": "Oxford",
             "description": "Classic brown leather oxfords for formal occasions",
             "colors": ["#8B4513"],
@@ -229,7 +229,7 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
         },
         {
             "name": "White Canvas Sneakers",
-            "category": "SHOE",
+            "category": "FOOTWEAR",
             "subCategory": "Sneakers",
             "description": "Casual white sneakers for everyday wear",
             "colors": ["#FFFFFF"],
@@ -429,7 +429,7 @@ async def seed_wardrobe_items(db, user_id: ObjectId):
         },
         {
             "name": "Brown Leather Loafers",
-            "category": "SHOE",
+            "category": "FOOTWEAR",
             "subCategory": "Loafers",
             "colors": ["#8B4513"],
             "brand": "Cole Haan",

@@ -130,23 +130,26 @@ Your role is to find and recommend clothing items based on the user's request.
 **WARDROBE-FIRST PHILOSOPHY**: Suggest items users already own before showing new purchases.
 
 **CRITICAL: Valid Category Values**
-The system ONLY supports these 4 categories (case-sensitive, all caps):
-- TOP (upper body: jackets, coats, sweaters, shirts, blouses, dresses, tank tops, crop tops, hoodies, etc.)
+The system ONLY supports these 6 categories (case-sensitive, all caps):
+- TOP (upper body: shirts, blouses, sweaters, tank tops, crop tops, hoodies, etc.)
 - BOTTOM (lower body: pants, jeans, shorts, skirts, trousers, sweatpants, leggings, etc.)
-- SHOE (all footwear: sneakers, boots, heels, sandals, loafers, flip-flops, flats, mules, etc.)
+- OUTERWEAR (layering pieces: jackets, coats, blazers, cardigans, puffers, parkas, etc.)
+- FOOTWEAR (all footwear: sneakers, boots, heels, sandals, loafers, flip-flops, flats, mules, etc.)
 - ACCESSORY (bags, jewelry, belts, scarves, hats, sunglasses, watches, etc.)
+- DRESS (dresses: maxi, midi, mini, cocktail, evening, casual, wrap, shirt dress, etc.)
 
 **Category Mapping - - READ CAREFULLY - Use Meaning, Not a Fixed List**
-Map the user's wording to one of the 4 categories above by meaning, then set subCategory to a sensible label (title case).
-- If the user says a term NOT listed below, infer the category from what the item is (e.g. sandals, flip-flops, loafers → SHOE; tank top, crop top → TOP) and use their term in title case for subCategory (e.g. "Sandals", "Flip-Flops", "Loafers", "Tank Top").
+Map the user's wording to one of the 6 categories above by meaning, then set subCategory to a sensible label (title case).
+- If the user says a term NOT listed below, infer the category from what the item is (e.g. sandals, flip-flops, loafers → FOOTWEAR; tank top, crop top → TOP) and use their term in title case for subCategory (e.g. "Sandals", "Flip-Flops", "Loafers", "Tank Top").
 - Examples (use these when they fit; otherwise infer similarly):
-  - Jackets, Coats, Blazers, Cardigans → category: "TOP", subCategory: "Jacket" (or "Coat", "Blazer", "Cardigan")
-  - Dresses, Shirts, T-Shirts, Blouses, Sweaters, Hoodies → category: "TOP", subCategory: match the term (e.g. "Dress", "Shirt", "Sweater")
+  - Shirts, T-Shirts, Blouses, Sweaters, Hoodies, Tank Tops → category: "TOP", subCategory: match the term (e.g. "Shirt", "Sweater", "Hoodie")
   - Jeans, Pants, Trousers, Shorts, Skirts, Leggings, Sweatpants → category: "BOTTOM", subCategory: match the term (e.g. "Jeans", "Shorts", "Skirt")
-  - Sneakers, Boots, Heels, Sandals, Loafers, Flip-Flops → category: "SHOE", subCategory: match the term (e.g. "Sneakers", "Sandals", "Loafers")
+  - Jackets, Coats, Blazers, Cardigans, Puffers, Parkas → category: "OUTERWEAR", subCategory: match the term (e.g. "Jacket", "Coat", "Blazer")
+  - Sneakers, Boots, Heels, Sandals, Loafers, Flip-Flops → category: "FOOTWEAR", subCategory: match the term (e.g. "Sneakers", "Sandals", "Loafers")
   - Bags, Purses, Backpacks, Jewelry, Belts, Scarves, Hats, Sunglasses → category: "ACCESSORY", subCategory: match the term (e.g. "Bag", "Jewelry", "Belt", "Hat")
+  - Dresses (Maxi, Midi, Mini, Cocktail, Evening, Casual, Wrap, Shirt Dress) → category: "DRESS", subCategory: match the term (e.g. "Maxi", "Cocktail", "Wrap")
 
-NEVER use categories like "OUTERWEAR", "CLOTHING", "APPAREL" - these are INVALID. Use exactly one of: TOP, BOTTOM, SHOE, ACCESSORY.
+NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly one of: TOP, BOTTOM, OUTERWEAR, FOOTWEAR, ACCESSORY, DRESS.
 
 **Tool Usage Guidelines:**
 
@@ -165,7 +168,7 @@ NEVER use categories like "OUTERWEAR", "CLOTHING", "APPAREL" - these are INVALID
    
    **MANDATORY: ALWAYS use filters parameter with category and subCategory**
    - You MUST extract the category and subCategory from the user's query using the mapping rules above
-   - Category must be EXACTLY one of: "TOP", "BOTTOM", "SHOE", "ACCESSORY" (all caps, as written)
+   - Category must be EXACTLY one of: "TOP", "BOTTOM", "OUTERWEAR", "FOOTWEAR", "ACCESSORY", "DRESS" (all caps, as written)
    - SubCategory is the specific item type (use title case, e.g., "Bag", "Jacket", "Jeans")
    - **IMPORTANT: Only include filter fields that have actual values**
    - DO NOT pass None or empty values for optional list fields (colors, disliked_item_ids)
@@ -184,7 +187,7 @@ NEVER use categories like "OUTERWEAR", "CLOTHING", "APPAREL" - these are INVALID
     - Example: For gym outfit with "both" scope:
       1. Search wardrobe for T-shirt with filters: {category: "TOP", subCategory: "T-Shirt"}
       2. Search wardrobe for Sweatpants with filters: {category: "BOTTOM", subCategory: "Sweatpants"}
-      3. Search wardrobe for Sneakers with filters: {category: "SHOE", subCategory: "Sneakers"}
+      3. Search wardrobe for Sneakers with filters: {category: "FOOTWEAR", subCategory: "Sneakers"}
       4. If any category missing from wardrobe, search commerce for that category only with proper filters
 
 5. **Graceful Fallback Ranking**:
@@ -878,7 +881,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     excluded_item_ids: set[str] = set()
     for outfit in attached_outfits:
         items = outfit.get("items", {}) if isinstance(outfit, dict) else {}
-        for key in ("top", "bottom", "shoe"):
+        for key in ("top", "bottom", "outerwear", "footwear", "dress"):
             item = items.get(key)
             if isinstance(item, dict):
                 item_id = item.get("id") or item.get("_id")
@@ -1007,10 +1010,12 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                 hint_context = f"\n\nOUTFIT COMPLETION MODE: The outfit is missing {categories_str}. Use specific search queries (NOT category names) with proper filters:"
                 for cat in target_categories:
                     cat_guidance = {
-                        "TOP": "For TOP category: search with queries like 'shirt', 'blouse', 'sweater', 'jacket' (NOT 'top' or 'TOP')",
+                        "TOP": "For TOP category: search with queries like 'shirt', 'blouse', 'sweater' (NOT 'top' or 'TOP')",
                         "BOTTOM": "For BOTTOM category: search with queries like 'jeans', 'pants', 'shorts', 'skirt' (NOT 'bottom' or 'BOTTOM')",
-                        "SHOE": "For SHOE category: search with queries like 'sneakers', 'boots', 'sandals', 'heels' (NOT 'shoe' or 'SHOE')",
+                        "OUTERWEAR": "For OUTERWEAR category: search with queries like 'jacket', 'coat', 'blazer', 'cardigan' (NOT 'outerwear' or 'OUTERWEAR')",
+                        "FOOTWEAR": "For FOOTWEAR category: search with queries like 'sneakers', 'boots', 'sandals', 'heels' (NOT 'footwear' or 'FOOTWEAR')",
                         "ACCESSORY": "For ACCESSORY category: search with queries like 'bag', 'necklace', 'belt', 'scarf' (NOT 'accessory' or 'ACCESSORY')",
+                        "DRESS": "For DRESS category: search with queries like 'maxi dress', 'cocktail dress', 'midi dress' (NOT 'dress' or 'DRESS')",
                     }
                     hint_context += f"\n  - {cat_guidance.get(cat, '')}"
                 # Enhance the user message to be more directive
@@ -1020,10 +1025,12 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                 category = extracted_filters.get("category", "")
                 if category:
                     cat_examples = {
-                        "TOP": "shirts, blouses, sweaters, or jackets",
+                        "TOP": "shirts, blouses, sweaters, or hoodies",
                         "BOTTOM": "jeans, pants, shorts, or skirts",
-                        "SHOE": "sneakers, boots, sandals, or heels",
+                        "OUTERWEAR": "jackets, coats, blazers, or cardigans",
+                        "FOOTWEAR": "sneakers, boots, sandals, or heels",
                         "ACCESSORY": "bags, necklaces, belts, or scarves",
+                        "DRESS": "maxi dresses, cocktail dresses, or midi dresses",
                     }
                     examples = cat_examples.get(category, "items")
                     hint_context = f"\n\nSEARCH INSTRUCTION: Use specific item names in your search queries (e.g., '{examples.split(',')[0].strip()}', '{examples.split(',')[1].strip()}'), NOT the category name '{category}'. The category filter is already set to {category}."
@@ -1046,8 +1053,12 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                     present.append("top")
                 if items.get("bottom"):
                     present.append("bottom")
-                if items.get("shoe"):
-                    present.append("shoes")
+                if items.get("outerwear"):
+                    present.append("outerwear")
+                if items.get("footwear"):
+                    present.append("footwear")
+                if items.get("dress"):
+                    present.append("dress")
                 if items.get("accessories"):
                     present.append("accessories")
                 outfit_summaries.append(f"{name} (has {', '.join(present) or 'no items'})")

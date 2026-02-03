@@ -110,7 +110,7 @@ async def test_get_commerce_item_returns_item(monkeypatch):
                 "_id": "item123",
                 "name": "Running Shoes",
                 "imageUrl": "https://example.com/shoes.jpg",
-                "category": "SHOE",
+                "category": "FOOTWEAR",
                 "retailerId": "retailer2",
                 "productUrl": "https://shop.com/shoes",
                 "brand": "Nike",

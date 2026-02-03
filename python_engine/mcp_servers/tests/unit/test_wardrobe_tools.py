@@ -84,7 +84,7 @@ async def test_get_wardrobe_item_returns_item(monkeypatch):
                 "_id": "item123",
                 "userId": "u1",
                 "imageUrl": "https://example.com/shoe.jpg",
-                "category": "SHOE",
+                "category": "FOOTWEAR",
                 "brand": "Nike",
                 "colors": ["#000000", "#FFFFFF"],
                 "isFavorite": True,

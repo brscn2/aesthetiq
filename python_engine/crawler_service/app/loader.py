@@ -85,7 +85,7 @@ class ProductLoader:
             category = Category.TOP
         elif any(word in category_str for word in ["BOTTOM", "PANT", "JEAN", "SKIRT", "SHORT"]):
             category = Category.BOTTOM
-        elif any(word in category_str for word in ["SHOE", "BOOT", "SNEAKER", "SANDAL"]):
+        elif any(word in category_str for word in ["FOOTWEAR", "BOOT", "SNEAKER", "SANDAL"]):
             category = Category.SHOE
         elif any(word in category_str for word in ["ACCESSORY", "BAG", "HAT", "BELT", "SCARF"]):
             category = Category.ACCESSORY
