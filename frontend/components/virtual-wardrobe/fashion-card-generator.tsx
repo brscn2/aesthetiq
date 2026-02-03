@@ -91,27 +91,55 @@ export function FashionCardGenerator({ outfit, onClose }: FashionCardGeneratorPr
     // Calculate item positions
     const itemAreaTop = padding + headerHeight + 20
     const itemAreaHeight = CARD_HEIGHT - itemAreaTop - padding
-    const itemSize = Math.min(contentWidth / 2 - 20, itemAreaHeight / 2 - 20)
 
-    // Load and draw images
-    const topUrl = getItemImageUrl(outfit.items.top)
-    const bottomUrl = getItemImageUrl(outfit.items.bottom)
-    const shoeUrl = getItemImageUrl(outfit.items.shoe)
-    const accessoryUrl = outfit.items.accessories.length > 0 
-      ? getItemImageUrl(outfit.items.accessories[0]) 
-      : null
-
-    const positions = [
-      { url: topUrl, x: padding + (contentWidth / 4) - itemSize / 2, y: itemAreaTop, label: "Top" },
-      { url: bottomUrl, x: padding + (contentWidth * 3 / 4) - itemSize / 2, y: itemAreaTop, label: "Bottom" },
-      { url: shoeUrl, x: padding + (contentWidth / 4) - itemSize / 2, y: itemAreaTop + itemSize + 40, label: "Shoes" },
-      { url: accessoryUrl, x: padding + (contentWidth * 3 / 4) - itemSize / 2, y: itemAreaTop + itemSize + 40, label: "Accessory" },
+    const baseItems = [
+      { url: getItemImageUrl(outfit.items.top), label: "Top" },
+      { url: getItemImageUrl(outfit.items.bottom), label: "Bottom" },
+      { url: getItemImageUrl(outfit.items.outerwear), label: "Outerwear" },
+      { url: getItemImageUrl(outfit.items.footwear), label: "Footwear" },
+      { url: getItemImageUrl(outfit.items.dress), label: "Dress" },
     ]
 
-    for (const pos of positions) {
+    const accessoryItems = outfit.items.accessories
+      .map((acc, index) => ({
+        url: getItemImageUrl(acc),
+        label: `Accessory ${index + 1}`,
+      }))
+
+    const itemsToRender = [...baseItems, ...accessoryItems].filter((item) => item.url)
+
+    if (itemsToRender.length === 0) {
+      ctx.fillStyle = config.textColor + "80"
+      ctx.font = `16px ${config.fontFamily}`
+      ctx.textAlign = "center"
+      ctx.fillText("No items to display", CARD_WIDTH / 2, itemAreaTop + itemAreaHeight / 2)
+      setIsRendering(false)
+      return
+    }
+
+    const gap = 16
+    const totalItems = itemsToRender.length
+    const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
+    const rows = Math.ceil(totalItems / columns)
+    const itemSize = Math.min(
+      (contentWidth - gap * (columns - 1)) / columns,
+      (itemAreaHeight - gap * (rows - 1)) / rows,
+    )
+
+    const gridWidth = columns * itemSize + gap * (columns - 1)
+    const gridHeight = rows * itemSize + gap * (rows - 1)
+    const startX = padding + (contentWidth - gridWidth) / 2
+    const startY = itemAreaTop + (itemAreaHeight - gridHeight) / 2
+
+    for (const [index, pos] of itemsToRender.entries()) {
+      const row = Math.floor(index / columns)
+      const col = index % columns
+      const x = startX + col * (itemSize + gap)
+      const y = startY + row * (itemSize + gap)
+
       // Draw slot background
       ctx.fillStyle = config.textColor + "10"
-      roundRect(ctx, pos.x, pos.y, itemSize, itemSize, 12)
+      roundRect(ctx, x, y, itemSize, itemSize, 12)
       ctx.fill()
 
       if (pos.url) {
@@ -120,20 +148,20 @@ export function FashionCardGenerator({ outfit, onClose }: FashionCardGeneratorPr
           const scale = Math.min((itemSize - 20) / img.width, (itemSize - 20) / img.height)
           const w = img.width * scale
           const h = img.height * scale
-          ctx.drawImage(img, pos.x + (itemSize - w) / 2, pos.y + (itemSize - h) / 2, w, h)
+          ctx.drawImage(img, x + (itemSize - w) / 2, y + (itemSize - h) / 2, w, h)
         } catch {
           // Draw placeholder text if image fails
           ctx.fillStyle = config.textColor + "40"
           ctx.font = `14px ${config.fontFamily}`
           ctx.textAlign = "center"
-          ctx.fillText(pos.label, pos.x + itemSize / 2, pos.y + itemSize / 2)
+          ctx.fillText(pos.label, x + itemSize / 2, y + itemSize / 2)
         }
       } else {
         // Empty slot label
         ctx.fillStyle = config.textColor + "40"
         ctx.font = `14px ${config.fontFamily}`
         ctx.textAlign = "center"
-        ctx.fillText(pos.label, pos.x + itemSize / 2, pos.y + itemSize / 2)
+        ctx.fillText(pos.label, x + itemSize / 2, y + itemSize / 2)
       }
     }
 

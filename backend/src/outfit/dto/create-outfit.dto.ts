@@ -38,7 +38,11 @@ class OutfitItemsDto {
   @IsOptional()
   dress?: string;
 
-  @ApiProperty({ required: false, type: [String], example: ['507f1f77bcf86cd799439016'] })
+  @ApiProperty({
+    required: false,
+    type: [String],
+    example: ['507f1f77bcf86cd799439016'],
+  })
   @IsArray()
   @IsMongoId({ each: true })
   @IsOptional()
@@ -57,7 +61,11 @@ export class CreateOutfitDto {
   @Type(() => OutfitItemsDto)
   items: OutfitItemsDto;
 
-  @ApiProperty({ enum: CardTemplate, required: false, default: CardTemplate.MINIMAL })
+  @ApiProperty({
+    enum: CardTemplate,
+    required: false,
+    default: CardTemplate.MINIMAL,
+  })
   @IsEnum(CardTemplate)
   @IsOptional()
   cardTemplate?: CardTemplate;

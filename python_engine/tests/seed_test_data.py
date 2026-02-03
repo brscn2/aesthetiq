@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 backend_env = python_engine_dir.parent / "backend" / ".env"
 if backend_env.exists():
     load_dotenv(backend_env, override=True)
-    
+
 # Then python_engine .env (may override with local settings)
 env_path = python_engine_dir / ".env"
 if env_path.exists():
@@ -52,8 +52,7 @@ async def get_embedding(text: str) -> list[float]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
-                f"{EMBEDDING_SERVICE_URL}/embed/text",
-                json={"text": text}
+                f"{EMBEDDING_SERVICE_URL}/embed/text", json={"text": text}
             )
             response.raise_for_status()
             return response.json()["embedding"]
@@ -65,12 +64,12 @@ async def get_embedding(text: str) -> list[float]:
 async def seed_retailer(db) -> ObjectId:
     """Seed test retailer."""
     print("\n📦 Seeding retailer...")
-    
+
     existing = await db.retailers.find_one({"name": TEST_RETAILER_NAME})
     if existing:
         print(f"  ✓ Retailer '{TEST_RETAILER_NAME}' already exists")
         return existing["_id"]
-    
+
     retailer = {
         "name": TEST_RETAILER_NAME,
         "website": "https://test-retailer.com",
@@ -87,7 +86,7 @@ async def seed_retailer(db) -> ObjectId:
 async def seed_commerce_items(db, retailer_id: ObjectId):
     """Seed commerce items with embeddings."""
     print("\n👕 Seeding commerce items...")
-    
+
     items = [
         # TOPS
         {
@@ -103,7 +102,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/black-blazer",
             "imageUrl": "https://via.placeholder.com/400x600?text=Black+Blazer",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.3, "COOL_WINTER": 0.9, "COOL_SUMMER": 0.7, "WARM_SPRING": 0.2},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.3,
+                "COOL_WINTER": 0.9,
+                "COOL_SUMMER": 0.7,
+                "WARM_SPRING": 0.2,
+            },
         },
         {
             "name": "Navy Blue Cardigan",
@@ -118,7 +122,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/navy-cardigan",
             "imageUrl": "https://via.placeholder.com/400x600?text=Navy+Cardigan",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.5, "COOL_WINTER": 0.8, "COOL_SUMMER": 0.9, "WARM_SPRING": 0.3},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.5,
+                "COOL_WINTER": 0.8,
+                "COOL_SUMMER": 0.9,
+                "WARM_SPRING": 0.3,
+            },
         },
         {
             "name": "White Cotton T-Shirt",
@@ -133,7 +142,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/white-tee",
             "imageUrl": "https://via.placeholder.com/400x600?text=White+Tee",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.6, "COOL_WINTER": 0.8, "COOL_SUMMER": 0.9, "WARM_SPRING": 0.9},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.6,
+                "COOL_WINTER": 0.8,
+                "COOL_SUMMER": 0.9,
+                "WARM_SPRING": 0.9,
+            },
         },
         {
             "name": "Red Silk Blouse",
@@ -148,7 +162,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/red-blouse",
             "imageUrl": "https://via.placeholder.com/400x600?text=Red+Blouse",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.9, "COOL_WINTER": 0.7, "COOL_SUMMER": 0.4, "WARM_SPRING": 0.8},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.9,
+                "COOL_WINTER": 0.7,
+                "COOL_SUMMER": 0.4,
+                "WARM_SPRING": 0.8,
+            },
         },
         {
             "name": "Olive Green Jacket",
@@ -163,7 +182,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/olive-jacket",
             "imageUrl": "https://via.placeholder.com/400x600?text=Olive+Jacket",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.95, "COOL_WINTER": 0.3, "COOL_SUMMER": 0.4, "WARM_SPRING": 0.6},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.95,
+                "COOL_WINTER": 0.3,
+                "COOL_SUMMER": 0.4,
+                "WARM_SPRING": 0.6,
+            },
         },
         # BOTTOMS
         {
@@ -179,7 +203,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/dark-jeans",
             "imageUrl": "https://via.placeholder.com/400x600?text=Dark+Jeans",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.6, "COOL_WINTER": 0.8, "COOL_SUMMER": 0.7, "WARM_SPRING": 0.4},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.6,
+                "COOL_WINTER": 0.8,
+                "COOL_SUMMER": 0.7,
+                "WARM_SPRING": 0.4,
+            },
         },
         {
             "name": "Khaki Chinos",
@@ -194,7 +223,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/khaki-chinos",
             "imageUrl": "https://via.placeholder.com/400x600?text=Khaki+Chinos",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.85, "COOL_WINTER": 0.4, "COOL_SUMMER": 0.5, "WARM_SPRING": 0.8},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.85,
+                "COOL_WINTER": 0.4,
+                "COOL_SUMMER": 0.5,
+                "WARM_SPRING": 0.8,
+            },
         },
         {
             "name": "Black Dress Pants",
@@ -209,7 +243,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/black-pants",
             "imageUrl": "https://via.placeholder.com/400x600?text=Black+Pants",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.4, "COOL_WINTER": 0.95, "COOL_SUMMER": 0.8, "WARM_SPRING": 0.3},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.4,
+                "COOL_WINTER": 0.95,
+                "COOL_SUMMER": 0.8,
+                "WARM_SPRING": 0.3,
+            },
         },
         # FOOTWEAR
         {
@@ -225,7 +264,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/brown-oxford",
             "imageUrl": "https://via.placeholder.com/400x600?text=Brown+Oxford",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.9, "COOL_WINTER": 0.5, "COOL_SUMMER": 0.4, "WARM_SPRING": 0.7},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.9,
+                "COOL_WINTER": 0.5,
+                "COOL_SUMMER": 0.4,
+                "WARM_SPRING": 0.7,
+            },
         },
         {
             "name": "White Canvas Sneakers",
@@ -240,7 +284,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/white-sneakers",
             "imageUrl": "https://via.placeholder.com/400x600?text=White+Sneakers",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.5, "COOL_WINTER": 0.7, "COOL_SUMMER": 0.9, "WARM_SPRING": 0.9},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.5,
+                "COOL_WINTER": 0.7,
+                "COOL_SUMMER": 0.9,
+                "WARM_SPRING": 0.9,
+            },
         },
         # ACCESSORIES
         {
@@ -256,7 +305,12 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/navy-tie",
             "imageUrl": "https://via.placeholder.com/400x600?text=Navy+Tie",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.4, "COOL_WINTER": 0.85, "COOL_SUMMER": 0.9, "WARM_SPRING": 0.3},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.4,
+                "COOL_WINTER": 0.85,
+                "COOL_SUMMER": 0.9,
+                "WARM_SPRING": 0.3,
+            },
         },
         {
             "name": "Brown Leather Belt",
@@ -271,24 +325,29 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "inStock": True,
             "productUrl": "https://test-retailer.com/brown-belt",
             "imageUrl": "https://via.placeholder.com/400x600?text=Brown+Belt",
-            "seasonalPaletteScores": {"WARM_AUTUMN": 0.9, "COOL_WINTER": 0.4, "COOL_SUMMER": 0.3, "WARM_SPRING": 0.7},
+            "seasonalPaletteScores": {
+                "WARM_AUTUMN": 0.9,
+                "COOL_WINTER": 0.4,
+                "COOL_SUMMER": 0.3,
+                "WARM_SPRING": 0.7,
+            },
         },
     ]
-    
+
     # Check existing items
     existing_count = await db.commerceitems.count_documents({})
     if existing_count >= len(items):
         print(f"  ✓ Commerce items already seeded ({existing_count} items)")
         return
-    
+
     # Clear existing test items and seed new ones
     await db.commerceitems.delete_many({"retailerId": retailer_id})
-    
+
     for item in items:
         # Get embedding for item
         embed_text = f"{item['name']} {item['description']} {item['category']} {item['subCategory']}"
         embedding = await get_embedding(embed_text)
-        
+
         doc = {
             **item,
             "retailerId": retailer_id,
@@ -296,23 +355,25 @@ async def seed_commerce_items(db, retailer_id: ObjectId):
             "createdAt": datetime.utcnow(),
             "updatedAt": datetime.utcnow(),
         }
-        
+
         result = await db.commerceitems.insert_one(doc)
         has_embed = "✓" if embedding else "⚠"
-        print(f"  {has_embed} Created: {item['name']} ({item['category']}) - {result.inserted_id}")
-    
+        print(
+            f"  {has_embed} Created: {item['name']} ({item['category']}) - {result.inserted_id}"
+        )
+
     print(f"  ✓ Seeded {len(items)} commerce items")
 
 
 async def seed_user(db) -> ObjectId:
     """Seed test user."""
     print("\n👤 Seeding test user...")
-    
+
     existing = await db.users.find_one({"clerkId": TEST_USER_ID})
     if existing:
         print(f"  ✓ User '{TEST_USER_ID}' already exists")
         return existing["_id"]
-    
+
     user = {
         "clerkId": TEST_USER_ID,
         "email": "test@aesthetiq.com",
@@ -333,12 +394,12 @@ async def seed_user(db) -> ObjectId:
 async def seed_color_analysis(db, user_id: ObjectId):
     """Seed color analysis for test user."""
     print("\n🎨 Seeding color analysis...")
-    
+
     existing = await db.coloranalyses.find_one({"userId": TEST_USER_ID})
     if existing:
         print(f"  ✓ Color analysis for '{TEST_USER_ID}' already exists")
         return
-    
+
     analysis = {
         "userId": TEST_USER_ID,
         "season": "WARM_AUTUMN",
@@ -360,12 +421,12 @@ async def seed_color_analysis(db, user_id: ObjectId):
 async def seed_style_profile(db, user_id: ObjectId):
     """Seed style profile for test user."""
     print("\n🎭 Seeding style profile...")
-    
+
     existing = await db.styleprofiles.find_one({"userId": TEST_USER_ID})
     if existing:
         print(f"  ✓ Style profile for '{TEST_USER_ID}' already exists")
         return
-    
+
     profile = {
         "userId": TEST_USER_ID,
         "styleArchetype": "Classic",
@@ -393,12 +454,14 @@ async def seed_style_profile(db, user_id: ObjectId):
 async def seed_wardrobe_items(db, user_id: ObjectId):
     """Seed wardrobe items for test user."""
     print("\n🧥 Seeding wardrobe items...")
-    
+
     existing_count = await db.wardrobeitems.count_documents({"userId": TEST_USER_ID})
     if existing_count >= 5:
-        print(f"  ✓ Wardrobe items for '{TEST_USER_ID}' already seeded ({existing_count} items)")
+        print(
+            f"  ✓ Wardrobe items for '{TEST_USER_ID}' already seeded ({existing_count} items)"
+        )
         return
-    
+
     items = [
         {
             "name": "My Favorite Navy Blazer",
@@ -446,14 +509,14 @@ async def seed_wardrobe_items(db, user_id: ObjectId):
             "notes": "Daily wear watch",
         },
     ]
-    
+
     # Clear existing and re-seed
     await db.wardrobeitems.delete_many({"userId": TEST_USER_ID})
-    
+
     for item in items:
         embed_text = f"{item['name']} {item['category']} {item['subCategory']} {item.get('brand', '')}"
         embedding = await get_embedding(embed_text)
-        
+
         doc = {
             **item,
             "userId": TEST_USER_ID,
@@ -464,7 +527,7 @@ async def seed_wardrobe_items(db, user_id: ObjectId):
         result = await db.wardrobeitems.insert_one(doc)
         has_embed = "✓" if embedding else "⚠"
         print(f"  {has_embed} Created: {item['name']} - {result.inserted_id}")
-    
+
     print(f"  ✓ Seeded {len(items)} wardrobe items")
 
 
@@ -473,17 +536,17 @@ async def main():
     print("=" * 60)
     print("AesthetIQ Test Data Seeder")
     print("=" * 60)
-    
+
     if not MONGODB_URI:
         print("\n❌ MONGODB_URI environment variable not set!")
         print("\nRun with:")
         print("  export MONGODB_URI='your-mongodb-uri'")
         print("  python -m tests.seed_test_data")
         sys.exit(1)
-    
+
     print(f"\n📊 MongoDB: {MONGODB_URI[:50]}...")
     print(f"📊 Embedding Service: {EMBEDDING_SERVICE_URL}")
-    
+
     # Check embedding service
     print("\n🔍 Checking embedding service...")
     try:
@@ -493,11 +556,13 @@ async def main():
             if data.get("model_loaded"):
                 print(f"  ✓ Embedding service ready (device: {data.get('device')})")
             else:
-                print("  ⚠ Embedding service model not loaded - items will be seeded without embeddings")
+                print(
+                    "  ⚠ Embedding service model not loaded - items will be seeded without embeddings"
+                )
     except Exception as e:
         print(f"  ⚠ Embedding service not available: {e}")
         print("  Items will be seeded without embeddings")
-    
+
     # Connect to MongoDB
     # Add tlsAllowInvalidCertificates for development with Atlas
     client = AsyncIOMotorClient(
@@ -506,12 +571,12 @@ async def main():
         serverSelectionTimeoutMS=30000,
     )
     db = client[DB_NAME]
-    
+
     try:
         # Test connection
         await db.command("ping")
         print("\n✓ Connected to MongoDB")
-        
+
         # Seed data
         retailer_id = await seed_retailer(db)
         await seed_commerce_items(db, retailer_id)
@@ -519,11 +584,11 @@ async def main():
         await seed_color_analysis(db, user_id)
         await seed_style_profile(db, user_id)
         await seed_wardrobe_items(db, user_id)
-        
+
         print("\n" + "=" * 60)
         print("✓ Test data seeding complete!")
         print("=" * 60)
-        
+
         # Print summary
         print("\n📊 Summary:")
         print(f"  - Retailers: {await db.retailers.count_documents({})}")
@@ -532,7 +597,7 @@ async def main():
         print(f"  - Color Analyses: {await db.coloranalyses.count_documents({})}")
         print(f"  - Style Profiles: {await db.styleprofiles.count_documents({})}")
         print(f"  - Wardrobe Items: {await db.wardrobeitems.count_documents({})}")
-        
+
     finally:
         client.close()
 

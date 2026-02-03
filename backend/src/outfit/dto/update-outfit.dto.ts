@@ -38,7 +38,11 @@ class UpdateOutfitItemsDto {
   @IsOptional()
   dress?: string | null;
 
-  @ApiProperty({ required: false, type: [String], example: ['507f1f77bcf86cd799439016'] })
+  @ApiProperty({
+    required: false,
+    type: [String],
+    example: ['507f1f77bcf86cd799439016'],
+  })
   @IsArray()
   @IsMongoId({ each: true })
   @IsOptional()

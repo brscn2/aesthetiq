@@ -248,7 +248,9 @@ export function ChatStylist({
   const buildOutfitAttachment = useCallback((outfit: Outfit): OutfitAttachment => {
     const top = buildOutfitItemSnapshot(outfit.items.top)
     const bottom = buildOutfitItemSnapshot(outfit.items.bottom)
-    const shoe = buildOutfitItemSnapshot(outfit.items.shoe)
+    const outerwear = buildOutfitItemSnapshot(outfit.items.outerwear)
+    const footwear = buildOutfitItemSnapshot(outfit.items.footwear)
+    const dress = buildOutfitItemSnapshot(outfit.items.dress)
     const accessories = outfit.items.accessories
       .map(buildOutfitItemSnapshot)
       .filter((item): item is NonNullable<typeof item> => !!item)
@@ -259,7 +261,9 @@ export function ChatStylist({
       items: {
         top,
         bottom,
-        shoe,
+        outerwear,
+        footwear,
+        dress,
         accessories,
       },
     }
@@ -269,7 +273,9 @@ export function ChatStylist({
     return [
       attachment.items.top?.imageUrl,
       attachment.items.bottom?.imageUrl,
-      attachment.items.shoe?.imageUrl,
+      attachment.items.outerwear?.imageUrl,
+      attachment.items.footwear?.imageUrl,
+      attachment.items.dress?.imageUrl,
       attachment.items.accessories[0]?.imageUrl,
     ]
   }, [])
@@ -1052,20 +1058,44 @@ export function ChatStylist({
           {attachedOutfits.length > 0 && (
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {attachedOutfits.map((outfit) => {
-                const images = getOutfitAttachmentImages(outfit)
+                const attachmentItems = [
+                  { label: "Top", image: outfit.items.top?.imageUrl },
+                  { label: "Bottom", image: outfit.items.bottom?.imageUrl },
+                  { label: "Outerwear", image: outfit.items.outerwear?.imageUrl },
+                  { label: "Footwear", image: outfit.items.footwear?.imageUrl },
+                  { label: "Dress", image: outfit.items.dress?.imageUrl },
+                  ...outfit.items.accessories.map((acc, index) => ({
+                    label: `Acc ${index + 1}`,
+                    image: acc.imageUrl,
+                  })),
+                ].filter((item) => item.image)
+
+                const totalItems = Math.max(attachmentItems.length, 1)
+                const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
                 const swapIntent = swapIntentsByOutfit[outfit.id]
+                const availableSwapCategories = [
+                  outfit.items.top ? "TOP" : null,
+                  outfit.items.bottom ? "BOTTOM" : null,
+                  outfit.items.outerwear ? "OUTERWEAR" : null,
+                  outfit.items.footwear ? "FOOTWEAR" : null,
+                  outfit.items.dress ? "DRESS" : null,
+                  outfit.items.accessories.length > 0 ? "ACCESSORY" : null,
+                ].filter((category): category is OutfitSwapIntent["category"] => Boolean(category))
 
                 return (
                   <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                          {[0, 1, 2, 3].map((index) => (
-                            <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                              {images[index] ? (
+                        <div
+                          className="grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1"
+                          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                        >
+                          {attachmentItems.map((item, index) => (
+                            <div key={`${item.label}-${index}`} className="relative h-full w-full rounded-sm bg-background/60">
+                              {item.image ? (
                                 <Image
-                                  src={images[index] as string}
-                                  alt="Outfit item"
+                                  src={item.image}
+                                  alt={item.label}
                                   fill
                                   className="object-contain"
                                 />
@@ -1092,7 +1122,7 @@ export function ChatStylist({
                       </Button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {(["TOP", "BOTTOM", "SHOE", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
+                      {availableSwapCategories.map((category) => (
                         <Button
                           key={category}
                           variant={swapIntent === category ? "default" : "outline"}
@@ -1210,19 +1240,35 @@ export function ChatStylist({
               {outfitOptions.map((outfit) => {
                 const isAttached = attachedOutfits.some((entry) => entry.id === outfit._id)
                 const attachment = buildOutfitAttachment(outfit)
-                const images = getOutfitAttachmentImages(attachment)
+                const attachmentItems = [
+                  { label: "Top", image: attachment.items.top?.imageUrl },
+                  { label: "Bottom", image: attachment.items.bottom?.imageUrl },
+                  { label: "Outerwear", image: attachment.items.outerwear?.imageUrl },
+                  { label: "Footwear", image: attachment.items.footwear?.imageUrl },
+                  { label: "Dress", image: attachment.items.dress?.imageUrl },
+                  ...attachment.items.accessories.map((acc, index) => ({
+                    label: `Acc ${index + 1}`,
+                    image: acc.imageUrl,
+                  })),
+                ].filter((item) => item.image)
+
+                const totalItems = Math.max(attachmentItems.length, 1)
+                const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
 
                 return (
                   <div key={outfit._id} className="rounded-lg border border-border/50 bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-14 w-14 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                          {[0, 1, 2, 3].map((index) => (
-                            <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                              {images[index] ? (
+                        <div
+                          className="grid h-14 w-14 gap-1 overflow-hidden rounded-md bg-muted p-1"
+                          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                        >
+                          {attachmentItems.map((item, index) => (
+                            <div key={`${item.label}-${index}`} className="relative h-full w-full rounded-sm bg-background/60">
+                              {item.image ? (
                                 <Image
-                                  src={images[index] as string}
-                                  alt="Outfit item"
+                                  src={item.image}
+                                  alt={item.label}
                                   fill
                                   className="object-contain"
                                 />

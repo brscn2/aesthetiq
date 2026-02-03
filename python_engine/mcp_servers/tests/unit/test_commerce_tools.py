@@ -1,4 +1,5 @@
 """Unit tests for Commerce tools."""
+
 import pytest
 
 from mcp_servers.commerce_server import tools
@@ -57,15 +58,14 @@ async def test_search_commerce_items_uses_seasonal_palette_scores(monkeypatch):
         # Query embedding - same for both items to isolate season effect
         return [1.0, 0.0]
 
-    monkeypatch.setattr(tools.db, "find_items_with_embeddings", fake_find_with_embeddings)
+    monkeypatch.setattr(
+        tools.db, "find_items_with_embeddings", fake_find_with_embeddings
+    )
     monkeypatch.setattr(tools, "embed_text", fake_embed)
 
     # Search with warm_autumn style DNA - camel coat should rank higher
-    results = await tools.search_commerce_items(
-        query="coat",
-        style_dna="warm_autumn"
-    )
-    
+    results = await tools.search_commerce_items(query="coat", style_dna="warm_autumn")
+
     assert len(results) == 2
     assert results[0]["item"].id == "a"  # Camel coat should rank first
     assert results[0]["score"] > results[1]["score"]
@@ -76,26 +76,28 @@ async def test_search_commerce_items_uses_seasonal_palette_scores(monkeypatch):
 @pytest.mark.asyncio
 async def test_filter_commerce_items_delegates_to_db(monkeypatch):
     """Test that filter_commerce_items properly queries the database."""
+
     async def fake_find(filters=None, limit=100):
         assert filters["category"] == "TOP"
-        return [{
-            "_id": "item1",
-            "name": "White T-Shirt",
-            "imageUrl": "https://example.com/tshirt.jpg",
-            "category": "TOP",
-            "retailerId": "retailer1",
-            "productUrl": "https://shop.com/tshirt",
-            "colors": ["#FFFFFF"],
-            "inStock": True,
-        }]
+        return [
+            {
+                "_id": "item1",
+                "name": "White T-Shirt",
+                "imageUrl": "https://example.com/tshirt.jpg",
+                "category": "TOP",
+                "retailerId": "retailer1",
+                "productUrl": "https://shop.com/tshirt",
+                "colors": ["#FFFFFF"],
+                "inStock": True,
+            }
+        ]
 
     monkeypatch.setattr(tools.db, "find_commerce_items", fake_find)
 
     items = await tools.filter_commerce_items(
-        CommerceFilters(category=Category.TOP),
-        limit=10
+        CommerceFilters(category=Category.TOP), limit=10
     )
-    
+
     assert len(items) == 1
     assert items[0].category == Category.TOP
     assert items[0].name == "White T-Shirt"
@@ -104,6 +106,7 @@ async def test_filter_commerce_items_delegates_to_db(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_commerce_item_returns_item(monkeypatch):
     """Test that get_commerce_item returns the correct item."""
+
     async def fake_get(item_id):
         if item_id == "item123":
             return {
@@ -124,7 +127,7 @@ async def test_get_commerce_item_returns_item(monkeypatch):
     monkeypatch.setattr(tools.db, "get_commerce_item", fake_get)
 
     item = await tools.get_commerce_item("item123")
-    
+
     assert item is not None
     assert item.id == "item123"
     assert item.category == Category.SHOE
@@ -136,6 +139,7 @@ async def test_get_commerce_item_returns_item(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_commerce_item_returns_none_for_missing(monkeypatch):
     """Test that get_commerce_item returns None for non-existent items."""
+
     async def fake_get(item_id):
         return None
 
@@ -147,6 +151,7 @@ async def test_get_commerce_item_returns_none_for_missing(monkeypatch):
 
 # Style ranking unit tests
 
+
 def test_score_from_palette_scores():
     """Test score_from_palette_scores returns correct score."""
     scores = {
@@ -154,7 +159,7 @@ def test_score_from_palette_scores():
         "COOL_WINTER": 0.30,
         "LIGHT_SPRING": 0.60,
     }
-    
+
     assert score_from_palette_scores(scores, "warm_autumn") == 0.85
     assert score_from_palette_scores(scores, "WARM_AUTUMN") == 0.85
     assert score_from_palette_scores(scores, "Warm Autumn") == 0.85
@@ -180,16 +185,16 @@ def test_get_best_palettes():
         "LIGHT_SPRING": 0.75,
         "MUTED_AUTUMN": 0.90,
     }
-    
+
     best = get_best_palettes(scores, threshold=0.7)
     assert len(best) == 3
     assert best[0] == ("MUTED_AUTUMN", 0.90)
     assert best[1] == ("WARM_AUTUMN", 0.85)
     assert best[2] == ("LIGHT_SPRING", 0.75)
-    
+
     # Test with limit
     best_limited = get_best_palettes(scores, threshold=0.7, limit=2)
     assert len(best_limited) == 2
-    
+
     # Test with None
     assert get_best_palettes(None) == []

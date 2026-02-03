@@ -26,16 +26,35 @@ function isItemDeleted(item: string | WardrobeItem | undefined): boolean {
 export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView }: OutfitCardProps) {
   const topImage = getItemImage(outfit.items.top)
   const bottomImage = getItemImage(outfit.items.bottom)
-  const shoeImage = getItemImage(outfit.items.shoe)
+  const outerwearImage = getItemImage(outfit.items.outerwear)
+  const footwearImage = getItemImage(outfit.items.footwear)
+  const dressImage = getItemImage(outfit.items.dress)
   const accessoryImages = outfit.items.accessories
     .map(getItemImage)
     .filter((img): img is string => img !== null)
-    .slice(0, 2)
+    .slice(0, 6)
+
+  const gridItems = [
+    { label: "Top", image: topImage },
+    { label: "Bottom", image: bottomImage },
+    { label: "Outerwear", image: outerwearImage },
+    { label: "Footwear", image: footwearImage },
+    { label: "Dress", image: dressImage },
+    ...accessoryImages.map((image, index) => ({
+      label: `Acc ${index + 1}`,
+      image,
+    })),
+  ].filter((item) => item.image)
+
+  const totalItems = Math.max(gridItems.length, 1)
+  const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
 
   const hasDeletedItems = 
     isItemDeleted(outfit.items.top) ||
     isItemDeleted(outfit.items.bottom) ||
-    isItemDeleted(outfit.items.shoe) ||
+    isItemDeleted(outfit.items.outerwear) ||
+    isItemDeleted(outfit.items.footwear) ||
+    isItemDeleted(outfit.items.dress) ||
     outfit.items.accessories.some(isItemDeleted)
 
   return (
@@ -46,39 +65,25 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
       <CardContent className="p-4">
         {/* Thumbnail Grid */}
         <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-md bg-muted">
-          <div className="grid grid-cols-2 grid-rows-2 gap-1 h-full p-2">
-            {/* Top */}
-            <div className="flex items-center justify-center bg-background/50 rounded">
-              {topImage ? (
-                <Image src={topImage} alt="Top" width={80} height={80} className="object-contain h-full w-full p-1" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Top</span>
-              )}
-            </div>
-            {/* Bottom */}
-            <div className="flex items-center justify-center bg-background/50 rounded">
-              {bottomImage ? (
-                <Image src={bottomImage} alt="Bottom" width={80} height={80} className="object-contain h-full w-full p-1" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Bottom</span>
-              )}
-            </div>
-            {/* Shoe */}
-            <div className="flex items-center justify-center bg-background/50 rounded">
-              {shoeImage ? (
-                <Image src={shoeImage} alt="Shoe" width={80} height={80} className="object-contain h-full w-full p-1" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Shoe</span>
-              )}
-            </div>
-            {/* Accessory */}
-            <div className="flex items-center justify-center bg-background/50 rounded">
-              {accessoryImages[0] ? (
-                <Image src={accessoryImages[0]} alt="Accessory" width={80} height={80} className="object-contain h-full w-full p-1" />
-              ) : (
-                <span className="text-xs text-muted-foreground">Acc</span>
-              )}
-            </div>
+          <div
+            className="grid gap-1 h-full p-2"
+            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+          >
+            {gridItems.map((item, index) => (
+              <div key={`${item.label}-${index}`} className="flex items-center justify-center bg-background/50 rounded">
+                {item.image ? (
+                  <Image
+                    src={item.image}
+                    alt={item.label}
+                    width={80}
+                    height={80}
+                    className="object-contain h-full w-full p-1"
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">{item.label}</span>
+                )}
+              </div>
+            ))}
           </div>
           
           {/* Deleted Items Warning */}

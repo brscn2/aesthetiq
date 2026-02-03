@@ -1,4 +1,5 @@
 """Style DNA MCP tools - fetches from StyleProfile and ColorAnalysis collections."""
+
 from __future__ import annotations
 
 import logging
@@ -86,19 +87,19 @@ def _parse_palette(doc: Dict[str, Any]) -> List[PaletteColor]:
 async def get_style_dna(user_id: str) -> Optional[StyleDNA]:
     """
     Get complete style DNA by combining data from StyleProfile and ColorAnalysis.
-    
+
     Returns None only if both collections have no data for this user.
     """
     # Fetch from both collections in parallel would be nice, but for simplicity:
     style_profile = await db.get_style_profile(user_id)
     color_analysis = await db.get_color_analysis(user_id)
-    
+
     if not style_profile and not color_analysis:
         return None
-    
+
     style_doc = style_profile or {}
     color_doc = color_analysis or {}
-    
+
     return StyleDNA(
         user_id=user_id,
         # From ColorAnalysis
@@ -166,21 +167,25 @@ async def get_style_sliders(user_id: str) -> Dict[str, float]:
 async def get_recommended_colors(user_id: str) -> List[str]:
     """
     Get recommended colors based on the user's color season.
-    
+
     Returns hex color codes from the seasonal palette.
     """
     season = await get_color_season(user_id)
     if not season:
-        logger.warning(f"No color season found for user {user_id}, returning empty color list")
+        logger.warning(
+            f"No color season found for user {user_id}, returning empty color list"
+        )
         return []
-    logger.info(f"Found color season '{season}' for user {user_id}, returning recommended colors")
+    logger.info(
+        f"Found color season '{season}' for user {user_id}, returning recommended colors"
+    )
     return recommended_colors_for_season(season)
 
 
 async def get_user_palette(user_id: str) -> List[PaletteColor]:
     """
     Get the user's personalized color palette from their color analysis.
-    
+
     This is the specific palette generated during their color analysis scan.
     """
     color_analysis = await db.get_color_analysis(user_id)

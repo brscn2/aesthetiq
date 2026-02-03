@@ -342,8 +342,8 @@ export class AiService {
               {
                 type: 'text',
                 text: `Analyze this clothing image and return a JSON object with:
-- category: one of "TOP", "BOTTOM", "SHOE", "ACCESSORY" (TOP includes shirts, jackets, sweaters; BOTTOM includes pants, shorts, skirts; SHOE includes all footwear; ACCESSORY includes bags, hats, jewelry, watches, belts)
-- subCategory: specific type (e.g., "T-Shirt", "Jeans", "Sneakers", "Watch", "Backpack")
+- category: one of "TOP", "BOTTOM", "OUTERWEAR", "FOOTWEAR", "ACCESSORY", "DRESS" (TOP includes shirts, sweaters, tanks; BOTTOM includes pants, shorts, skirts; OUTERWEAR includes coats, jackets, blazers, cardigans; FOOTWEAR includes all shoes; ACCESSORY includes bags, hats, jewelry, watches, belts; DRESS includes casual and formal dresses)
+- subCategory: specific type (e.g., "T-Shirt", "Jeans", "Sneakers", "Coat","Watch", "Backpack")
 - brand: brand name if visible on the item, otherwise null
 - colors: array of 1-3 DISTINCT dominant colors. Choose from: black, white, gray, darkgray, silver, navy, blue, royalblue, cornflowerblue, skyblue, lightblue, steelblue, slateblue, darkslateblue, teal, turquoise, green, olive, khaki, yellow, gold, orange, coral, red, crimson, pink, hotpink, purple, violet, indigo, brown, chocolate, tan, beige, ivory, cream, maroon, burgundy, salmon, lavender, plum, magenta, cyan, lime, forestgreen, darkgreen, darkblue, midnightblue, slategray, dimgray, charcoal, offwhite, camel
 - styleNotes: A brief 1-2 sentence styling tip including: suitable occasions (casual, business, formal, sport, date night, etc.), what to pair it with, and optionally the season. Keep it concise and helpful.
@@ -425,10 +425,62 @@ Return ONLY valid JSON. Example:
       const parsed = JSON.parse(jsonStr);
 
       // Validate and normalize the response
-      const validCategories = ['TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'];
-      const category = validCategories.includes(parsed.category?.toUpperCase())
-        ? parsed.category.toUpperCase()
-        : 'ACCESSORY';
+      const validCategories = [
+        'TOP',
+        'BOTTOM',
+        'OUTERWEAR',
+        'FOOTWEAR',
+        'ACCESSORY',
+        'DRESS',
+      ];
+
+      const normalizedCategory =
+        typeof parsed.category === 'string'
+          ? parsed.category.toUpperCase().trim()
+          : '';
+
+      const subCategoryText =
+        typeof parsed.subCategory === 'string'
+          ? parsed.subCategory.toLowerCase()
+          : '';
+
+      const inferredCategory = (() => {
+        if (
+          subCategoryText.includes('coat') ||
+          subCategoryText.includes('jacket') ||
+          subCategoryText.includes('blazer') ||
+          subCategoryText.includes('cardigan') ||
+          subCategoryText.includes('parka') ||
+          subCategoryText.includes('puffer') ||
+          subCategoryText.includes('trench')
+        ) {
+          return 'OUTERWEAR';
+        }
+
+        if (
+          subCategoryText.includes('sneaker') ||
+          subCategoryText.includes('boot') ||
+          subCategoryText.includes('loafer') ||
+          subCategoryText.includes('sandal') ||
+          subCategoryText.includes('heel') ||
+          subCategoryText.includes('shoe') ||
+          subCategoryText.includes('flat')
+        ) {
+          return 'FOOTWEAR';
+        }
+
+        if (subCategoryText.includes('dress')) {
+          return 'DRESS';
+        }
+
+        return '';
+      })();
+
+      const category = validCategories.includes(normalizedCategory)
+        ? normalizedCategory
+        : validCategories.includes(inferredCategory)
+          ? inferredCategory
+          : 'ACCESSORY';
 
       // Convert color names to hex codes
       const colors = (parsed.colors || [])

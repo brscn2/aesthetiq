@@ -1,31 +1,31 @@
 // User Types
 export enum SubscriptionStatus {
-  FREE = 'FREE',
-  PRO = 'PRO',
+  FREE = "FREE",
+  PRO = "PRO",
 }
 
 export enum Units {
-  METRIC = 'METRIC',
-  IMPERIAL = 'IMPERIAL',
+  METRIC = "METRIC",
+  IMPERIAL = "IMPERIAL",
 }
 
 export enum Theme {
-  LIGHT = 'LIGHT',
-  DARK = 'DARK',
-  SYSTEM = 'SYSTEM',
+  LIGHT = "LIGHT",
+  DARK = "DARK",
+  SYSTEM = "SYSTEM",
 }
 
 export enum Currency {
-  USD = 'USD',
-  EUR = 'EUR',
-  GBP = 'GBP',
+  USD = "USD",
+  EUR = "EUR",
+  GBP = "GBP",
 }
 
 export enum ShoppingRegion {
-  USA = 'USA',
-  UK = 'UK',
-  EU = 'EU',
-  APAC = 'APAC',
+  USA = "USA",
+  UK = "UK",
+  EU = "EU",
+  APAC = "APAC",
 }
 
 export interface UserSettings {
@@ -33,7 +33,7 @@ export interface UserSettings {
   units: Units;
   currency: Currency;
   shoppingRegion: ShoppingRegion;
-  
+
   // Privacy & Biometric Settings
   allowBiometrics: boolean;
   allowFacialAnalysis: boolean;
@@ -42,7 +42,7 @@ export interface UserSettings {
 
   // Feedback & Personalization
   feedbackDecayDays: number;
-  
+
   // Appearance
   theme: Theme;
 }
@@ -55,7 +55,7 @@ export interface User {
   name: string;
   avatarUrl?: string;
   subscriptionStatus: SubscriptionStatus;
-  role?: 'USER' | 'ADMIN';
+  role?: "USER" | "ADMIN";
   settings: UserSettings;
   createdAt?: string;
   updatedAt?: string;
@@ -81,30 +81,30 @@ export interface UpdateUserDto {
 
 // Seasonal Color Palette Types
 export enum SeasonalPalette {
-  DARK_AUTUMN = 'DARK_AUTUMN',
-  DARK_WINTER = 'DARK_WINTER',
-  LIGHT_SPRING = 'LIGHT_SPRING',
-  LIGHT_SUMMER = 'LIGHT_SUMMER',
-  MUTED_AUTUMN = 'MUTED_AUTUMN',
-  MUTED_SUMMER = 'MUTED_SUMMER',
-  BRIGHT_SPRING = 'BRIGHT_SPRING',
-  BRIGHT_WINTER = 'BRIGHT_WINTER',
-  WARM_AUTUMN = 'WARM_AUTUMN',
-  WARM_SPRING = 'WARM_SPRING',
-  COOL_WINTER = 'COOL_WINTER',
-  COOL_SUMMER = 'COOL_SUMMER',
+  DARK_AUTUMN = "DARK_AUTUMN",
+  DARK_WINTER = "DARK_WINTER",
+  LIGHT_SPRING = "LIGHT_SPRING",
+  LIGHT_SUMMER = "LIGHT_SUMMER",
+  MUTED_AUTUMN = "MUTED_AUTUMN",
+  MUTED_SUMMER = "MUTED_SUMMER",
+  BRIGHT_SPRING = "BRIGHT_SPRING",
+  BRIGHT_WINTER = "BRIGHT_WINTER",
+  WARM_AUTUMN = "WARM_AUTUMN",
+  WARM_SPRING = "WARM_SPRING",
+  COOL_WINTER = "COOL_WINTER",
+  COOL_SUMMER = "COOL_SUMMER",
 }
 
 export type SeasonalPaletteScores = Record<SeasonalPalette, number>;
 
 // Wardrobe Types
 export enum Category {
-  TOP = 'TOP',
-  BOTTOM = 'BOTTOM',
-  OUTERWEAR = 'OUTERWEAR',
-  FOOTWEAR = 'FOOTWEAR',
-  ACCESSORY = 'ACCESSORY',
-  DRESS = 'DRESS',
+  TOP = "TOP",
+  BOTTOM = "BOTTOM",
+  OUTERWEAR = "OUTERWEAR",
+  FOOTWEAR = "FOOTWEAR",
+  ACCESSORY = "ACCESSORY",
+  DRESS = "DRESS",
 }
 
 export interface WardrobeItem {
@@ -154,7 +154,7 @@ export interface UpdateWardrobeItemDto {
 // Wardrobe Feedback Types
 export interface WardrobeFeedbackMetadata {
   itemId: string;
-  feedback: 'dislike' | 'irrelevant' | 'like';
+  feedback: "dislike" | "irrelevant" | "like";
   reason?: string;
   reasonText?: string;
   createdAt?: string;
@@ -199,8 +199,8 @@ export interface CreateColorAnalysisDto {
 }
 
 // Style Profile Types
-export type FitPreference = 'slim' | 'regular' | 'relaxed' | 'oversized';
-export type BudgetRange = 'budget' | 'mid-range' | 'premium' | 'luxury';
+export type FitPreference = "slim" | "regular" | "relaxed" | "oversized";
+export type BudgetRange = "budget" | "mid-range" | "premium" | "luxury";
 
 export interface StyleProfile {
   _id: string;
@@ -269,8 +269,8 @@ export interface UpdateStyleProfileDto {
 
 // Chat Types
 export enum MessageRole {
-  USER = 'user',
-  ASSISTANT = 'assistant',
+  USER = "user",
+  ASSISTANT = "assistant",
 }
 
 export interface ChatMessage {
@@ -309,12 +309,14 @@ export interface AddMessageDto {
 }
 
 // Outfit Types
-export type CardTemplate = 'minimal' | 'elegant' | 'bold';
+export type CardTemplate = "minimal" | "elegant" | "bold";
 
 export interface OutfitItems {
   top?: string | WardrobeItem;
   bottom?: string | WardrobeItem;
-  shoe?: string | WardrobeItem;
+  outerwear?: string | WardrobeItem;
+  footwear?: string | WardrobeItem;
+  dress?: string | WardrobeItem;
   accessories: (string | WardrobeItem)[];
 }
 
@@ -331,18 +333,30 @@ export interface Outfit {
 
 export interface CreateOutfitDto {
   name: string;
-  items: { top?: string; bottom?: string; shoe?: string; accessories?: string[] };
+  items: {
+    top?: string;
+    bottom?: string;
+    outerwear?: string;
+    footwear?: string;
+    dress?: string;
+    accessories?: string[];
+  };
   cardTemplate?: CardTemplate;
 }
 
 export interface UpdateOutfitDto {
   name?: string;
-  items?: { top?: string | null; bottom?: string | null; shoe?: string | null; accessories?: string[] };
+  items?: {
+    top?: string | null;
+    bottom?: string | null;
+    outerwear?: string | null;
+    footwear?: string | null;
+    dress?: string | null;
+    accessories?: string[];
+  };
   isFavorite?: boolean;
   cardTemplate?: CardTemplate;
 }
-
-
 
 // AI Analysis Types
 export interface ClothingAnalysisResult {
@@ -506,17 +520,25 @@ export interface CommerceStats {
   totalItems: number;
   inStockItems: number;
   itemsByCategory: { category: string; count: number }[];
-  itemsByRetailer: { retailerId: string; retailerName: string; count: number }[];
+  itemsByRetailer: {
+    retailerId: string;
+    retailerName: string;
+    count: number;
+  }[];
   itemsByBrand: { brand: string; count: number }[];
 }
 // Persona Analysis Types
-export type PersonaAnalysisStatusType = 'pending' | 'processing' | 'completed' | 'failed';
+export type PersonaAnalysisStatusType =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed";
 
 export interface ImageAnalysis {
   styleKeywords: string[];
   colorPalette: string[];
   aestheticNotes: string;
-  formalityLevel: 'casual' | 'smart-casual' | 'business' | 'formal';
+  formalityLevel: "casual" | "smart-casual" | "business" | "formal";
   silhouettePreferences?: string[];
   patterns?: string[];
   dominantColors?: string[];

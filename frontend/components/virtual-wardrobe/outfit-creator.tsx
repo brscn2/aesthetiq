@@ -33,7 +33,9 @@ interface OutfitCreatorProps {
 interface SelectedItems {
   top: string | null;
   bottom: string | null;
-  shoe: string | null;
+  outerwear: string | null;
+  footwear: string | null;
+  dress: string | null;
   accessories: string[];
 }
 
@@ -53,7 +55,9 @@ export function OutfitCreator({
   const [selectedItems, setSelectedItems] = useState<SelectedItems>({
     top: null,
     bottom: null,
-    shoe: null,
+    outerwear: null,
+    footwear: null,
+    dress: null,
     accessories: [],
   });
   const prefillAppliedRef = useRef<string | null>(null);
@@ -78,10 +82,18 @@ export function OutfitCreator({
           typeof editOutfit.items.bottom === "string"
             ? editOutfit.items.bottom
             : editOutfit.items.bottom?._id || null,
-        shoe:
-          typeof editOutfit.items.shoe === "string"
-            ? editOutfit.items.shoe
-            : editOutfit.items.shoe?._id || null,
+        outerwear:
+          typeof editOutfit.items.outerwear === "string"
+            ? editOutfit.items.outerwear
+            : editOutfit.items.outerwear?._id || null,
+        footwear:
+          typeof editOutfit.items.footwear === "string"
+            ? editOutfit.items.footwear
+            : editOutfit.items.footwear?._id || null,
+        dress:
+          typeof editOutfit.items.dress === "string"
+            ? editOutfit.items.dress
+            : editOutfit.items.dress?._id || null,
         accessories: editOutfit.items.accessories.map((a) =>
           typeof a === "string" ? a : a._id,
         ),
@@ -101,7 +113,9 @@ export function OutfitCreator({
     const nextSelection: SelectedItems = {
       top: null,
       bottom: null,
-      shoe: null,
+      outerwear: null,
+      footwear: null,
+      dress: null,
       accessories: [],
     };
     const missingIds: string[] = [];
@@ -141,9 +155,27 @@ export function OutfitCreator({
         return;
       }
 
-      if (item.category === Category.SHOE) {
-        if (!nextSelection.shoe) {
-          nextSelection.shoe = item._id;
+      if (item.category === Category.OUTERWEAR) {
+        if (!nextSelection.outerwear) {
+          nextSelection.outerwear = item._id;
+        } else {
+          skippedIds.push(item._id);
+        }
+        return;
+      }
+
+      if (item.category === Category.FOOTWEAR) {
+        if (!nextSelection.footwear) {
+          nextSelection.footwear = item._id;
+        } else {
+          skippedIds.push(item._id);
+        }
+        return;
+      }
+
+      if (item.category === Category.DRESS) {
+        if (!nextSelection.dress) {
+          nextSelection.dress = item._id;
         } else {
           skippedIds.push(item._id);
         }
@@ -166,7 +198,7 @@ export function OutfitCreator({
       toast({
         title: "Some items were skipped",
         description:
-          "Only one item per top, bottom, and shoe category can be pre-selected.",
+          "Only one item per top, bottom, outerwear, footwear, and dress category can be pre-selected.",
       });
     }
   }, [prefillItemIds, prefillKey, wardrobeItems, editOutfit, toast]);
@@ -204,7 +236,9 @@ export function OutfitCreator({
     if (
       !selectedItems.top &&
       !selectedItems.bottom &&
-      !selectedItems.shoe &&
+      !selectedItems.outerwear &&
+      !selectedItems.footwear &&
+      !selectedItems.dress &&
       selectedItems.accessories.length === 0
     ) {
       toast({
@@ -219,7 +253,9 @@ export function OutfitCreator({
       items: {
         top: selectedItems.top || undefined,
         bottom: selectedItems.bottom || undefined,
-        shoe: selectedItems.shoe || undefined,
+        outerwear: selectedItems.outerwear || undefined,
+        footwear: selectedItems.footwear || undefined,
+        dress: selectedItems.dress || undefined,
         accessories:
           selectedItems.accessories.length > 0
             ? selectedItems.accessories
@@ -244,7 +280,18 @@ export function OutfitCreator({
           : [...prev.accessories, itemId],
       }));
     } else {
-      const key = category.toLowerCase() as "top" | "bottom" | "shoe";
+      const categoryKeyMap: Record<Category, keyof SelectedItems> = {
+        [Category.TOP]: "top",
+        [Category.BOTTOM]: "bottom",
+        [Category.OUTERWEAR]: "outerwear",
+        [Category.FOOTWEAR]: "footwear",
+        [Category.DRESS]: "dress",
+        [Category.ACCESSORY]: "accessories",
+      };
+      const key = categoryKeyMap[category] as Exclude<
+        keyof SelectedItems,
+        "accessories"
+      >;
       setSelectedItems((prev) => ({
         ...prev,
         [key]: prev[key] === itemId ? null : itemId,
@@ -256,7 +303,18 @@ export function OutfitCreator({
     if (category === Category.ACCESSORY) {
       return selectedItems.accessories.includes(itemId);
     }
-    const key = category.toLowerCase() as "top" | "bottom" | "shoe";
+    const categoryKeyMap: Record<Category, keyof SelectedItems> = {
+      [Category.TOP]: "top",
+      [Category.BOTTOM]: "bottom",
+      [Category.OUTERWEAR]: "outerwear",
+      [Category.FOOTWEAR]: "footwear",
+      [Category.DRESS]: "dress",
+      [Category.ACCESSORY]: "accessories",
+    };
+    const key = categoryKeyMap[category] as Exclude<
+      keyof SelectedItems,
+      "accessories"
+    >;
     return selectedItems[key] === itemId;
   };
 
@@ -271,10 +329,14 @@ export function OutfitCreator({
       wardrobeItems?.filter((i) => i.category === Category.TOP) || [],
     [Category.BOTTOM]:
       wardrobeItems?.filter((i) => i.category === Category.BOTTOM) || [],
-    [Category.SHOE]:
-      wardrobeItems?.filter((i) => i.category === Category.SHOE) || [],
+    [Category.OUTERWEAR]:
+      wardrobeItems?.filter((i) => i.category === Category.OUTERWEAR) || [],
+    [Category.FOOTWEAR]:
+      wardrobeItems?.filter((i) => i.category === Category.FOOTWEAR) || [],
     [Category.ACCESSORY]:
       wardrobeItems?.filter((i) => i.category === Category.ACCESSORY) || [],
+    [Category.DRESS]:
+      wardrobeItems?.filter((i) => i.category === Category.DRESS) || [],
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -322,11 +384,17 @@ export function OutfitCreator({
             <TabsTrigger value={Category.BOTTOM}>
               Bottoms ({itemsByCategory[Category.BOTTOM].length})
             </TabsTrigger>
-            <TabsTrigger value={Category.SHOE}>
-              Shoes ({itemsByCategory[Category.SHOE].length})
+            <TabsTrigger value={Category.OUTERWEAR}>
+              Outerwear ({itemsByCategory[Category.OUTERWEAR].length})
+            </TabsTrigger>
+            <TabsTrigger value={Category.FOOTWEAR}>
+              Footwear ({itemsByCategory[Category.FOOTWEAR].length})
             </TabsTrigger>
             <TabsTrigger value={Category.ACCESSORY}>
               Accessories ({itemsByCategory[Category.ACCESSORY].length})
+            </TabsTrigger>
+            <TabsTrigger value={Category.DRESS}>
+              Dresses ({itemsByCategory[Category.DRESS].length})
             </TabsTrigger>
           </TabsList>
 
@@ -427,24 +495,27 @@ export function OutfitCreator({
                   template={cardTemplate}
                 />
                 <PreviewSlot
-                  item={getSelectedItem(selectedItems.shoe)}
-                  label="Shoe"
+                  item={getSelectedItem(selectedItems.outerwear)}
+                  label="Outerwear"
+                  template={cardTemplate}
+                />
+                <PreviewSlot
+                  item={getSelectedItem(selectedItems.footwear)}
+                  label="Footwear"
+                  template={cardTemplate}
+                />
+                <PreviewSlot
+                  item={getSelectedItem(selectedItems.dress)}
+                  label="Dress"
                   template={cardTemplate}
                 />
 
-                {/* Show all accessories */}
-                {selectedItems.accessories.length > 0 ? (
-                  selectedItems.accessories.map((accId, idx) => (
-                    <PreviewSlot
-                      key={accId}
-                      item={getSelectedItem(accId)}
-                      label={`Acc ${idx + 1}`}
-                      template={cardTemplate}
-                    />
-                  ))
-                ) : (
-                  <PreviewSlot label="Acc" template={cardTemplate} />
-                )}
+                <PreviewSlot
+                  item={getSelectedItem(selectedItems.accessories[0] || null)}
+                  label="Acc"
+                  template={cardTemplate}
+                  count={selectedItems.accessories.length}
+                />
               </div>
             </div>
           </CardContent>

@@ -1,6 +1,6 @@
 /**
  * Types for the Conversational Agent streaming API.
- * 
+ *
  * The agent uses Server-Sent Events (SSE) to stream workflow progress
  * and responses back to the client in real-time.
  */
@@ -201,14 +201,16 @@ export interface OutfitAttachment {
   items: {
     top?: OutfitItemSnapshot;
     bottom?: OutfitItemSnapshot;
-    shoe?: OutfitItemSnapshot;
+    outerwear?: OutfitItemSnapshot;
+    footwear?: OutfitItemSnapshot;
+    dress?: OutfitItemSnapshot;
     accessories: OutfitItemSnapshot[];
   };
 }
 
 export interface OutfitSwapIntent {
   outfitId: string;
-  category: "TOP" | "BOTTOM" | "SHOE" | "ACCESSORY";
+  category: "TOP" | "BOTTOM" | "OUTERWEAR" | "FOOTWEAR" | "DRESS" | "ACCESSORY";
 }
 
 // =============================================================================

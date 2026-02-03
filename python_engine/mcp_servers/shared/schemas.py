@@ -1,4 +1,5 @@
 """Shared schemas used across multiple MCP servers."""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -11,8 +12,10 @@ from pydantic import BaseModel
 # Enums (matching backend schemas)
 # -----------------------------------------------------------------------------
 
+
 class Category(str, Enum):
     """Item category enum - used across wardrobe, commerce, and web search."""
+
     TOP = "TOP"
     BOTTOM = "BOTTOM"
     OUTERWEAR = "OUTERWEAR"
@@ -25,8 +28,10 @@ class Category(str, Enum):
 # SeasonalPaletteScores type (matching backend)
 # -----------------------------------------------------------------------------
 
+
 class SeasonalPaletteScores(BaseModel):
     """Seasonal color palette compatibility scores (0-1)."""
+
     DARK_AUTUMN: Optional[float] = None
     DARK_WINTER: Optional[float] = None
     LIGHT_SPRING: Optional[float] = None
