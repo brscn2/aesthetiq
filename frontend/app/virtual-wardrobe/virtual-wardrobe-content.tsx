@@ -123,45 +123,47 @@ export default function VirtualWardrobeContent() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background text-foreground md:h-screen">
-      {/* Control Bar */}
-      <WardrobeControlBar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onAddItem={() => setIsAddModalOpen(true)}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filters={filters}
-        onFiltersChange={setFilters}
-        availableBrands={availableBrands}
-      />
+    <>
+      <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background text-foreground md:h-screen">
+        {/* Control Bar */}
+        <WardrobeControlBar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onAddItem={() => setIsAddModalOpen(true)}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          filters={filters}
+          onFiltersChange={setFilters}
+          availableBrands={availableBrands}
+        />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-          {renderContent()}
-        </main>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+            {renderContent()}
+          </main>
 
-        {/* Intelligence Sidebar - Desktop (hide when creating outfit) */}
+          {/* Intelligence Sidebar - Desktop (hide when creating outfit) */}
+          {activeTab !== "outfits" && (
+            <aside className="hidden w-[480px] overflow-y-auto border-l border-border bg-background p-7 lg:block">
+              <WardrobeIntelligenceComponent />
+            </aside>
+          )}
+        </div>
+
+        {/* Intelligence Toggle Button - Mobile */}
         {activeTab !== "outfits" && (
-          <aside className="hidden w-[480px] overflow-y-auto border-l border-border bg-background p-7 lg:block">
-            <WardrobeIntelligenceComponent />
-          </aside>
+          <div className="fixed bottom-6 right-6 z-40 lg:hidden">
+            <Button
+              size="lg"
+              className="h-14 w-14 rounded-full bg-primary shadow-lg"
+              onClick={() => setShowIntelligence(true)}
+            >
+              <Brain className="h-6 w-6" />
+            </Button>
+          </div>
         )}
       </div>
-
-      {/* Intelligence Toggle Button - Mobile */}
-      {activeTab !== "outfits" && (
-        <div className="fixed bottom-6 right-6 z-40 lg:hidden">
-          <Button
-            size="lg"
-            className="h-14 w-14 rounded-full bg-primary shadow-lg"
-            onClick={() => setShowIntelligence(true)}
-          >
-            <Brain className="h-6 w-6" />
-          </Button>
-        </div>
-      )}
 
       {/* Intelligence Modal - Mobile */}
       {showIntelligence && (
@@ -198,6 +200,6 @@ export default function VirtualWardrobeContent() {
           onClose={() => setViewingOutfit(null)}
         />
       )}
-    </div>
+    </>
   )
 }
