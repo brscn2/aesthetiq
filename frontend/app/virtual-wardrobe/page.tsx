@@ -1,24 +1,16 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { WardrobeControlBar, WardrobeFilters } from "@/components/virtual-wardrobe/control-bar"
-import { InventoryGrid } from "@/components/virtual-wardrobe/inventory-grid"
-import { WardrobeIntelligenceComponent } from "@/components/virtual-wardrobe/wardrobe-intelligence-new"
-import { AddItemModal } from "@/components/virtual-wardrobe/add-item-modal"
-import { OutfitCreator } from "@/components/virtual-wardrobe/outfit-creator"
-import { OutfitGrid } from "@/components/virtual-wardrobe/outfit-grid"
-import { FashionCardGenerator } from "@/components/virtual-wardrobe/fashion-card-generator"
-import { DislikedItemsPanel } from "@/components/virtual-wardrobe/disliked-items-panel"
-import { Button } from "@/components/ui/button"
-import { Brain, X } from "lucide-react"
-import { useApi } from "@/lib/api"
-import { Outfit } from "@/types/api"
+import VirtualWardrobeContent from "./virtual-wardrobe-content"
 
 export default function VirtualWardrobePage() {
-  const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState("all-items")
+  return (
+    <DashboardLayout>
+      <Suspense fallback={<div className="flex h-full items-center justify-center">Loading wardrobe...</div>}>
+        <VirtualWardrobeContent />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [showIntelligence, setShowIntelligence] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
