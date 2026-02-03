@@ -285,6 +285,92 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                         logger.info(f"Fallback decomposition used: {fallback_decomposed}")
                     else:
                         logger.warning(f"No decomposition found for occasion '{occasion}'")
+
+            # === OUTFIT ATTACHMENT CONTEXT ===
+            attached_outfits = state.get("attached_outfits") or []
+            swap_intents = state.get("swap_intents") or []
+
+            def _category_to_search_guidance(category: str) -> str:
+                """Generate natural language search guidance for a category.
+                This helps the agent construct proper search queries instead of searching for generic terms like 'BOTTOM'.
+                """
+                guidance = {
+                    "TOP": "tops, shirts, blouses, sweaters, jackets",
+                    "BOTTOM": "bottoms, jeans, pants, shorts, skirts",
+                    "SHOE": "shoes, sneakers, boots, sandals, heels",
+                    "ACCESSORY": "accessories, bags, jewelry, belts, scarves, hats",
+                }
+                return guidance.get(category, category.lower())
+
+
+            def _missing_categories(outfit: Dict[str, Any]) -> List[str]:
+                items = outfit.get("items", {}) if isinstance(outfit, dict) else {}
+                missing = []
+                if not items.get("top"):
+                    missing.append("TOP")
+                if not items.get("bottom"):
+                    missing.append("BOTTOM")
+                if not items.get("shoe"):
+                    missing.append("SHOE")
+                if not items.get("accessories"):
+                    missing.append("ACCESSORY")
+                return missing
+
+            target_categories: List[str] = []
+            if swap_intents:
+                target_categories = [intent.get("category") for intent in swap_intents if intent.get("category")]
+            elif attached_outfits:
+                for outfit in attached_outfits:
+                    target_categories.extend(_missing_categories(outfit))
+
+            target_categories = [c for c in target_categories if c]
+            unique_targets = list(dict.fromkeys(target_categories))
+
+            # Check if LLM extracted a specific sub_category - if it did, user was specific about what they want
+            user_was_specific = bool(filters_dict.get("sub_category"))
+
+            # Prioritize outfit attachment context - override LLM-extracted filters if outfit context exists
+            if unique_targets and attached_outfits:
+                logger.info(f"Overriding filters with outfit attachment context: {unique_targets}")
+                if len(unique_targets) == 1:
+                    # Single missing category - set it as category filter
+                    filters_dict["category"] = unique_targets[0]
+                    # Only add generic search hint if user didn't specify a particular item
+                    if not user_was_specific:
+                        search_hint = _category_to_search_guidance(unique_targets[0])
+                        filters_dict["_search_hint"] = search_hint
+                        logger.info(f"Set category filter: {unique_targets[0]} with search hint: {search_hint}")
+                    else:
+                        logger.info(f"Set category filter: {unique_targets[0]}, preserving user's specific sub_category: {filters_dict.get('sub_category')}")
+                else:
+                    # Multiple missing categories - pass as list
+                    filters_dict["target_categories"] = unique_targets
+                    # Only add generic search hints if user didn't specify a particular item
+                    if not user_was_specific:
+                        combined_hints = ", ".join([_category_to_search_guidance(cat) for cat in unique_targets])
+                        filters_dict["_search_hint"] = combined_hints
+                        logger.info(f"Set target categories: {unique_targets} with search hints: {combined_hints}")
+                    else:
+                        logger.info(f"Set target categories: {unique_targets}, preserving user's specific sub_category: {filters_dict.get('sub_category')}")
+            elif unique_targets and not filters_dict.get("category") and not filters_dict.get("sub_categories"):
+                # Fall back to applying target categories if no filters yet and swap intents specified
+                logger.info(f"Applying target categories from swap intents: {unique_targets}")
+                if len(unique_targets) == 1:
+                    filters_dict["category"] = unique_targets[0]
+                    if not user_was_specific:
+                        search_hint = _category_to_search_guidance(unique_targets[0])
+                        filters_dict["_search_hint"] = search_hint
+                        logger.info(f"Set category filter: {unique_targets[0]} with search hint: {search_hint}")
+                    else:
+                        logger.info(f"Set category filter: {unique_targets[0]}, preserving user's specific sub_category: {filters_dict.get('sub_category')}")
+                else:
+                    filters_dict["target_categories"] = unique_targets
+                    if not user_was_specific:
+                        combined_hints = ", ".join([_category_to_search_guidance(cat) for cat in unique_targets])
+                        filters_dict["_search_hint"] = combined_hints
+                        logger.info(f"Set target categories: {unique_targets} with search hints: {combined_hints}")
+                    else:
+                        logger.info(f"Set target categories: {unique_targets}, preserving user's specific sub_category: {filters_dict.get('sub_category')}")
             
             # Log to Langfuse
             if trace_id:
@@ -310,6 +396,8 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 "filters": filters_dict,
                 "reasoning": analysis.reasoning,
             }
+            if unique_targets:
+                metadata["outfit_target_categories"] = unique_targets
             
             return {
                 "search_scope": analysis.search_scope,

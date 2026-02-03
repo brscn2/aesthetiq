@@ -872,6 +872,23 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     refinement_notes = state.get("refinement_notes", []) or []
     iteration = state.get("iteration", 0)
     trace_id = state.get("langfuse_trace_id")
+    attached_outfits = state.get("attached_outfits") or []
+    swap_intents = state.get("swap_intents") or []
+
+    excluded_item_ids: set[str] = set()
+    for outfit in attached_outfits:
+        items = outfit.get("items", {}) if isinstance(outfit, dict) else {}
+        for key in ("top", "bottom", "shoe"):
+            item = items.get(key)
+            if isinstance(item, dict):
+                item_id = item.get("id") or item.get("_id")
+                if item_id:
+                    excluded_item_ids.add(str(item_id))
+        for accessory in items.get("accessories", []) or []:
+            if isinstance(accessory, dict):
+                item_id = accessory.get("id") or accessory.get("_id")
+                if item_id:
+                    excluded_item_ids.add(str(item_id))
     
     # Verify state reading in refinement loops
     previous_items = state.get("retrieved_items") or []
@@ -977,17 +994,81 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
         if decomposed_items:
             decomposition_context = f"\n\nDECOMPOSED OUTFIT ITEMS: {', '.join(decomposed_items)}\nSearch for each of these items to build a complete outfit."
         
+        # Handle search hints for outfit completion
+        search_hint = extracted_filters.get("_search_hint", "")
+        target_categories = extracted_filters.get("target_categories", [])
+        hint_context = ""
+        enhanced_message = message
+        
+        if search_hint:
+            if target_categories:
+                # Multiple categories to search - enhance the message to be more specific
+                categories_str = ', '.join(target_categories)
+                hint_context = f"\n\nOUTFIT COMPLETION MODE: The outfit is missing {categories_str}. Use specific search queries (NOT category names) with proper filters:"
+                for cat in target_categories:
+                    cat_guidance = {
+                        "TOP": "For TOP category: search with queries like 'shirt', 'blouse', 'sweater', 'jacket' (NOT 'top' or 'TOP')",
+                        "BOTTOM": "For BOTTOM category: search with queries like 'jeans', 'pants', 'shorts', 'skirt' (NOT 'bottom' or 'BOTTOM')",
+                        "SHOE": "For SHOE category: search with queries like 'sneakers', 'boots', 'sandals', 'heels' (NOT 'shoe' or 'SHOE')",
+                        "ACCESSORY": "For ACCESSORY category: search with queries like 'bag', 'necklace', 'belt', 'scarf' (NOT 'accessory' or 'ACCESSORY')",
+                    }
+                    hint_context += f"\n  - {cat_guidance.get(cat, '')}"
+                # Enhance the user message to be more directive
+                enhanced_message = f"Find items to complete this outfit: {search_hint}"
+            else:
+                # Single category - make it very explicit
+                category = extracted_filters.get("category", "")
+                if category:
+                    cat_examples = {
+                        "TOP": "shirts, blouses, sweaters, or jackets",
+                        "BOTTOM": "jeans, pants, shorts, or skirts",
+                        "SHOE": "sneakers, boots, sandals, or heels",
+                        "ACCESSORY": "bags, necklaces, belts, or scarves",
+                    }
+                    examples = cat_examples.get(category, "items")
+                    hint_context = f"\n\nSEARCH INSTRUCTION: Use specific item names in your search queries (e.g., '{examples.split(',')[0].strip()}', '{examples.split(',')[1].strip()}'), NOT the category name '{category}'. The category filter is already set to {category}."
+                    enhanced_message = f"Find {examples} to complete this outfit"
+                else:
+                    hint_context = f"\n\nSEARCH GUIDANCE: When searching, use specific item names: {search_hint}"
+        
         refinement_context = ""
         if refinement_notes and iteration > 0:
             refinement_context = f"\n\nRefinement needed (attempt {iteration + 1}): {', '.join(refinement_notes)}"
+
+        outfit_context = ""
+        if attached_outfits:
+            outfit_summaries = []
+            for outfit in attached_outfits:
+                name = outfit.get("name", "Outfit") if isinstance(outfit, dict) else "Outfit"
+                items = outfit.get("items", {}) if isinstance(outfit, dict) else {}
+                present = []
+                if items.get("top"):
+                    present.append("top")
+                if items.get("bottom"):
+                    present.append("bottom")
+                if items.get("shoe"):
+                    present.append("shoes")
+                if items.get("accessories"):
+                    present.append("accessories")
+                outfit_summaries.append(f"{name} (has {', '.join(present) or 'no items'})")
+            outfit_context = f"\n\nAttached outfits: {', '.join(outfit_summaries)}"
+
+        swap_context = ""
+        if swap_intents:
+            swap_descriptions = []
+            for intent in swap_intents:
+                category = intent.get("category", "item")
+                outfit_id = intent.get("outfitId")
+                swap_descriptions.append(f"{category} for outfit {outfit_id}")
+            swap_context = f"\n\nSwap intents: {', '.join(swap_descriptions)}"
         
         profile_context = f"\n\nUser profile: {prefetched_user_profile}" if prefetched_user_profile else ""
         style_context = f"\n\nUser style DNA: {prefetched_style_dna}" if prefetched_style_dna else ""
 
-        search_request = f"""User request: {message}
+        search_request = f"""User request: {enhanced_message}
     User ID: {user_id}
     Search scope: {search_scope}
-    Filters: {filter_str}{decomposition_context}{refinement_context}{disliked_context}{profile_context}{style_context}"""
+    Filters: {filter_str}{decomposition_context}{hint_context}{refinement_context}{disliked_context}{profile_context}{style_context}{outfit_context}{swap_context}"""
         
         agent_result = await agent.ainvoke({"messages": [HumanMessage(content=search_request)]})
         
@@ -1176,6 +1257,21 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             logger.info(f"[RECOMMENDER] Deduplicated items: {len(validated_items)} -> {len(deduplicated_items)} (removed {len(validated_items) - len(deduplicated_items)} duplicates)")
         
         retrieved_items = deduplicated_items
+
+        if excluded_item_ids:
+            before_count = len(retrieved_items)
+            filtered_items = []
+            for item in retrieved_items:
+                if not isinstance(item, dict):
+                    filtered_items.append(item)
+                    continue
+                item_id = item.get("id") or item.get("_id")
+                if item_id and str(item_id) in excluded_item_ids:
+                    continue
+                filtered_items.append(item)
+            retrieved_items = filtered_items
+            if before_count != len(retrieved_items):
+                logger.info(f"[RECOMMENDER] Excluded {before_count - len(retrieved_items)} items already in attached outfits")
         
         logger.info(f"[RECOMMENDER] Final retrieved_items count: {len(retrieved_items)}")
         if retrieved_items:

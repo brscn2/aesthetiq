@@ -135,6 +135,8 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
     user_profile = state.get("user_profile")
     extracted_filters = state.get("extracted_filters", {})
     iteration = state.get("iteration", 0)
+    attached_outfits = state.get("attached_outfits") or []
+    swap_intents = state.get("swap_intents") or []
     
     # Verify state reading in refinement loops
     previous_analysis = state.get("analysis_result")
@@ -230,12 +232,22 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
             style_summary += f"\nUser Profile: {user_profile}"
         
         filter_summary = ", ".join(f"{k}={v}" for k, v in extracted_filters.items()) if extracted_filters else "none"
+
+        outfit_context = ""
+        if attached_outfits:
+            outfit_context = f"\nAttached outfits provided: {len(attached_outfits)}"
+        if swap_intents:
+            swap_context = ", ".join(
+                f"{intent.get('category')} for {intent.get('outfitId')}" for intent in swap_intents
+            )
+            outfit_context += f"\nSwap intents: {swap_context}"
         
         analysis_prompt = f"""
 User's Request: {message}
 
 Extracted Filters: {filter_summary}
 {style_summary}
+    {outfit_context}
 
 Retrieved Items:{items_summary}
 

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag } from "lucide-react"
+import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,9 @@ import { AgentProgress } from "@/components/agent-progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { useChatApi, generateMessageId } from "@/lib/chat-api"
-import type { ClothingItem, DoneEvent } from "@/types/chat"
+import { useApi } from "@/lib/api"
+import type { ClothingItem, DoneEvent, OutfitAttachment, OutfitSwapIntent } from "@/types/chat"
+import type { Outfit, WardrobeItem, UpdateOutfitDto } from "@/types/api"
 
 // Speech Recognition types
 interface SpeechRecognition extends EventTarget {
@@ -68,6 +70,8 @@ interface Message {
   content: string
   images?: string[]
   items?: ClothingItem[]
+  attachedOutfits?: OutfitAttachment[]
+  swapIntents?: OutfitSwapIntent[]
   isStreaming?: boolean
   metadata?: {
     intent?: string
@@ -107,11 +111,20 @@ export function ChatStylist({
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const router = useRouter()
+  const { outfitApi } = useApi()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
+  const [attachedOutfits, setAttachedOutfits] = useState<OutfitAttachment[]>([])
+  const [swapIntentsByOutfit, setSwapIntentsByOutfit] = useState<Record<string, OutfitSwapIntent["category"] | null>>({})
+  const [isOutfitDialogOpen, setIsOutfitDialogOpen] = useState(false)
+  const [isLoadingOutfits, setIsLoadingOutfits] = useState(false)
+  const [outfitOptions, setOutfitOptions] = useState<Outfit[]>([])
   const [isRecording, setIsRecording] = useState(false)
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null)
+  const [selectedItemsForAdd, setSelectedItemsForAdd] = useState<Set<string>>(new Set())
+  const [isAddingToOutfit, setIsAddingToOutfit] = useState(false)
+  const [addingItemIds, setAddingItemIds] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -221,6 +234,68 @@ export function ChatStylist({
     router.push(`/virtual-wardrobe?${params.toString()}`)
   }, [router])
 
+  const buildOutfitItemSnapshot = useCallback((item: string | WardrobeItem | undefined) => {
+    if (!item || typeof item === "string") return undefined
+    return {
+      id: item._id,
+      name: item.subCategory || item.category || "Item",
+      imageUrl: item.processedImageUrl || item.imageUrl || undefined,
+      category: item.category,
+      source: "wardrobe" as const,
+    }
+  }, [])
+
+  const buildOutfitAttachment = useCallback((outfit: Outfit): OutfitAttachment => {
+    const top = buildOutfitItemSnapshot(outfit.items.top)
+    const bottom = buildOutfitItemSnapshot(outfit.items.bottom)
+    const shoe = buildOutfitItemSnapshot(outfit.items.shoe)
+    const accessories = outfit.items.accessories
+      .map(buildOutfitItemSnapshot)
+      .filter((item): item is NonNullable<typeof item> => !!item)
+
+    return {
+      id: outfit._id,
+      name: outfit.name,
+      items: {
+        top,
+        bottom,
+        shoe,
+        accessories,
+      },
+    }
+  }, [buildOutfitItemSnapshot])
+
+  const getOutfitAttachmentImages = useCallback((attachment: OutfitAttachment) => {
+    return [
+      attachment.items.top?.imageUrl,
+      attachment.items.bottom?.imageUrl,
+      attachment.items.shoe?.imageUrl,
+      attachment.items.accessories[0]?.imageUrl,
+    ]
+  }, [])
+
+  const buildAutoMessage = useCallback(
+    (swapIntents: OutfitSwapIntent[], attachments: OutfitAttachment[]) => {
+      if (swapIntents.length > 0) {
+        const swaps = swapIntents
+          .map((intent) => {
+            const outfit = attachments.find((entry) => entry.id === intent.outfitId)
+            const categoryLabel = intent.category.toLowerCase()
+            return outfit ? `swap the ${categoryLabel} for "${outfit.name}"` : `swap the ${categoryLabel}`
+          })
+          .join("; ")
+        return `Please ${swaps}.`
+      }
+
+      if (attachments.length > 0) {
+        return "Please use the attached outfits for context."
+      }
+
+      return ""
+    },
+    [],
+  )
+
   // Initialize messages from props when session changes or reset is triggered
   useEffect(() => {
     const sessionChanged = activeSessionId !== previousSessionIdRef.current
@@ -228,6 +303,8 @@ export function ChatStylist({
     
     if (sessionChanged) {
       previousSessionIdRef.current = activeSessionId
+      setAttachedOutfits([])
+      setSwapIntentsByOutfit({})
     }
     
     if (resetTriggered) {
@@ -239,6 +316,8 @@ export function ChatStylist({
       setMessages([])
       setPendingClarification(null)
       resetSession()
+      setAttachedOutfits([])
+      setSwapIntentsByOutfit({})
     } else if (sessionChanged && initialMessages.length > 0) {
       // Load messages for existing session
       setMessages(
@@ -247,6 +326,8 @@ export function ChatStylist({
           role: msg.role,
           content: msg.content,
           items: msg.items,
+          attachedOutfits: msg.metadata?.attachedOutfits,
+          swapIntents: msg.metadata?.swapIntents,
           metadata: msg.metadata,
         }))
       )
@@ -255,6 +336,33 @@ export function ChatStylist({
       setMessages([])
     }
   }, [activeSessionId, initialMessages, resetTrigger, setPendingClarification, resetSession])
+
+  useEffect(() => {
+    if (!isOutfitDialogOpen) return
+
+    let isActive = true
+    setIsLoadingOutfits(true)
+
+    outfitApi
+      .getAll()
+      .then((outfits) => {
+        if (!isActive) return
+        setOutfitOptions(outfits)
+      })
+      .catch((error) => {
+        if (!isActive) return
+        console.error("Failed to load outfits", error)
+        toast.error("Failed to load outfits")
+      })
+      .finally(() => {
+        if (!isActive) return
+        setIsLoadingOutfits(false)
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [isOutfitDialogOpen, outfitApi])
 
   // Create or update streaming message when content arrives
   useEffect(() => {
@@ -267,17 +375,8 @@ export function ChatStylist({
         if (lastMessage?.isStreaming) {
           lastMessage.content = streamedText
           return [...newMessages]
-        } 
-        
-        // Only create new streaming message if:
-        // 1. No streaming message exists AND
-        // 2. Last message is not already an assistant message (to prevent duplicates)
-        const lastAssistantMessage = newMessages
-          .slice()
-          .reverse()
-          .find(msg => msg.role === "assistant")
-        
-        if (!lastAssistantMessage || lastAssistantMessage.isStreaming !== false) {
+        } else {
+          // Create new streaming message
           const streamingMessage: Message = {
             id: generateMessageId(),
             role: "assistant",
@@ -286,8 +385,6 @@ export function ChatStylist({
           }
           return [...newMessages, streamingMessage]
         }
-        
-        return newMessages
       })
     }
   }, [streamedText, sessionState.isStreaming])
@@ -354,27 +451,40 @@ export function ChatStylist({
   }, [])
 
   const handleSendMessage = useCallback(async () => {
-    if (!input.trim() && attachedImages.length === 0) return
+    const swapIntents: OutfitSwapIntent[] = Object.entries(swapIntentsByOutfit)
+      .filter(([, category]) => !!category)
+      .map(([outfitId, category]) => ({
+        outfitId,
+        category: category as OutfitSwapIntent["category"],
+      }))
 
-    const messageContent = input.trim()
+    if (!input.trim() && attachedImages.length === 0 && attachedOutfits.length === 0 && swapIntents.length === 0) return
+
+    const messageContent = input.trim() || buildAutoMessage(swapIntents, attachedOutfits)
 
     const userMessage: Message = {
       id: generateMessageId(),
       role: "user",
       content: messageContent,
       images: attachedImages.length > 0 ? [...attachedImages] : undefined,
+      attachedOutfits: attachedOutfits.length > 0 ? [...attachedOutfits] : undefined,
+      swapIntents: swapIntents.length > 0 ? swapIntents : undefined,
     }
 
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setAttachedImages([])
+    setSwapIntentsByOutfit({})
 
     // Use activeSessionId from props if provided, otherwise use sessionState.sessionId
     const sessionIdToUse = activeSessionId ?? sessionState.sessionId ?? null
 
     // Send to the conversational agent API
-    await sendMessage(messageContent, sessionIdToUse)
-  }, [input, attachedImages, sendMessage, activeSessionId, sessionState.sessionId])
+    await sendMessage(messageContent, sessionIdToUse, {
+      attachedOutfits: attachedOutfits.length > 0 ? attachedOutfits : undefined,
+      swapIntents: swapIntents.length > 0 ? swapIntents : undefined,
+    })
+  }, [input, attachedImages, attachedOutfits, swapIntentsByOutfit, sendMessage, activeSessionId, sessionState.sessionId, buildAutoMessage])
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -428,6 +538,181 @@ export function ChatStylist({
   const removeImage = (index: number) => {
     setAttachedImages((prev) => prev.filter((_, i) => i !== index))
   }
+
+  const handleToggleOutfitAttachment = useCallback((outfit: Outfit) => {
+    setAttachedOutfits((prev) => {
+      const exists = prev.some((entry) => entry.id === outfit._id)
+      if (exists) {
+        return prev.filter((entry) => entry.id !== outfit._id)
+      }
+      if (prev.length >= 3) {
+        toast.error("You can attach up to 3 outfits")
+        return prev
+      }
+      return [...prev, buildOutfitAttachment(outfit)]
+    })
+  }, [buildOutfitAttachment])
+
+  const removeOutfitAttachment = useCallback((outfitId: string) => {
+    setAttachedOutfits((prev) => prev.filter((entry) => entry.id !== outfitId))
+    setSwapIntentsByOutfit((prev) => {
+      if (!prev[outfitId]) return prev
+      const updated = { ...prev }
+      delete updated[outfitId]
+      return updated
+    })
+  }, [])
+
+  const toggleSwapIntent = useCallback(
+    (outfitId: string, category: OutfitSwapIntent["category"]) => {
+      setSwapIntentsByOutfit((prev) => ({
+        ...prev,
+        [outfitId]: prev[outfitId] === category ? null : category,
+      }))
+    },
+    [],
+  )
+
+  const handleAddToOutfit = useCallback(async (item: ClothingItem, outfitId?: string) => {
+    if (item.source !== "wardrobe" || !item.id) {
+      toast.error("Only wardrobe items can be added to outfits")
+      return
+    }
+
+    // Prevent duplicate adds
+    if (addingItemIds.has(item.id)) {
+      return
+    }
+
+    const targetOutfitId = outfitId || attachedOutfits[0]?.id
+    if (!targetOutfitId) {
+      toast.error("No outfit selected. Please attach an outfit first.")
+      return
+    }
+
+    const categoryMap: Record<string, keyof NonNullable<UpdateOutfitDto["items"]>> = {
+      "TOP": "top",
+      "BOTTOM": "bottom",
+      "SHOE": "shoe",
+      "ACCESSORY": "accessories",
+    }
+
+    const slotKey = item.category ? categoryMap[item.category] : undefined
+    if (!slotKey) {
+      toast.error(`Cannot add ${item.category || "item"} to outfit`)
+      return
+    }
+
+    // Track this item as being added
+    setAddingItemIds((prev) => new Set(prev).add(item.id))
+    setIsAddingToOutfit(true)
+
+    try {
+      const updateData: UpdateOutfitDto = {
+        items: slotKey === "accessories" 
+          ? { accessories: [item.id] } 
+          : { [slotKey]: item.id }
+      }
+
+      await outfitApi.update(targetOutfitId, updateData)
+
+      // Refetch the full outfit to get populated item details
+      const refreshedOutfit = await outfitApi.getById(targetOutfitId)
+
+      // Update local state with the refreshed outfit data
+      setAttachedOutfits((prev) =>
+        prev.map((outfit) =>
+          outfit.id === targetOutfitId ? buildOutfitAttachment(refreshedOutfit) : outfit
+        )
+      )
+
+      toast.success(`Added ${item.name} to outfit`)
+    } catch (error) {
+      console.error("Failed to add item to outfit:", error)
+      toast.error("Failed to add item to outfit")
+    } finally {
+      setIsAddingToOutfit(false)
+      // Remove from adding set after a delay to prevent rapid re-clicks
+      setTimeout(() => {
+        setAddingItemIds((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
+      }, 500)
+    }
+  }, [attachedOutfits, outfitApi, buildOutfitAttachment, addingItemIds])
+
+  const handleBulkAddToOutfit = useCallback(async (items: ClothingItem[], outfitId?: string) => {
+    const wardrobeItems = items.filter((item) => item.source === "wardrobe" && item.id)
+    if (wardrobeItems.length === 0) {
+      toast.error("No wardrobe items selected")
+      return
+    }
+
+    const targetOutfitId = outfitId || attachedOutfits[0]?.id
+    if (!targetOutfitId) {
+      toast.error("No outfit selected. Please attach an outfit first.")
+      return
+    }
+
+    setIsAddingToOutfit(true)
+
+    try {
+      // Group items by category
+      const updateData: UpdateOutfitDto = { items: {} }
+      const categoryMap: Record<string, keyof NonNullable<UpdateOutfitDto["items"]>> = {
+        "TOP": "top",
+        "BOTTOM": "bottom",
+        "SHOE": "shoe",
+        "ACCESSORY": "accessories",
+      }
+
+      wardrobeItems.forEach((item) => {
+        if (!item.category) return
+        const slotKey = categoryMap[item.category]
+        if (slotKey) {
+          if (slotKey === "accessories") {
+            if (!updateData.items!.accessories) {
+              updateData.items!.accessories = []
+            }
+            updateData.items!.accessories.push(item.id!)
+          } else {
+            updateData.items![slotKey] = item.id!
+          }
+        }
+      })
+
+      const updatedOutfit = await outfitApi.update(targetOutfitId, updateData)
+
+      // Update local state
+      setAttachedOutfits((prev) =>
+        prev.map((outfit) =>
+          outfit.id === targetOutfitId ? buildOutfitAttachment(updatedOutfit) : outfit
+        )
+      )
+
+      setSelectedItemsForAdd(new Set())
+      toast.success(`Added ${wardrobeItems.length} item(s) to outfit`)
+    } catch (error) {
+      console.error("Failed to add items to outfit:", error)
+      toast.error("Failed to add items to outfit")
+    } finally {
+      setIsAddingToOutfit(false)
+    }
+  }, [attachedOutfits, outfitApi, buildOutfitAttachment])
+
+  const toggleItemSelection = useCallback((itemId: string) => {
+    setSelectedItemsForAdd((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId)
+      } else {
+        newSet.add(itemId)
+      }
+      return newSet
+    })
+  }, [])
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
@@ -546,6 +831,46 @@ export function ChatStylist({
                   </div>
                 )}
 
+                {message.attachedOutfits && message.attachedOutfits.length > 0 && (
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {message.attachedOutfits.map((outfit) => {
+                      const images = getOutfitAttachmentImages(outfit)
+                      const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
+
+                      return (
+                        <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                          <div className="flex items-center gap-2">
+                            <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
+                              {[0, 1, 2, 3].map((index) => (
+                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                  {images[index] ? (
+                                    <Image
+                                      src={images[index] as string}
+                                      alt="Outfit item"
+                                      fill
+                                      className="object-contain"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                      --
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                              {swapIntent && (
+                                <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
                 {/* Clothing Items Display */}
                 {message.items && message.items.length > 0 && (() => {
                   // Filter out items without an id - don't display incomplete items
@@ -576,32 +901,83 @@ export function ChatStylist({
                       </div>
                       <div className={gridClass}>
                         {validItems.map((item) => (
-                          <button
+                          <div
                             key={item.id}
-                            type="button"
-                            onClick={() => setSelectedItem(item)}
-                            className="group flex flex-col items-center gap-1 sm:gap-2 rounded-lg border border-border/50 bg-card/60 p-1.5 sm:p-2 hover:bg-accent/40 focus:outline-hidden focus:ring-2 focus:ring-primary transition-colors"
+                            className="group flex flex-col gap-1 sm:gap-2 rounded-lg border border-border/50 bg-card/60 p-1.5 sm:p-2 hover:bg-accent/40 transition-colors relative"
                           >
-                            <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
-                              {item.imageUrl ? (
-                                <Image
-                                  src={item.imageUrl}
-                                  alt={item.name}
-                                  fill
-                                  className="object-contain"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[9px] sm:text-[10px] text-muted-foreground">
-                                  No image
-                                </div>
-                              )}
-                            </div>
-                            <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
-                              {item.name}
-                            </span>
-                          </button>
+                            {attachedOutfits.length > 0 && (
+                              <input
+                                type="checkbox"
+                                checked={selectedItemsForAdd.has(item.id)}
+                                onChange={() => toggleItemSelection(item.id)}
+                                className="absolute top-2 left-2 z-10 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedItem(item)}
+                              className="flex flex-col items-center gap-1 sm:gap-2"
+                            >
+                              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+                                {item.imageUrl ? (
+                                  <Image
+                                    src={item.imageUrl}
+                                    alt={item.name}
+                                    fill
+                                    className="object-contain"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-[9px] sm:text-[10px] text-muted-foreground">
+                                    No image
+                                  </div>
+                                )}
+                              </div>
+                              <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
+                                {item.name}
+                              </span>
+                            </button>
+                            {attachedOutfits.length > 0 && item.source === "wardrobe" && item.id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-[10px] px-2 w-full"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleAddToOutfit(item)
+                                }}
+                                disabled={isAddingToOutfit || addingItemIds.has(item.id)}
+                              >
+                                {addingItemIds.has(item.id) ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Plus className="h-3 w-3 mr-1" />
+                                )}
+                                Add
+                              </Button>
+                            )}
+                          </div>
                         ))}
                       </div>
+                      {attachedOutfits.length > 0 && selectedItemsForAdd.size > 0 && (() => {
+                        const selectedItems = validItems.filter((item) => selectedItemsForAdd.has(item.id))
+                        return (
+                          <div className="mt-3 flex justify-center">
+                            <Button
+                              size="sm"
+                              onClick={() => handleBulkAddToOutfit(selectedItems)}
+                              disabled={isAddingToOutfit}
+                            >
+                              {isAddingToOutfit ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Plus className="h-4 w-4 mr-2" />
+                              )}
+                              Add {selectedItemsForAdd.size} item(s) to outfit
+                            </Button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })()}
@@ -640,6 +1016,101 @@ export function ChatStylist({
 
       {/* Input Area */}
       <div className="flex-shrink-0 border-t border-border bg-background p-2.5 sm:p-4 md:p-6">
+        {/* Outfit Attachments */}
+        <div className="mb-2 sm:mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setIsOutfitDialogOpen(true)}
+                disabled={attachedOutfits.length >= 3}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Attach outfit
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                {attachedOutfits.length}/3 attached
+              </span>
+            </div>
+            {attachedOutfits.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  setAttachedOutfits([])
+                  setSwapIntentsByOutfit({})
+                }}
+              >
+                Clear outfits
+              </Button>
+            )}
+          </div>
+
+          {attachedOutfits.length > 0 && (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {attachedOutfits.map((outfit) => {
+                const images = getOutfitAttachmentImages(outfit)
+                const swapIntent = swapIntentsByOutfit[outfit.id]
+
+                return (
+                  <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
+                          {[0, 1, 2, 3].map((index) => (
+                            <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                              {images[index] ? (
+                                <Image
+                                  src={images[index] as string}
+                                  alt="Outfit item"
+                                  fill
+                                  className="object-contain"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                  --
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                          <p className="text-[10px] text-muted-foreground">Attached outfit</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => removeOutfitAttachment(outfit.id)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(["TOP", "BOTTOM", "SHOE", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
+                        <Button
+                          key={category}
+                          variant={swapIntent === category ? "default" : "outline"}
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => toggleSwapIntent(outfit.id, category)}
+                        >
+                          Swap {category.toLowerCase()}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Attached Images Preview */}
         {attachedImages.length > 0 && (
           <div className="mb-2 sm:mb-3 flex flex-wrap gap-2">
@@ -713,13 +1184,78 @@ export function ChatStylist({
               size="icon"
               className="gradient-ai h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 text-white flex-shrink-0"
               onClick={handleSendMessage}
-              disabled={!input.trim() && attachedImages.length === 0}
+              disabled={!input.trim() && attachedImages.length === 0 && attachedOutfits.length === 0 && Object.values(swapIntentsByOutfit).every((value) => !value)}
             >
               <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
             </Button>
           )}
         </div>
       </div>
+
+      <Dialog open={isOutfitDialogOpen} onOpenChange={setIsOutfitDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Attach outfits</DialogTitle>
+          </DialogHeader>
+          {isLoadingOutfits ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : outfitOptions.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">No outfits available.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {outfitOptions.map((outfit) => {
+                const isAttached = attachedOutfits.some((entry) => entry.id === outfit._id)
+                const attachment = buildOutfitAttachment(outfit)
+                const images = getOutfitAttachmentImages(attachment)
+
+                return (
+                  <div key={outfit._id} className="rounded-lg border border-border/50 bg-card p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-14 w-14 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
+                          {[0, 1, 2, 3].map((index) => (
+                            <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                              {images[index] ? (
+                                <Image
+                                  src={images[index] as string}
+                                  alt="Outfit item"
+                                  fill
+                                  className="object-contain"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                  --
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{outfit.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{outfit.isFavorite ? "Favorite" : "Outfit"}</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant={isAttached ? "secondary" : "outline"}
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() => handleToggleOutfitAttachment(outfit)}
+                        disabled={!isAttached && attachedOutfits.length >= 3}
+                      >
+                        {isAttached ? "Remove" : "Attach"}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
         {selectedItem && (

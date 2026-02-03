@@ -281,6 +281,8 @@ class ConversationState(TypedDict, total=False):
     session_id: str
     message: str
     conversation_history: List[Dict[str, str]]
+    attached_outfits: Optional[List[Dict[str, Any]]]
+    swap_intents: Optional[List[Dict[str, Any]]]
     
     # =========================================================================
     # Workflow Control (for multi-turn conversations)
@@ -402,6 +404,8 @@ def create_initial_state(
     message: str,
     conversation_history: Optional[List[Dict[str, str]]] = None,
     pending_context: Optional[Dict[str, Any]] = None,
+    attached_outfits: Optional[List[Dict[str, Any]]] = None,
+    swap_intents: Optional[List[Dict[str, Any]]] = None,
 ) -> ConversationState:
     """
     Create an initial conversation state for a new workflow execution.
@@ -424,6 +428,8 @@ def create_initial_state(
         session_id=session_id,
         message=message,
         conversation_history=conversation_history or [],
+        attached_outfits=attached_outfits or [],
+        swap_intents=swap_intents or [],
         # Workflow control
         workflow_status="active",
         is_clarification_response=is_clarification,
@@ -464,6 +470,8 @@ def create_initial_state(
         # Restore style_dna and user_profile to avoid re-fetching
         state["style_dna"] = pending_context.get("style_dna")
         state["user_profile"] = pending_context.get("user_profile")
+        state["attached_outfits"] = pending_context.get("attached_outfits", attached_outfits or [])
+        state["swap_intents"] = pending_context.get("swap_intents", swap_intents or [])
     
     return state
 
@@ -491,6 +499,8 @@ def create_clarification_context(state: ConversationState) -> Dict[str, Any]:
         "style_dna": state.get("style_dna"),
         "user_profile": state.get("user_profile"),
         "intent": state.get("intent"),
+        "attached_outfits": state.get("attached_outfits", []),
+        "swap_intents": state.get("swap_intents", []),
     }
 
 

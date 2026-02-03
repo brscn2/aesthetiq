@@ -184,6 +184,34 @@ export interface ClothingItem {
 }
 
 // =============================================================================
+// Outfit Attachment Types
+// =============================================================================
+
+export interface OutfitItemSnapshot {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  category?: string;
+  source: "wardrobe" | "commerce" | "web";
+}
+
+export interface OutfitAttachment {
+  id: string;
+  name: string;
+  items: {
+    top?: OutfitItemSnapshot;
+    bottom?: OutfitItemSnapshot;
+    shoe?: OutfitItemSnapshot;
+    accessories: OutfitItemSnapshot[];
+  };
+}
+
+export interface OutfitSwapIntent {
+  outfitId: string;
+  category: "TOP" | "BOTTOM" | "SHOE" | "ACCESSORY";
+}
+
+// =============================================================================
 // Chat Request/Response Types
 // =============================================================================
 
@@ -195,6 +223,8 @@ export interface ChatRequest {
   sessionId?: string;
   message: string;
   pendingContext?: ClarificationContext;
+  attachedOutfits?: OutfitAttachment[];
+  swapIntents?: OutfitSwapIntent[];
 }
 
 /**
@@ -250,6 +280,8 @@ export interface ChatMessage {
   timestamp: Date;
   images?: string[];
   items?: ClothingItem[];
+  attachedOutfits?: OutfitAttachment[];
+  swapIntents?: OutfitSwapIntent[];
   isStreaming?: boolean;
   metadata?: {
     intent?: string;

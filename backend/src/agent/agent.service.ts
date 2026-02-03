@@ -14,6 +14,20 @@ export interface AgentChatRequest {
     retrieved_items?: any[];
     iteration?: number;
   };
+  attached_outfits?: Array<{
+    id: string;
+    name: string;
+    items: {
+      top?: any;
+      bottom?: any;
+      shoe?: any;
+      accessories: any[];
+    };
+  }>;
+  swap_intents?: Array<{
+    outfitId: string;
+    category: string;
+  }>;
   auth_token?: string;
 }
 
@@ -65,6 +79,14 @@ export class AgentService {
     // Forward pending_context if provided (map camelCase to snake_case for Python)
     if (request.pending_context) {
       body.pending_context = request.pending_context;
+    }
+
+    if (request.attached_outfits) {
+      body.attached_outfits = request.attached_outfits;
+    }
+
+    if (request.swap_intents) {
+      body.swap_intents = request.swap_intents;
     }
 
     const response = await fetch(url, {
@@ -132,6 +154,14 @@ export class AgentService {
       // Forward pending_context if provided (map camelCase to snake_case for Python)
       if (request.pending_context) {
         body.pending_context = request.pending_context;
+      }
+
+      if (request.attached_outfits) {
+        body.attached_outfits = request.attached_outfits;
+      }
+
+      if (request.swap_intents) {
+        body.swap_intents = request.swap_intents;
       }
 
       const response = await fetch(url, {

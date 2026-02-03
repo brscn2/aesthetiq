@@ -1,5 +1,5 @@
 """Main LangGraph workflow for the conversational agent."""
-from typing import Dict, Any, Literal, Optional, AsyncGenerator
+from typing import Dict, Any, Literal, Optional, AsyncGenerator, List
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -553,6 +553,8 @@ async def run_workflow(
     message: str,
     conversation_history: Optional[list] = None,
     pending_context: Optional[Dict[str, Any]] = None,
+    attached_outfits: Optional[List[Dict[str, Any]]] = None,
+    swap_intents: Optional[List[Dict[str, Any]]] = None,
 ) -> ConversationState:
     """
     Run the workflow with the given input.
@@ -596,6 +598,8 @@ async def run_workflow(
         message=message,
         conversation_history=conversation_history,
         pending_context=pending_context,
+        attached_outfits=attached_outfits,
+        swap_intents=swap_intents,
     )
     
     # Add trace_id to state
@@ -702,6 +706,8 @@ async def run_workflow_streaming(
     message: str,
     conversation_history: Optional[list] = None,
     pending_context: Optional[Dict[str, Any]] = None,
+    attached_outfits: Optional[List[Dict[str, Any]]] = None,
+    swap_intents: Optional[List[Dict[str, Any]]] = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     """
     Run the workflow with streaming intermediate results.
@@ -745,6 +751,8 @@ async def run_workflow_streaming(
         message=message,
         conversation_history=conversation_history,
         pending_context=pending_context,
+        attached_outfits=attached_outfits,
+        swap_intents=swap_intents,
     )
     
     # Add trace_id to state

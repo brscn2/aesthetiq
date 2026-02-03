@@ -46,6 +46,8 @@ Your task is to classify the user's message into one of two intents:
    - Shopping requests (e.g., "I want to buy a new dress")
    - Wardrobe queries (e.g., "What can I wear from my closet?")
    - Outfit recommendations (e.g., "What should I wear to a job interview?")
+    - Outfit-specific edits or swaps (e.g., "Swap the top in this outfit")
+    - Requests referencing attached outfits (e.g., "Find a top for that outfit")
    - Combining wardrobe items with new purchases
 
 Analyze the user's message carefully and provide your classification.

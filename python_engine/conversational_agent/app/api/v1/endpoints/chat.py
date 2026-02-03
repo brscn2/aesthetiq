@@ -77,6 +77,14 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="Session identifier (creates new if not provided)")
     message: str = Field(..., description="User message", min_length=1, max_length=10000)
     pending_context: Optional[Dict[str, Any]] = Field(None, description="Pending clarification context for follow-up messages")
+    attached_outfits: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Outfit attachments included with the message",
+    )
+    swap_intents: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="One-shot swap intents per outfit",
+    )
     
     class Config:
         json_schema_extra = {
@@ -179,6 +187,8 @@ async def chat(
             message=request.message,
             conversation_history=conversation_history,
             pending_context=pending_context,
+            attached_outfits=request.attached_outfits,
+            swap_intents=request.swap_intents,
         )
         
         # Get the response
@@ -197,11 +207,17 @@ async def chat(
                     if str(item.get("id") or item.get("_id")) in response_item_ids_set
                 ]
 
+            user_metadata = {"trace_id": trace_id}
+            if request.attached_outfits:
+                user_metadata["attachedOutfits"] = request.attached_outfits
+            if request.swap_intents:
+                user_metadata["swapIntents"] = request.swap_intents
+
             await session_service.save_conversation_turn(
                 session_id=session_data.session_id,
                 user_message=request.message,
                 assistant_message=response_text or "I apologize, but I encountered an issue processing your request. Please try again.",
-                user_metadata={"trace_id": trace_id},
+                user_metadata=user_metadata,
                 assistant_metadata={
                     "trace_id": trace_id,
                     "intent": final_state.get("intent"),
@@ -395,6 +411,8 @@ async def chat_stream(
                 message=request.message,
                 conversation_history=conversation_history,
                 pending_context=pending_context,
+                attached_outfits=request.attached_outfits,
+                swap_intents=request.swap_intents,
             ):
                 # Convert StreamEvent to SSE format
                 yield _format_sse_event(event.type, event.content)
@@ -428,11 +446,17 @@ async def chat_stream(
                         for item in retrieved_items
                         if str(item.get("id") or item.get("_id")) in response_item_ids_set
                     ]
+                user_metadata = {}
+                if request.attached_outfits:
+                    user_metadata["attachedOutfits"] = request.attached_outfits
+                if request.swap_intents:
+                    user_metadata["swapIntents"] = request.swap_intents
+
                 await session_service.save_conversation_turn(
                     session_id=session_data.session_id,
                     user_message=request.message,
                     assistant_message=response_to_save,
-                    user_metadata={},
+                    user_metadata=user_metadata,
                     assistant_metadata={
                         "intent": final_intent,
                         "streaming": True,
