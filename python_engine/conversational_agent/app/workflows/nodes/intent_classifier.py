@@ -48,9 +48,14 @@ Definitions:
 - item_search: requests to find/recommend/buy/swap/add/replace items (wardrobe/commerce search).
 - outfit_analysis: requests to analyze, compare, or evaluate attached outfits without requesting new items.
 
+Routing guidance when attachments are present:
+- If the user is asking to describe/evaluate/compare the attached outfit(s) or attached wardrobe item(s), choose task_type: outfit_analysis.
+- If the user is asking to find/recommend/replace items (even with attachments), choose task_type: item_search.
+
 Examples:
 - "Compare the two outfits I attached" -> intent: general, task_type: outfit_analysis
 - "Which outfit fits my style profile better?" (with attached outfits) -> intent: general, task_type: outfit_analysis
+- "Tell me about the item I attached" -> intent: general, task_type: outfit_analysis
 - "Find a bag for this outfit" -> intent: clothing, task_type: item_search
 - "I need a jacket" -> intent: clothing, task_type: item_search
 - "What are the latest trends?" -> intent: general, task_type: general
@@ -74,6 +79,7 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
     message = state.get("message", "")
     conversation_history = state.get("conversation_history", [])
     trace_id = state.get("langfuse_trace_id")
+    attached_outfits = state.get("attached_outfits") or []
 
     logger.info(f"Classifying intent for message: {message[:50]}...")
 
@@ -93,7 +99,16 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
                 context += f"- {role}: {content}\n"
 
         # Classify intent using structured output
-        user_prompt = f"User message: {message}{context}"
+        attachment_names = []
+        for outfit in attached_outfits:
+            if isinstance(outfit, dict):
+                attachment_names.append(outfit.get("name") or "Attached item")
+        attachments_summary = (
+            f"Attached items/outfits: {', '.join(attachment_names)}"
+            if attachment_names
+            else "Attached items/outfits: none"
+        )
+        user_prompt = f"User message: {message}\n{attachments_summary}{context}"
 
         classification = await llm_service.structured_chat(
             system_prompt=INTENT_CLASSIFIER_PROMPT,
