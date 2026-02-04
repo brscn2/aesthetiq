@@ -13,6 +13,7 @@
 .env.prod
 .env.local
 .env.*.local
+docker-compose.prod.yml
 /logs/app.log
 
 .venv*/
