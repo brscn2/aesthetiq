@@ -192,7 +192,14 @@ export interface OutfitItemSnapshot {
   name: string;
   imageUrl?: string;
   category?: string;
+  subCategory?: string;
   source: "wardrobe" | "commerce" | "web";
+  /** Renk(ler) - AI için bağlam */
+  colors?: string[];
+  /** Kullanıcı notu / açıklama */
+  notes?: string;
+  /** Marka */
+  brand?: string;
 }
 
 export interface OutfitAttachment {
@@ -227,6 +234,8 @@ export interface ChatRequest {
   pendingContext?: ClarificationContext;
   attachedOutfits?: OutfitAttachment[];
   swapIntents?: OutfitSwapIntent[];
+  /** Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions) */
+  images?: string[];
 }
 
 /**

@@ -27,6 +27,23 @@ Keep the response concise and grounded in the provided outfit details.
 """
 
 
+def _item_detail_str(label: str, item: Dict[str, Any]) -> str:
+    """Format a single item with full details (type, colors, brand, notes)."""
+    name_value = item.get("name") or item.get("category") or label
+    parts = [f"- {label}: {name_value}"]
+    if item.get("subCategory"):
+        parts.append(f"  type: {item.get('subCategory')}")
+    if item.get("colors"):
+        c = item.get("colors")
+        colors_str = ", ".join(c) if isinstance(c, list) else str(c)
+        parts.append(f"  color(s): {colors_str}")
+    if item.get("brand"):
+        parts.append(f"  brand: {item.get('brand')}")
+    if item.get("notes"):
+        parts.append(f"  notes: {item.get('notes')}")
+    return "\n".join(parts) if len(parts) > 1 else parts[0]
+
+
 def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
     if not attached_outfits:
         return "No attached outfits provided."
@@ -38,13 +55,6 @@ def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
         name = outfit.get("name", "Outfit")
         items = outfit.get("items", {}) if isinstance(outfit.get("items"), dict) else {}
 
-        def _item_label(label: str, key: str) -> Optional[str]:
-            item = items.get(key)
-            if isinstance(item, dict):
-                name_value = item.get("name") or item.get("category") or label
-                return f"- {label}: {name_value}"
-            return None
-
         lines.append(f"- {name}:")
         for label, key in (
             ("Top", "top"),
@@ -53,20 +63,15 @@ def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
             ("Footwear", "footwear"),
             ("Dress", "dress"),
         ):
-            entry = _item_label(label, key)
-            if entry:
-                lines.append(f"  {entry}")
+            item = items.get(key)
+            if isinstance(item, dict):
+                lines.append(f"  {_item_detail_str(label, item)}")
 
         accessories = items.get("accessories") or []
         if isinstance(accessories, list) and accessories:
-            accessory_names = []
             for acc in accessories:
                 if isinstance(acc, dict):
-                    accessory_names.append(
-                        acc.get("name") or acc.get("category") or "Accessory"
-                    )
-            if accessory_names:
-                lines.append(f"  - Accessories: {', '.join(accessory_names)}")
+                    lines.append(f"  {_item_detail_str('Accessory', acc)}")
 
     return "\n".join(lines)
 

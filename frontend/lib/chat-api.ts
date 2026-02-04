@@ -25,7 +25,7 @@ import type {
  * All agent requests go through the backend for authentication and logging.
  */
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3003/api";
 
 /**
  * Agent API base path (relative to backend).
@@ -283,6 +283,7 @@ export interface UseChatApiReturn {
     options?: {
       attachedOutfits?: OutfitAttachment[];
       swapIntents?: OutfitSwapIntent[];
+      images?: string[];
     },
   ) => Promise<DoneEvent | null>;
   /** Cancel the current request */
@@ -444,6 +445,7 @@ export function useChatApi(
           pendingContext: sessionState.pendingClarification || undefined,
           attachedOutfits: messageOptions?.attachedOutfits,
           swapIntents: messageOptions?.swapIntents,
+          images: messageOptions?.images,
         };
 
         // Stream the response

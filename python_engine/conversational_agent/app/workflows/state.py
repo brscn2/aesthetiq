@@ -309,6 +309,8 @@ class ConversationState(TypedDict, total=False):
     conversation_history: List[Dict[str, str]]
     attached_outfits: Optional[List[Dict[str, Any]]]
     swap_intents: Optional[List[Dict[str, Any]]]
+    attached_images: Optional[List[str]]
+    # Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions)
 
     # =========================================================================
     # Workflow Control (for multi-turn conversations)
@@ -435,6 +437,7 @@ def create_initial_state(
     pending_context: Optional[Dict[str, Any]] = None,
     attached_outfits: Optional[List[Dict[str, Any]]] = None,
     swap_intents: Optional[List[Dict[str, Any]]] = None,
+    attached_images: Optional[List[str]] = None,
 ) -> ConversationState:
     """
     Create an initial conversation state for a new workflow execution.
@@ -459,6 +462,7 @@ def create_initial_state(
         conversation_history=conversation_history or [],
         attached_outfits=attached_outfits or [],
         swap_intents=swap_intents or [],
+        attached_images=attached_images or [],
         # Workflow control
         workflow_status="active",
         is_clarification_response=is_clarification,

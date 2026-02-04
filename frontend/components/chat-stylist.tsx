@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
 import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -63,6 +64,7 @@ declare global {
 }
 
 const contextChips = ["Business Casual", "Date Night", "Travel", "Eco-Friendly"]
+const TEMP_USER_ID = "507f1f77bcf86cd799439011"
 
 interface Message {
   id: string
@@ -111,13 +113,14 @@ export function ChatStylist({
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const router = useRouter()
-  const { outfitApi } = useApi()
+  const { outfitApi, wardrobeApi } = useApi()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedOutfits, setAttachedOutfits] = useState<OutfitAttachment[]>([])
   const [swapIntentsByOutfit, setSwapIntentsByOutfit] = useState<Record<string, OutfitSwapIntent["category"] | null>>({})
   const [isOutfitDialogOpen, setIsOutfitDialogOpen] = useState(false)
+  const [isWardrobeDialogOpen, setIsWardrobeDialogOpen] = useState(false)
   const [isLoadingOutfits, setIsLoadingOutfits] = useState(false)
   const [outfitOptions, setOutfitOptions] = useState<Outfit[]>([])
   const [isRecording, setIsRecording] = useState(false)
@@ -131,6 +134,13 @@ export function ChatStylist({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previousSessionIdRef = useRef<string | null>(null)
   const previousResetTriggerRef = useRef<number>(0)
+
+  // Load wardrobe items for attaching individual clothing pieces
+  const { data: wardrobeItems, isLoading: isLoadingWardrobe } = useQuery({
+    queryKey: ["chat-wardrobe", TEMP_USER_ID],
+    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+    enabled: isWardrobeDialogOpen,
+  })
 
   // Use the chat API hook (must be called before useEffect that uses setPendingClarification)
   const {
@@ -236,12 +246,19 @@ export function ChatStylist({
 
   const buildOutfitItemSnapshot = useCallback((item: string | WardrobeItem | undefined) => {
     if (!item || typeof item === "string") return undefined
+    const isWardrobe = "_id" in item && "userId" in item
     return {
       id: item._id,
       name: item.subCategory || item.category || "Item",
       imageUrl: item.processedImageUrl || item.imageUrl || undefined,
       category: item.category,
+      subCategory: item.subCategory,
       source: "wardrobe" as const,
+      ...(isWardrobe && {
+        colors: (item as WardrobeItem).colors,
+        notes: (item as WardrobeItem).notes,
+        brand: (item as WardrobeItem).brand,
+      }),
     }
   }, [])
 
@@ -269,6 +286,56 @@ export function ChatStylist({
     }
   }, [buildOutfitItemSnapshot])
 
+  // Build a single-item attachment from a wardrobe item so it can be sent
+  // through the existing attachedOutfits pipeline to the backend.
+  const buildWardrobeAttachment = useCallback(
+    (item: WardrobeItem): OutfitAttachment => {
+      const snapshot = buildOutfitItemSnapshot(item)
+
+      const items: OutfitAttachment["items"] = {
+        top: undefined,
+        bottom: undefined,
+        footwear: undefined,
+        outerwear: undefined,
+        dress: undefined,
+        accessories: [],
+      }
+
+      if (snapshot) {
+        switch (item.category) {
+          case "TOP":
+            items.top = snapshot
+            break
+          case "BOTTOM":
+            items.bottom = snapshot
+            break
+          case "FOOTWEAR":
+            items.footwear = snapshot
+            break
+          case "OUTERWEAR":
+            items.outerwear = snapshot
+            break
+          case "DRESS":
+            items.dress = snapshot
+            break
+          case "ACCESSORY":
+            items.accessories = [snapshot]
+            break
+          default:
+            items.accessories = [snapshot]
+            break
+        }
+      }
+
+      return {
+        id: `wardrobe:${item._id}`,
+        name: item.subCategory || item.category || item.brand || "Wardrobe item",
+        items,
+      }
+    },
+    [buildOutfitItemSnapshot],
+  )
+
   const getOutfitAttachmentImages = useCallback((attachment: OutfitAttachment) => {
     return [
       attachment.items.outerwear?.imageUrl,
@@ -294,7 +361,7 @@ export function ChatStylist({
       }
 
       if (attachments.length > 0) {
-        return "Please use the attached outfits for context."
+        return "Please use the attached outfits and items for context."
       }
 
       return ""
@@ -489,6 +556,7 @@ export function ChatStylist({
     await sendMessage(messageContent, sessionIdToUse, {
       attachedOutfits: attachedOutfits.length > 0 ? attachedOutfits : undefined,
       swapIntents: swapIntents.length > 0 ? swapIntents : undefined,
+      images: attachedImages.length > 0 ? [...attachedImages] : undefined,
     })
   }, [input, attachedImages, attachedOutfits, swapIntentsByOutfit, sendMessage, activeSessionId, sessionState.sessionId, buildAutoMessage])
 
@@ -845,29 +913,54 @@ export function ChatStylist({
                   <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {message.attachedOutfits.map((outfit) => {
                       const images = getOutfitAttachmentImages(outfit)
+                      const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                      const primaryImage =
+                        images[0] ||
+                        images[1] ||
+                        images[2] ||
+                        images[3] ||
+                        images[4] ||
+                        images[5]
                       const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
 
                       return (
                         <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
                           <div className="flex items-center gap-2">
-                            <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                              {[0, 1, 2, 3].map((index) => (
-                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                  {images[index] ? (
-                                    <Image
-                                      src={images[index] as string}
-                                      alt="Outfit item"
-                                      fill
-                                      className="object-contain"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                      --
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                            {isWardrobeAttachment ? (
+                              <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                                {primaryImage ? (
+                                  <Image
+                                    src={primaryImage as string}
+                                    alt="Wardrobe item"
+                                    fill
+                                    className="object-contain"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                    No image
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
+                                {[0, 1, 2, 3].map((index) => (
+                                  <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                    {images[index] ? (
+                                      <Image
+                                        src={images[index] as string}
+                                        alt="Outfit item"
+                                        fill
+                                        className="object-contain"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                        --
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div>
                               <p className="text-xs font-medium text-foreground">{outfit.name}</p>
                               {swapIntent && (
@@ -1026,7 +1119,7 @@ export function ChatStylist({
 
       {/* Input Area */}
       <div className="flex-shrink-0 border-t border-border bg-background p-2.5 sm:p-4 md:p-6">
-        {/* Outfit Attachments */}
+        {/* Outfit & Wardrobe Attachments */}
         <div className="mb-2 sm:mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1039,6 +1132,16 @@ export function ChatStylist({
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
                 Attach outfit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setIsWardrobeDialogOpen(true)}
+                disabled={attachedOutfits.length >= 3}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Attach from wardrobe
               </Button>
               <span className="text-[11px] text-muted-foreground">
                 {attachedOutfits.length}/3 attached
@@ -1064,32 +1167,61 @@ export function ChatStylist({
               {attachedOutfits.map((outfit) => {
                 const images = getOutfitAttachmentImages(outfit)
                 const swapIntent = swapIntentsByOutfit[outfit.id]
+                const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+
+                // Outfitler icin 2x2 grid, wardrobe tekil attach icin tek gorsel
+                const primaryImage =
+                  images[0] ||
+                  images[1] ||
+                  images[2] ||
+                  images[3] ||
+                  images[4] ||
+                  images[5]
 
                 return (
                   <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                          {[0, 1, 2, 3].map((index) => (
-                            <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                              {images[index] ? (
-                                <Image
-                                  src={images[index] as string}
-                                  alt="Outfit item"
-                                  fill
-                                  className="object-contain"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                  --
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                        {isWardrobeAttachment ? (
+                          <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                            {primaryImage ? (
+                              <Image
+                                src={primaryImage as string}
+                                alt="Wardrobe item"
+                                fill
+                                className="object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                No image
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
+                            {[0, 1, 2, 3].map((index) => (
+                              <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                {images[index] ? (
+                                  <Image
+                                    src={images[index] as string}
+                                    alt="Outfit item"
+                                    fill
+                                    className="object-contain"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                    --
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div>
                           <p className="text-xs font-medium text-foreground">{outfit.name}</p>
-                          <p className="text-[10px] text-muted-foreground">Attached outfit</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {isWardrobeAttachment ? "Attached wardrobe item" : "Attached outfit"}
+                          </p>
                         </div>
                       </div>
                       <Button
@@ -1254,6 +1386,93 @@ export function ChatStylist({
                         size="sm"
                         className="h-7 px-2 text-[11px]"
                         onClick={() => handleToggleOutfitAttachment(outfit)}
+                        disabled={!isAttached && attachedOutfits.length >= 3}
+                      >
+                        {isAttached ? "Remove" : "Attach"}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Wardrobe Item Attachment Dialog */}
+      <Dialog open={isWardrobeDialogOpen} onOpenChange={setIsWardrobeDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Attach wardrobe items</DialogTitle>
+          </DialogHeader>
+          {isLoadingWardrobe ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : !wardrobeItems || wardrobeItems.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">Your wardrobe is empty.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {wardrobeItems.map((item: WardrobeItem) => {
+                const attachmentId = `wardrobe:${item._id}`
+                const isAttached = attachedOutfits.some((entry) => entry.id === attachmentId)
+                const attachment = buildWardrobeAttachment(item)
+                // Wardrobe attachment tek bir urun oldugu icin,
+                // kategorilere gore ilk dolu imageUrl'i sec.
+                const primaryImage =
+                  attachment.items.top?.imageUrl ||
+                  attachment.items.bottom?.imageUrl ||
+                  attachment.items.outerwear?.imageUrl ||
+                  attachment.items.footwear?.imageUrl ||
+                  attachment.items.dress?.imageUrl ||
+                  attachment.items.accessories[0]?.imageUrl
+
+                return (
+                  <div key={item._id} className="rounded-lg border border-border/50 bg-card p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="relative h-14 w-14 overflow-hidden rounded-md bg-muted">
+                          {primaryImage ? (
+                            <Image
+                              src={primaryImage}
+                              alt="Wardrobe item"
+                              fill
+                              className="object-contain"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {item.brand || item.subCategory || item.category || "Wardrobe item"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {item.category ? item.category.toLowerCase() : "from wardrobe"}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant={isAttached ? "secondary" : "outline"}
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() => {
+                          setAttachedOutfits((prev) => {
+                            const exists = prev.some((entry) => entry.id === attachmentId)
+                            if (exists) {
+                              return prev.filter((entry) => entry.id !== attachmentId)
+                            }
+                            if (prev.length >= 3) {
+                              toast.error("You can attach up to 3 outfits/items")
+                              return prev
+                            }
+                            return [...prev, attachment]
+                          })
+                        }}
                         disabled={!isAttached && attachedOutfits.length >= 3}
                       >
                         {isAttached ? "Remove" : "Attach"}

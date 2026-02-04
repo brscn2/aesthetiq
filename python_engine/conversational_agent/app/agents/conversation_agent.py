@@ -38,6 +38,7 @@ You help users with general fashion questions, provide style advice, and discuss
 3. Consider the user's personal style when relevant - use tools to fetch their style DNA
 4. Reference current trends when appropriate - use web search tools if needed
 5. Personalize advice based on user's style profile when available
+6. When the user attaches image(s), they may be asking about the clothing or item in the image (e.g. "what is this?", "describe this", "bu ne?") — look at the image and answer based on what you see (type, style, color, occasion, etc.). Do not treat image data or user context as a "user ID" question.
 
 Keep responses concise but informative. Aim for 2-3 paragraphs maximum unless more detail is requested.
 """
@@ -62,8 +63,9 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
     trace_id = state.get("langfuse_trace_id")
     attached_outfits = state.get("attached_outfits") or []
     swap_intents = state.get("swap_intents") or []
+    attached_images = state.get("attached_images") or []
 
-    logger.info(f"Conversation agent processing: {message[:50]}...")
+    logger.info(f"Conversation agent processing: {message[:50]}... (images: {len(attached_images)})")
 
     # Get services
     llm_service = get_llm_service()
@@ -127,14 +129,25 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                         else {}
                     )
 
-                    def _item_label(label: str, key: str) -> Optional[str]:
+                    def _item_detail(label: str, key: str) -> Optional[str]:
                         item = items.get(key)
-                        if isinstance(item, dict):
-                            name_value = (
-                                item.get("name") or item.get("category") or label
-                            )
-                            return f"- {label}: {name_value}"
-                        return None
+                        if not isinstance(item, dict):
+                            return None
+                        name_value = (
+                            item.get("name") or item.get("category") or label
+                        )
+                        parts = [f"- {label}: {name_value}"]
+                        if item.get("subCategory"):
+                            parts.append(f"  type: {item.get('subCategory')}")
+                        if item.get("colors"):
+                            c = item.get("colors")
+                            colors_str = ", ".join(c) if isinstance(c, list) else str(c)
+                            parts.append(f"  color(s): {colors_str}")
+                        if item.get("brand"):
+                            parts.append(f"  brand: {item.get('brand')}")
+                        if item.get("notes"):
+                            parts.append(f"  notes: {item.get('notes')}")
+                        return "\n".join(parts) if len(parts) > 1 else parts[0]
 
                     lines.append(f"- {name}:")
                     for label, key in (
@@ -144,24 +157,31 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                         ("Footwear", "footwear"),
                         ("Dress", "dress"),
                     ):
-                        entry = _item_label(label, key)
+                        entry = _item_detail(label, key)
                         if entry:
                             lines.append(f"  {entry}")
 
                     accessories = items.get("accessories") or []
                     if isinstance(accessories, list) and accessories:
-                        accessory_names = []
                         for acc in accessories:
                             if isinstance(acc, dict):
-                                accessory_names.append(
+                                acc_name = (
                                     acc.get("name")
                                     or acc.get("category")
                                     or "Accessory"
                                 )
-                        if accessory_names:
-                            lines.append(
-                                f"  - Accessories: {', '.join(accessory_names)}"
-                            )
+                                acc_parts = [f"  - Accessory: {acc_name}"]
+                                if acc.get("subCategory"):
+                                    acc_parts.append(f"    type: {acc.get('subCategory')}")
+                                if acc.get("colors"):
+                                    c = acc.get("colors")
+                                    colors_str = ", ".join(c) if isinstance(c, list) else str(c)
+                                    acc_parts.append(f"    color(s): {colors_str}")
+                                if acc.get("brand"):
+                                    acc_parts.append(f"    brand: {acc.get('brand')}")
+                                if acc.get("notes"):
+                                    acc_parts.append(f"    notes: {acc.get('notes')}")
+                                lines.append("\n".join(acc_parts))
 
                 if swap_intents:
                     swaps = []
@@ -177,12 +197,19 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
 
                 return "\n".join(lines)
 
-            # Add context about user if available
+            # Add context about user if available (for tools); keep it brief so the model does not confuse it with the main question
             user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
             outfit_context = _build_outfit_context()
-            messages.append(
-                HumanMessage(content=message + user_context + outfit_context)
-            )
+            text_content = message + user_context + outfit_context
+
+            # When user attaches images, send multimodal content so the LLM can see the image (vision)
+            if attached_images:
+                content: List[Any] = [{"type": "text", "text": text_content}]
+                for img_url in attached_images:
+                    content.append({"type": "image_url", "image_url": {"url": img_url}})
+                messages.append(HumanMessage(content=content))
+            else:
+                messages.append(HumanMessage(content=text_content))
 
             # Invoke agent
             agent_result = await agent.ainvoke({"messages": messages})
@@ -291,12 +318,24 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         else:
             logger.warning("No tools available, using direct LLM response")
 
-            # Fallback to direct LLM response without tools
-            response = await llm_service.chat_with_history(
-                system_prompt=CONVERSATION_AGENT_PROMPT,
-                user_message=message,
-                conversation_history=conversation_history[-5:],
-            )
+            # Fallback: build messages (with optional vision when user attached images)
+            fallback_messages: List[Any] = [SystemMessage(content=CONVERSATION_AGENT_PROMPT)]
+            if conversation_history:
+                for msg in conversation_history[-5:]:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role == "user":
+                        fallback_messages.append(HumanMessage(content=content))
+                    elif role == "assistant":
+                        fallback_messages.append(AIMessage(content=content))
+            if attached_images:
+                content: List[Any] = [{"type": "text", "text": message}]
+                for img_url in attached_images:
+                    content.append({"type": "image_url", "image_url": {"url": img_url}})
+                fallback_messages.append(HumanMessage(content=content))
+            else:
+                fallback_messages.append(HumanMessage(content=message))
+            response = await llm_service.chat(fallback_messages)
 
         # Log LLM call to Langfuse
         if trace_id:

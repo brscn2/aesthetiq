@@ -30,6 +30,8 @@ export interface AgentChatRequest {
     outfitId: string;
     category: string;
   }>;
+  /** Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions) */
+  images?: string[];
   auth_token?: string;
 }
 
@@ -98,6 +100,10 @@ export class AgentService {
 
     if (request.swap_intents) {
       body.swap_intents = request.swap_intents;
+    }
+
+    if (request.images && request.images.length > 0) {
+      body.images = request.images;
     }
 
     const response = await fetch(url, {
@@ -173,6 +179,10 @@ export class AgentService {
 
       if (request.swap_intents) {
         body.swap_intents = request.swap_intents;
+      }
+
+      if (request.images && request.images.length > 0) {
+        body.images = request.images;
       }
 
       const response = await fetch(url, {
