@@ -46,13 +46,16 @@ Your task is to classify the user's message into:
 Definitions:
 - general: fashion questions, advice, trends, or discussion that do not require searching items.
 - item_search: requests to find/recommend/buy/swap/add/replace items (wardrobe/commerce search).
-- outfit_analysis: requests to analyze, compare, or evaluate attached outfits without requesting new items.
+- outfit_analysis: requests to analyze, compare, or evaluate attached outfits/images without requesting new items.
 
 Routing guidance when attachments are present:
+- If the user attached IMAGE(S) and is asking about them ("what is this?", "what color?", "describe this"), choose intent: general, task_type: general.
 - If the user is asking to describe/evaluate/compare the attached outfit(s) or attached wardrobe item(s), choose task_type: outfit_analysis.
 - If the user is asking to find/recommend/replace items (even with attachments), choose task_type: item_search.
 
 Examples:
+- "What is the color of the shirt?" (with attached image) -> intent: general, task_type: general
+- "What do you think of this?" (with attached image) -> intent: general, task_type: general  
 - "Compare the two outfits I attached" -> intent: general, task_type: outfit_analysis
 - "Which outfit fits my style profile better?" (with attached outfits) -> intent: general, task_type: outfit_analysis
 - "Tell me about the item I attached" -> intent: general, task_type: outfit_analysis
@@ -80,8 +83,9 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
     conversation_history = state.get("conversation_history", [])
     trace_id = state.get("langfuse_trace_id")
     attached_outfits = state.get("attached_outfits") or []
+    attached_images = state.get("attached_images") or []
 
-    logger.info(f"Classifying intent for message: {message[:50]}...")
+    logger.info(f"Classifying intent for message: {message[:50]}... (images: {len(attached_images)})")
 
     # Get services
     llm_service = get_llm_service()
@@ -103,10 +107,15 @@ async def intent_classifier_node(state: ConversationState) -> Dict[str, Any]:
         for outfit in attached_outfits:
             if isinstance(outfit, dict):
                 attachment_names.append(outfit.get("name") or "Attached item")
+        
+        # Include image info in attachment summary
+        if attached_images:
+            attachment_names.append(f"{len(attached_images)} user-uploaded image(s)")
+        
         attachments_summary = (
-            f"Attached items/outfits: {', '.join(attachment_names)}"
+            f"Attached items/outfits/images: {', '.join(attachment_names)}"
             if attachment_names
-            else "Attached items/outfits: none"
+            else "Attached items/outfits/images: none"
         )
         user_prompt = f"User message: {message}\n{attachments_summary}{context}"
 

@@ -9,6 +9,8 @@ This agent handles outfit_analysis tasks:
 from typing import Any, Dict, List, Optional
 import json
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from app.workflows.state import ConversationState
 from app.services.llm_service import get_llm_service
 from app.services.tracing.langfuse_service import get_tracing_service
@@ -92,9 +94,11 @@ async def outfit_analysis_agent_node(state: ConversationState) -> Dict[str, Any]
     message = state.get("message", "")
     user_id = state.get("user_id", "")
     attached_outfits = state.get("attached_outfits") or []
+    attached_images = state.get("attached_images") or []
     trace_id = state.get("langfuse_trace_id")
+    conversation_history = state.get("conversation_history", [])
 
-    logger.info(f"Outfit analysis agent processing: {message[:80]}...")
+    logger.info(f"Outfit analysis agent processing: {message[:80]}... (images: {len(attached_images)})")
 
     llm_service = get_llm_service()
     tracing_service = get_tracing_service()
@@ -242,10 +246,41 @@ User profile: {user_profile or 'Not available'}
 Analyze the outfits based on the request and the user's style DNA. Provide a clear comparison if asked.
 """
 
-    response = await llm_service.chat_with_history(
-        system_prompt=OUTFIT_ANALYSIS_PROMPT,
-        user_message=prompt,
-    )
+    # Use vision LLM when user attached images
+    if attached_images:
+        logger.info("Using vision LLM for outfit analysis with attached images")
+        # Build messages with conversation history for context
+        messages: List[Any] = [SystemMessage(content=OUTFIT_ANALYSIS_PROMPT)]
+        
+        # Include conversation history for context
+        if conversation_history:
+            for msg in conversation_history[-5:]:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if content:
+                    if role == "user":
+                        messages.append(HumanMessage(content=content))
+                    elif role == "assistant":
+                        from langchain_core.messages import AIMessage
+                        messages.append(AIMessage(content=content))
+        
+        # Build multimodal message with images
+        image_note = (
+            "\n\n[IMPORTANT: The user attached image(s). Analyze the clothing in the image(s). "
+            "If multiple images, focus on the LAST/MOST RECENT one unless the user references earlier images.]"
+        )
+        content: List[Any] = [{"type": "text", "text": prompt + image_note}]
+        for img_url in attached_images:
+            content.append({"type": "image_url", "image_url": {"url": img_url}})
+        messages.append(HumanMessage(content=content))
+        
+        resp = await llm_service.vision_llm.ainvoke(messages)
+        response = resp.content if hasattr(resp, "content") else str(resp)
+    else:
+        response = await llm_service.chat_with_history(
+            system_prompt=OUTFIT_ANALYSIS_PROMPT,
+            user_message=prompt,
+        )
 
     if trace_id:
         tracing_service.log_llm_call(

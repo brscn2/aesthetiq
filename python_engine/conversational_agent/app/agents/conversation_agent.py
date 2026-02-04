@@ -223,9 +223,9 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                 prompt=CONVERSATION_AGENT_PROMPT,
             )
 
-            # Build messages. When user attached image(s), skip history so the model focuses only on THIS image (avoids "describe outerwear?" after 2–3 turns)
+            # Build messages with conversation history for context
             messages = []
-            if conversation_history and not attached_images:
+            if conversation_history:
                 for msg in conversation_history[-5:]:  # Last 5 messages
                     role = msg.get("role", "user")
                     content = msg.get("content", "")
@@ -376,7 +376,7 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                 logger.info(f"[Chat DEBUG] Fallback path: outfit context sent to LLM:\n{outfit_context}")
 
             fallback_messages: List[Any] = [SystemMessage(content=CONVERSATION_AGENT_PROMPT)]
-            if conversation_history and not attached_images:
+            if conversation_history:
                 for msg in conversation_history[-5:]:
                     role = msg.get("role", "user")
                     content = msg.get("content", "")
