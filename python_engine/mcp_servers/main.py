@@ -2,7 +2,6 @@
 
 Hosts 5 MCP tool domains:
 - wardrobe
-- commerce
 - web_search
 - user_data
 - style_dna
@@ -48,7 +47,7 @@ async def health():
 
 
 app.include_router(wardrobe_router, prefix=f"{settings.API_PREFIX}/wardrobe", tags=["wardrobe"])
-app.include_router(commerce_router, prefix=f"{settings.API_PREFIX}/commerce", tags=["commerce"])
+# app.include_router(commerce_router, prefix=f"{settings.API_PREFIX}/commerce", tags=["commerce"])
 app.include_router(web_search_router, prefix=f"{settings.API_PREFIX}/web-search", tags=["web-search"])
 app.include_router(user_data_router, prefix=f"{settings.API_PREFIX}/user-data", tags=["user-data"])
 app.include_router(style_dna_router, prefix=f"{settings.API_PREFIX}/style-dna", tags=["style-dna"])

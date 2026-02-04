@@ -4,10 +4,20 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsInt,
+  Min,
+  Max,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole } from '../schemas/user.schema';
+import {
+  SubscriptionStatus,
+  Units,
+  Theme,
+  Currency,
+  ShoppingRegion,
+  UserRole,
+} from '../schemas/user.schema';
 
 class UserSettingsDto {
   // Measurement & Regional
@@ -42,6 +52,17 @@ class UserSettingsDto {
   @ApiProperty({ required: false })
   @IsOptional()
   contributeToTrendLearning?: boolean;
+
+  // Feedback & Personalization
+  @ApiProperty({
+    required: false,
+    description: 'Days before disliked feedback decays (1-30)',
+  })
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  @IsOptional()
+  feedbackDecayDays?: number;
 
   // Appearance
   @ApiProperty({ enum: Theme, required: false })
@@ -87,4 +108,3 @@ export class UpdateUserDto {
   @IsOptional()
   settings?: UserSettingsDto;
 }
-

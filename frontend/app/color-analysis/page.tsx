@@ -13,6 +13,8 @@ import Image from "next/image"
 import { useApi } from "@/lib/api"
 import { ColorAnalysis } from "@/types/api"
 import { toast } from "sonner"
+import { getJewelryTips } from "../../lib/get-jewelry-tips"
+import { getMakeupColors } from "@/lib/get-makeup-colors"
 
 export default function ColorAnalysisPage() {
   const [analysisState, setAnalysisState] = useState<"upload" | "processing" | "complete" | "viewing">("upload")
@@ -98,10 +100,21 @@ export default function ColorAnalysisPage() {
       // Reload past analyses to include the new one
       loadPastAnalyses()
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Failed to analyze image")
+      const errorMessage = err.response?.data?.message || err.message || "Failed to analyze image"
+
+      // Check for validation error
+      if (errorMessage.includes("Invalid Item")) {
+        setError(errorMessage)
+        toast.error("Invalid Image Detected", {
+          description: "Please upload a photo of clothing, fashion accessories, or a person."
+        })
+      } else {
+        setError(errorMessage)
+        toast.error("Analysis failed. Please try again.")
+      }
+
       setAnalysisState("upload")
       setUploadedImageUrl(null)
-      toast.error("Analysis failed. Please try again.")
     }
   }
 
@@ -482,6 +495,14 @@ function AnalysisReport({
   const contrastValue = analysis.contrastLevel === "High" ? 85 : analysis.contrastLevel === "Low" ? 30 : 55
   const undertoneValue = analysis.undertone === "Warm" ? 70 : analysis.undertone === "Cool" ? 30 : 50
 
+  const jewelryTips = getJewelryTips(analysis.season)
+
+  const makeupColors = getMakeupColors(
+    analysis.season,
+    analysis.undertone,
+    analysis.contrastLevel,
+  )
+
   const getSeasonDescription = (season: string) => {
     const descriptions: Record<string, string> = {
       "Dark Autumn": "Rich, warm, and dark. You shine in colors that mirror the turning leaves and deep earth tones.",
@@ -646,62 +667,107 @@ function AnalysisReport({
       <section className="space-y-6 pb-20">
         <h3 className="font-serif text-2xl font-bold">Styling Recommendations</h3>
         <Tabs defaultValue="jewelry" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-3 bg-card/50 p-1 backdrop-blur-sm">
+          <TabsList className="grid w-full max-w-md grid-cols-2 bg-card/50 p-1 backdrop-blur-sm">
             <TabsTrigger value="jewelry">Jewelry</TabsTrigger>
             <TabsTrigger value="makeup">Makeup</TabsTrigger>
-            <TabsTrigger value="hair">Hair</TabsTrigger>
           </TabsList>
 
           <TabsContent value="jewelry" className="mt-6 animate-in fade-in-50">
             <div className="grid gap-6 md:grid-cols-2">
-              <Card className="border-yellow-500/20 bg-yellow-500/5 transition-all hover:border-yellow-500/40">
+              {/* Gold & Brass Card */}
+              <Card className={analysis.undertone === "Warm" 
+                ? "border-yellow-500/20 bg-yellow-500/5 transition-all hover:border-yellow-500/40"
+                : "opacity-60 grayscale transition-all hover:opacity-100 hover:grayscale-0"
+              }>
                 <CardContent className="flex flex-col items-center p-8 text-center">
                   <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-500">
                     <Sparkles className="h-8 w-8" />
                   </div>
-                  <Badge className="mb-4 bg-yellow-500 hover:bg-yellow-600">Recommended</Badge>
+                  {analysis.undertone === "Warm" ? (
+                    <Badge className="mb-4 bg-yellow-500 hover:bg-yellow-600">Recommended</Badge>
+                  ) : (
+                    <Badge variant="outline" className="mb-4">Use With Caution</Badge>
+                  )}
                   <h4 className="mb-2 font-serif text-xl font-bold">Gold & Brass</h4>
                   <p className="text-sm text-muted-foreground">
-                    Warm metals harmonize beautifully with your skin's golden undertones.
+                    {analysis.undertone === "Warm" 
+                      ? "Warm metals harmonize beautifully with your skin's golden undertones."
+                      : "Warm metals may clash with your cool undertones. Opt for rose gold if needed."
+                    }
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="opacity-60 grayscale transition-all hover:opacity-100 hover:grayscale-0">
+              {/* Silver & Platinum Card */}
+              <Card className={analysis.undertone === "Cool"
+                ? "border-slate-400/20 bg-slate-400/5 transition-all hover:border-slate-400/40"
+                : "opacity-60 grayscale transition-all hover:opacity-100 hover:grayscale-0"
+              }>
                 <CardContent className="flex flex-col items-center p-8 text-center">
                   <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-300/10 text-slate-300">
                     <Sparkles className="h-8 w-8" />
                   </div>
-                  <Badge variant="outline" className="mb-4">
-                    Use With Caution
-                  </Badge>
+                  {analysis.undertone === "Cool" ? (
+                    <Badge className="mb-4 bg-slate-400 hover:bg-slate-500">Recommended</Badge>
+                  ) : (
+                    <Badge variant="outline" className="mb-4">Use With Caution</Badge>
+                  )}
                   <h4 className="mb-2 font-serif text-xl font-bold">Silver & Platinum</h4>
                   <p className="text-sm text-muted-foreground">
-                    Cool metals may clash with your warmth. Opt for antique silver if necessary.
+                    {analysis.undertone === "Cool"
+                      ? "Cool metals complement your skin's pink and blue undertones perfectly."
+                      : "Cool metals may clash with your warmth. Opt for antique silver if necessary."
+                    }
                   </p>
                 </CardContent>
               </Card>
             </div>
+
+            {/* Season-specific styling tips */}
+            {jewelryTips.length > 0 && (
+              <Card className="mt-6 bg-card/30 backdrop-blur-sm">
+                <CardContent className="p-6">
+                  <h4 className="mb-4 font-serif text-lg font-medium">
+                    Jewelry Styling Tips for {analysis.season}
+                  </h4>
+                  <ul className="space-y-2">
+                    {jewelryTips.map((tip, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="makeup" className="mt-6">
             <Card className="bg-card/30 backdrop-blur-sm">
               <CardContent className="p-8">
-                <div className="grid gap-8 md:grid-cols-2">
+                <div className="mb-6 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                  <Sparkles className="h-4 w-4 text-primary" />
+
+                  <p className="text-sm font-medium text-primary">
+                    Personalized makeup shades based on your season, undertone, and contrast
+                  </p>
+                </div>
+                <div className="grid gap-8 md:grid-cols-3">
                   <div className="space-y-4">
                     <h4 className="font-serif text-lg font-medium">Lips</h4>
                     <div className="flex gap-3">
-                      <PaletteSwatch color="#800000" name="Maroon" size="sm" />
-                      <PaletteSwatch color="#A0522D" name="Sienna" size="sm" />
-                      <PaletteSwatch color="#CC5500" name="Burnt Orange" size="sm" />
+                      {makeupColors.lips.map((item, idx) => (
+                        <PaletteSwatch key={idx} color={item.color} name={item.name} size="sm" />
+                      ))}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <h4 className="font-serif text-lg font-medium">Eyes</h4>
                     <div className="flex gap-3">
-                      <PaletteSwatch color="#556B2F" name="Olive" size="sm" />
-                      <PaletteSwatch color="#DAA520" name="Goldenrod" size="sm" />
-                      <PaletteSwatch color="#3E2723" name="Coffee" size="sm" />
+                      {makeupColors.eyes.map((item, idx) => (
+                        <PaletteSwatch key={idx} color={item.color} name={item.name} size="sm" />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -709,13 +775,6 @@ function AnalysisReport({
             </Card>
           </TabsContent>
 
-          <TabsContent value="hair" className="mt-6">
-            <Card className="bg-card/30 backdrop-blur-sm">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                Additional hair color recommendations available in the full report.
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </section>
     </div>
@@ -749,9 +808,15 @@ function PaletteSwatch({
   name,
   size = "md",
   crossOut = false,
-}: { color: string; name: string; size?: "sm" | "md"; crossOut?: boolean }) {
+}: {
+  color: string
+  name: string
+  size?: "sm" | "md"
+  crossOut?: boolean
+}) {
   return (
-    <div className="group relative flex cursor-pointer flex-col items-center gap-2">
+    <div className="group relative flex cursor-pointer flex-col items-center">
+      {/* Swatch */}
       <div
         className={cn(
           "relative rounded-full shadow-lg ring-1 ring-border/50 transition-transform duration-300 group-hover:scale-110",
@@ -765,9 +830,11 @@ function PaletteSwatch({
           </div>
         )}
       </div>
+
+      {/* Label (absolute, no layout shift) */}
       <span
         className={cn(
-          "text-center font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100",
+          "absolute -bottom-6 text-center font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 whitespace-nowrap",
           size === "md" ? "text-xs" : "text-[10px]",
         )}
       >

@@ -36,7 +36,7 @@ export function CreateStyleProfile({ onCreated }: { onCreated: () => void }) {
         sizes: {
           top: "M",
           bottom: "32",
-          shoe: "9",
+          footwear: "9",
         },
       }
 

@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, PipelineStage } from 'mongoose';
 import {
   WardrobeItem,
   WardrobeItemDocument,
   Category,
 } from './schemas/wardrobe-item.schema';
+import { ItemFeedback, ItemFeedbackDocument } from './schemas/item-feedback.schema';
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
@@ -19,6 +20,8 @@ export class WardrobeService {
   constructor(
     @InjectModel(WardrobeItem.name)
     private wardrobeItemModel: Model<WardrobeItemDocument>,
+    @InjectModel(ItemFeedback.name)
+    private itemFeedbackModel: Model<ItemFeedbackDocument>,
     private azureStorageService: AzureStorageService,
     private embeddingService: EmbeddingService,
   ) {}
@@ -202,6 +205,98 @@ export class WardrobeService {
     this.logger.log(`Wardrobe item ${id} deleted successfully`);
     
     return item;
+  }
+
+  async getDislikedWardrobeFeedback(
+    userId: string,
+    limit = 20,
+    offset = 0,
+  ): Promise<{ items: Array<{ item: WardrobeItem; feedback: any }>; total: number; limit: number; offset: number }> {
+    const cappedLimit = Math.min(Math.max(limit, 1), 50);
+    const safeOffset = Math.max(offset, 0);
+
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          user_id: userId,
+          feedback: { $in: ['dislike', 'irrelevant'] },
+        },
+      },
+      { $sort: { updated_at: -1, created_at: -1 } },
+      {
+        $addFields: {
+          itemObjectId: {
+            $convert: {
+              input: '$item_id',
+              to: 'objectId',
+              onError: null,
+              onNull: null,
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: 'wardrobeitems',
+          localField: 'itemObjectId',
+          foreignField: '_id',
+          as: 'item',
+        },
+      },
+      { $unwind: '$item' },
+      { $match: { 'item.userId': userId } },
+      {
+        $facet: {
+          items: [
+            { $skip: safeOffset },
+            { $limit: cappedLimit },
+            {
+              $project: {
+                item: 1,
+                feedback: {
+                  itemId: '$item_id',
+                  feedback: '$feedback',
+                  reason: '$reason',
+                  reasonText: '$reason_text',
+                  createdAt: '$created_at',
+                  updatedAt: '$updated_at',
+                },
+              },
+            },
+          ],
+          total: [{ $count: 'count' }],
+        },
+      },
+    ];
+
+    const aggResult = await this.itemFeedbackModel.aggregate(pipeline).exec();
+    const result = aggResult?.[0] || { items: [], total: [] };
+    const total = result.total?.[0]?.count ?? 0;
+
+    const items = (result.items || []).map((entry) => {
+      const item = entry.item || {};
+      const normalizedItem = {
+        ...item,
+        _id: item._id?.toString?.() ?? item._id,
+        retailerId: item.retailerId?.toString?.() ?? item.retailerId,
+      } as WardrobeItem;
+      return {
+        item: normalizedItem,
+        feedback: entry.feedback,
+      };
+    });
+
+    return {
+      items,
+      total,
+      limit: cappedLimit,
+      offset: safeOffset,
+    };
+  }
+
+  async deleteItemFeedback(userId: string, itemId: string): Promise<boolean> {
+    const result = await this.itemFeedbackModel.deleteOne({ user_id: userId, item_id: itemId }).exec();
+    return (result?.deletedCount ?? 0) > 0;
   }
 }
 

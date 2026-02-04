@@ -1,44 +1,12 @@
 """Commerce server schemas - aligned with backend CommerceItem schema."""
+
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
-# -----------------------------------------------------------------------------
-# Enums (matching backend/src/commerce/schemas/commerce-item.schema.ts)
-# -----------------------------------------------------------------------------
-
-class Category(str, Enum):
-    TOP = "TOP"
-    BOTTOM = "BOTTOM"
-    SHOE = "SHOE"
-    ACCESSORY = "ACCESSORY"
-
-
-# -----------------------------------------------------------------------------
-# SeasonalPaletteScores type (matching backend)
-# -----------------------------------------------------------------------------
-
-class SeasonalPaletteScores(BaseModel):
-    """Seasonal color palette compatibility scores (0-1)."""
-    DARK_AUTUMN: Optional[float] = None
-    DARK_WINTER: Optional[float] = None
-    LIGHT_SPRING: Optional[float] = None
-    LIGHT_SUMMER: Optional[float] = None
-    MUTED_AUTUMN: Optional[float] = None
-    MUTED_SUMMER: Optional[float] = None
-    BRIGHT_SPRING: Optional[float] = None
-    BRIGHT_WINTER: Optional[float] = None
-    WARM_AUTUMN: Optional[float] = None
-    WARM_SPRING: Optional[float] = None
-    COOL_WINTER: Optional[float] = None
-    COOL_SUMMER: Optional[float] = None
-
-    class Config:
-        extra = "allow"  # Allow extra fields for flexibility
+from mcp_servers.shared.schemas import Category, SeasonalPaletteScores
 
 
 # -----------------------------------------------------------------------------
@@ -46,8 +14,10 @@ class SeasonalPaletteScores(BaseModel):
 # Collection: commerceitems
 # -----------------------------------------------------------------------------
 
+
 class CommerceItem(BaseModel):
     """Commerce item as stored in MongoDB 'commerceitems' collection."""
+
     id: str = Field(..., description="Commerce item id (stringified ObjectId)")
     name: str
     description: Optional[str] = None
@@ -78,11 +48,15 @@ class CommerceItem(BaseModel):
 # Filter models (matching backend/src/commerce/dto/search-commerce-items.dto.ts)
 # -----------------------------------------------------------------------------
 
+
 class CommerceFilters(BaseModel):
     """Filters for querying commerce items."""
+
     search: Optional[str] = None  # Text search in name, description, tags
     category: Optional[Category] = None
-    brandId: Optional[str] = None
+    subCategory: Optional[str] = None  # Specific type: Jacket, Dress, Sneakers, etc.
+    brand: Optional[str] = None  # Brand name (partial match)
+    brandId: Optional[str] = None  # Brand ID (exact match)
     retailerId: Optional[str] = None
     color: Optional[str] = None  # Filter by color hex code
     priceMin: Optional[float] = None  # Minimum price
@@ -98,6 +72,7 @@ class CommerceFilters(BaseModel):
 # -----------------------------------------------------------------------------
 # Request/Response models for MCP tool endpoints
 # -----------------------------------------------------------------------------
+
 
 class SearchCommerceItemsRequest(BaseModel):
     query: str

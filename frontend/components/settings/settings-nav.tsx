@@ -1,14 +1,27 @@
-"use client"
+"use client";
 
-import { User, Fingerprint, Sliders, Bell, CreditCard, Shield, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { useUser } from "@/contexts/user-context"
+import {
+  User,
+  Fingerprint,
+  Sliders,
+  Bell,
+  CreditCard,
+  Shield,
+  Loader2,
+  Camera,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useUser } from "@/contexts/user-context";
 
 const navItems = [
   {
     title: "Account",
     icon: User,
+  },
+  {
+    title: "Virtual Try-On",
+    icon: Camera,
   },
   {
     title: "Biometric Privacy",
@@ -26,26 +39,30 @@ const navItems = [
     title: "Membership",
     icon: CreditCard,
   },
-]
+];
 
 interface SettingsNavProps {
-  activeSection: string
-  onSectionChange: (section: string) => void
-  onClose?: () => void
+  activeSection: string;
+  onSectionChange: (section: string) => void;
+  onClose?: () => void;
 }
 
-export function SettingsNav({ activeSection, onSectionChange, onClose }: SettingsNavProps) {
-  const { user, isLoading } = useUser()
+export function SettingsNav({
+  activeSection,
+  onSectionChange,
+  onClose,
+}: SettingsNavProps) {
+  const { user, isLoading } = useUser();
 
   // Get user initials for fallback
   const getInitials = (name: string) => {
     return name
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
+      .split(" ")
+      .map((word) => word.charAt(0))
+      .join("")
       .toUpperCase()
-      .slice(0, 2)
-  }
+      .slice(0, 2);
+  };
 
   return (
     <div className="flex h-full flex-col space-y-8">
@@ -64,18 +81,18 @@ export function SettingsNav({ activeSection, onSectionChange, onClose }: Setting
             <div className="relative">
               <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full border-2 border-primary/20 overflow-hidden bg-muted flex items-center justify-center">
                 {user?.avatarUrl ? (
-                  <img 
-                    src={user.avatarUrl} 
-                    alt="User" 
+                  <img
+                    src={user.avatarUrl}
+                    alt="User"
                     className="h-full w-full object-cover"
                   />
                 ) : (
                   <span className="text-lg sm:text-xl font-medium text-foreground">
-                    {user?.name ? getInitials(user.name) : 'U'}
+                    {user?.name ? getInitials(user.name) : "U"}
                   </span>
                 )}
               </div>
-              {user?.subscriptionStatus === 'PRO' && (
+              {user?.subscriptionStatus === "PRO" && (
                 <div className="absolute -bottom-1 -right-1 flex h-5 items-center rounded-full bg-gradient-to-r from-purple-500 to-rose-500 px-1.5 text-[9px] font-bold text-white shadow-lg">
                   PRO
                 </div>
@@ -83,10 +100,12 @@ export function SettingsNav({ activeSection, onSectionChange, onClose }: Setting
             </div>
             <div className="space-y-0.5 min-w-0 flex-1">
               <h2 className="font-playfair text-base sm:text-lg font-semibold tracking-tight text-foreground truncate">
-                {user?.name || 'User'}
+                {user?.name || "User"}
               </h2>
               <p className="bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-xs sm:text-sm font-medium text-transparent">
-                {user?.subscriptionStatus === 'PRO' ? 'Pro Member' : 'Free Member'}
+                {user?.subscriptionStatus === "PRO"
+                  ? "Pro Member"
+                  : "Free Member"}
               </p>
             </div>
           </>
@@ -100,8 +119,8 @@ export function SettingsNav({ activeSection, onSectionChange, onClose }: Setting
             key={item.title}
             variant="ghost"
             onClick={() => {
-              onSectionChange(item.title)
-              onClose?.()
+              onSectionChange(item.title);
+              onClose?.();
             }}
             className={cn(
               "justify-start gap-2 sm:gap-3 rounded-full px-3 sm:px-4 py-3 sm:py-4 text-sm sm:text-base font-medium transition-all duration-200",
@@ -122,5 +141,5 @@ export function SettingsNav({ activeSection, onSectionChange, onClose }: Setting
         <span>Your data is encrypted and secure.</span>
       </div>
     </div>
-  )
+  );
 }

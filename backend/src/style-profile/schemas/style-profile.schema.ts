@@ -45,14 +45,14 @@ export class StyleProfile {
     type: {
       top: { type: String },
       bottom: { type: String },
-      shoe: { type: String },
+      footwear: { type: String },
     },
     default: {},
   })
   sizes: {
     top?: string;
     bottom?: string;
-    shoe?: string;
+    footwear?: string;
   };
 
   @Prop({

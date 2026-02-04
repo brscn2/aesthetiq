@@ -26,25 +26,28 @@ export class UsersService {
   }> {
     const allUsers = await this.userModel.find().exec();
     const totalUsers = allUsers.length;
-    
+
     // Group by role
     const roleMap = new Map<string, number>();
-    allUsers.forEach(user => {
+    allUsers.forEach((user) => {
       const role = user.role || 'USER';
       roleMap.set(role, (roleMap.get(role) || 0) + 1);
     });
-    
+
     // Count recent signups (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentSignups = allUsers.filter(user => {
+    const recentSignups = allUsers.filter((user) => {
       const userDoc = user as any; // Cast to access timestamps
       return userDoc.createdAt && new Date(userDoc.createdAt) >= thirtyDaysAgo;
     }).length;
-    
+
     return {
       totalUsers,
-      usersByRole: Array.from(roleMap.entries()).map(([role, count]) => ({ role, count })),
+      usersByRole: Array.from(roleMap.entries()).map(([role, count]) => ({
+        role,
+        count,
+      })),
       recentSignups,
     };
   }
@@ -87,7 +90,10 @@ export class UsersService {
     return user as User;
   }
 
-  async updateByClerkId(clerkId: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async updateByClerkId(
+    clerkId: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<User> {
     const user = await this.userModel
       .findOneAndUpdate({ clerkId }, updateUserDto, { new: true })
       .exec();
@@ -106,32 +112,35 @@ export class UsersService {
     return user.settings;
   }
 
-  async updateSettingsByClerkId(clerkId: string, updateSettingsDto: UpdateSettingsDto): Promise<User['settings']> {
+  async updateSettingsByClerkId(
+    clerkId: string,
+    updateSettingsDto: UpdateSettingsDto,
+  ): Promise<User['settings']> {
     // Ensure user exists first (will auto-create if needed)
     const existingUser = await this.findByClerkId(clerkId);
     if (!existingUser) {
       throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
     }
-    
+
     // Merge new settings with existing settings to avoid overwriting unrelated fields
     const updatedSettings = {
       ...existingUser.settings,
       ...updateSettingsDto,
     };
-    
+
     const user = await this.userModel
       .findOneAndUpdate(
         { clerkId },
-        { $set: { 'settings': updatedSettings } },
-        { new: true, runValidators: true }
+        { $set: { settings: updatedSettings } },
+        { new: true, runValidators: true },
       )
       .select('settings')
       .exec();
-    
+
     if (!user) {
       throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
     }
-    
+
     return user.settings;
   }
 
@@ -144,30 +153,48 @@ export class UsersService {
     return user.settings;
   }
 
-  async updateSettings(id: string, updateSettingsDto: UpdateSettingsDto): Promise<User['settings']> {
+  async updateSettings(
+    id: string,
+    updateSettingsDto: UpdateSettingsDto,
+  ): Promise<User['settings']> {
     // First get the existing user to merge settings properly
     const existingUser = await this.findOne(id);
-    
+
     // Merge new settings with existing settings to avoid overwriting unrelated fields
     const updatedSettings = {
       ...existingUser.settings,
       ...updateSettingsDto,
     };
-    
+
     const user = await this.userModel
       .findByIdAndUpdate(
         id,
-        { $set: { 'settings': updatedSettings } },
-        { new: true, runValidators: true }
+        { $set: { settings: updatedSettings } },
+        { new: true, runValidators: true },
       )
       .select('settings')
       .exec();
-    
+
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    
+
     return user.settings;
   }
-}
 
+  async updateTryOnPhoto(clerkId: string, photoUrl: string): Promise<User> {
+    const user = await this.userModel
+      .findOneAndUpdate(
+        { clerkId },
+        { $set: { tryOnPhotoUrl: photoUrl } },
+        { new: true },
+      )
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException(`User with Clerk ID ${clerkId} not found`);
+    }
+
+    return user;
+  }
+}

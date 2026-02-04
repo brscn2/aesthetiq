@@ -85,10 +85,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
   // Predefined subcategories per category
   const subCategoriesByCategory: Record<Category, string[]> = {
-    [Category.TOP]: ['T-Shirt', 'Shirt', 'Polo', 'Hoodie', 'Sweater', 'Jacket', 'Coat', 'Blazer', 'Tank Top', 'Cardigan'],
+    [Category.TOP]: ['T-Shirt', 'Shirt', 'Polo', 'Hoodie', 'Sweater', 'Tank Top'],
     [Category.BOTTOM]: ['Jeans', 'Chinos', 'Shorts', 'Joggers', 'Trousers', 'Sweatpants', 'Skirt', 'Leggings'],
-    [Category.SHOE]: ['Sneakers', 'Boots', 'Loafers', 'Sandals', 'Running Shoes', 'Dress Shoes', 'Slippers', 'High Heels'],
+    [Category.OUTERWEAR]: ['Jacket', 'Coat', 'Blazer', 'Cardigan', 'Puffer', 'Trench Coat', 'Parka', 'Windbreaker'],
+    [Category.FOOTWEAR]: ['Sneakers', 'Boots', 'Loafers', 'Sandals', 'Running Shoes', 'Dress Shoes', 'Slippers', 'High Heels'],
     [Category.ACCESSORY]: ['Watch', 'Sunglasses', 'Cap', 'Hat', 'Belt', 'Bag', 'Backpack', 'Scarf', 'Gloves', 'Jewelry'],
+    [Category.DRESS]: ['Maxi', 'Midi', 'Mini', 'Cocktail', 'Evening', 'Casual', 'Wrap', 'Shirt Dress'],
   }
 
   // Cleanup function to revoke all object URLs
@@ -1154,8 +1156,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <SelectContent className="border-border bg-background text-foreground">
                     <SelectItem value={Category.TOP}>Tops</SelectItem>
                     <SelectItem value={Category.BOTTOM}>Bottoms</SelectItem>
-                    <SelectItem value={Category.SHOE}>Footwear</SelectItem>
+                    <SelectItem value={Category.OUTERWEAR}>Outerwear</SelectItem>
+                    <SelectItem value={Category.FOOTWEAR}>Footwear</SelectItem>
                     <SelectItem value={Category.ACCESSORY}>Accessories</SelectItem>
+                    <SelectItem value={Category.DRESS}>Dresses</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

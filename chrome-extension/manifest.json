@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Aesthetiq - Add to Wardrobe",
+  "version": "1.0.0",
+  "description": "Quickly add clothing items from any website to your Aesthetiq virtual wardrobe",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "https://*.vercel.app/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Aesthetiq Wardrobe"
+  },
+  "options_page": "options/options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["content.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

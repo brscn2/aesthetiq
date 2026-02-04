@@ -1,3 +1,5 @@
+import { getClerkJwt } from "./clerk-token";
+
 /**
  * Background Removal Service - Server-Side Implementation
  * Uses the backend API with remove.bg for reliable background removal
@@ -16,7 +18,7 @@ export interface BackgroundRemovalService {
     file: File,
     onProgress?: (progress: number) => void,
     timeout?: number,
-    getToken?: () => Promise<string | null>
+    getToken?: () => Promise<string | null>,
   ): Promise<Blob>;
 
   /**
@@ -29,7 +31,8 @@ class BackgroundRemovalServiceImpl implements BackgroundRemovalService {
   private apiUrl: string;
 
   constructor() {
-    this.apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    this.apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
   }
 
   isAvailable(): boolean {
@@ -40,11 +43,11 @@ class BackgroundRemovalServiceImpl implements BackgroundRemovalService {
     file: File,
     onProgress?: (progress: number) => void,
     timeout: number = 60000,
-    getToken?: () => Promise<string | null>
+    getToken?: () => Promise<string | null>,
   ): Promise<Blob> {
     return new Promise(async (resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new Error('Background removal timed out'));
+        reject(new Error("Background removal timed out"));
       }, timeout);
 
       try {
@@ -56,19 +59,19 @@ class BackgroundRemovalServiceImpl implements BackgroundRemovalService {
         onProgress?.(30);
 
         // Get auth token
-        let token = '';
+        let token = "";
         if (getToken) {
-          token = (await getToken()) || '';
+          token = (await getClerkJwt(getToken)) || "";
         }
-        
+
         // Call backend API
         onProgress?.(50);
-        
+
         const response = await fetch(`${this.apiUrl}/ai/remove-background`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ imageBase64: base64 }),
         });
@@ -83,15 +86,15 @@ class BackgroundRemovalServiceImpl implements BackgroundRemovalService {
         const result = await response.json();
 
         if (!result.success) {
-          throw new Error(result.error || 'Background removal failed');
+          throw new Error(result.error || "Background removal failed");
         }
 
         // Convert base64 result back to Blob
         const processedBlob = await this.base64ToBlob(result.data);
-        
+
         clearTimeout(timeoutId);
         onProgress?.(100);
-        
+
         resolve(processedBlob);
       } catch (error) {
         clearTimeout(timeoutId);
@@ -105,24 +108,24 @@ class BackgroundRemovalServiceImpl implements BackgroundRemovalService {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => reject(new Error("Failed to read file"));
     });
   }
 
   private async base64ToBlob(base64: string): Promise<Blob> {
     // Handle data URL format
-    const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-    const mimeType = base64.includes('data:') 
-      ? base64.split(';')[0].split(':')[1] 
-      : 'image/png';
-    
+    const base64Data = base64.includes(",") ? base64.split(",")[1] : base64;
+    const mimeType = base64.includes("data:")
+      ? base64.split(";")[0].split(":")[1]
+      : "image/png";
+
     const byteCharacters = atob(base64Data);
     const byteNumbers = new Array(byteCharacters.length);
-    
+
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
-    
+
     const byteArray = new Uint8Array(byteNumbers);
     return new Blob([byteArray], { type: mimeType });
   }

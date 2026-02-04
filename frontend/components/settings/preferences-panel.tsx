@@ -1,15 +1,24 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Sparkles, Palette, Loader2 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { useSettings } from "@/contexts/settings-context"
 import { Currency, ShoppingRegion, Units } from "@/types/api"
 
 export function PreferencesPanel() {
   const { settings, isLoading, updateSettings } = useSettings()
+  const [decayDays, setDecayDays] = useState<number>(7)
+
+  useEffect(() => {
+    if (typeof settings?.feedbackDecayDays === "number") {
+      setDecayDays(settings.feedbackDecayDays)
+    }
+  }, [settings?.feedbackDecayDays])
 
   if (isLoading) {
     return (
@@ -114,6 +123,45 @@ export function PreferencesPanel() {
                 <SelectItem value={Currency.EUR}>EUR (€)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+      </section>
+
+      <Separator />
+
+      {/* Advanced Settings */}
+      <section className="space-y-6">
+        <div className="space-y-1">
+          <h2 className="font-playfair text-2xl font-medium">Advanced</h2>
+          <p className="text-sm text-muted-foreground">Fine-tune personalization behavior.</p>
+        </div>
+
+        <div className="flex items-center justify-between space-x-4 rounded-lg border border-border bg-card/50 p-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="mt-0.5 rounded-full bg-primary/10 p-1.5 sm:p-2 flex-shrink-0">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            </div>
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <Label className="text-sm sm:text-base">Feedback decay (days)</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Disliked items lose influence after this many days.
+              </p>
+            </div>
+          </div>
+          <div className="flex-shrink-0">
+            <Input
+              type="number"
+              min={1}
+              max={30}
+              value={decayDays}
+              onChange={(e) => setDecayDays(parseInt(e.target.value || "0", 10))}
+              onBlur={() => {
+                const clamped = Math.min(Math.max(decayDays || 7, 1), 30)
+                setDecayDays(clamped)
+                updateSettings({ feedbackDecayDays: clamped })
+              }}
+              className="w-24"
+            />
           </div>
         </div>
       </section>

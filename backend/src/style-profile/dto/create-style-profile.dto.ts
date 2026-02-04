@@ -25,7 +25,7 @@ class SizesDto {
   @ApiProperty({ required: false, example: '9' })
   @IsString()
   @IsOptional()
-  shoe?: string;
+  footwear?: string;
 }
 
 export class CreateStyleProfileDto {

@@ -17,6 +17,9 @@ import { OutfitModule } from './outfit/outfit.module';
 import { AiModule } from './ai/ai.module';
 import { RetailerModule } from './retailer/retailer.module';
 import { CommerceModule } from './commerce/commerce.module';
+import { AgentModule } from './agent/agent.module';
+import { BrandsModule } from './brands/brands.module';
+import { TryOnModule } from './try-on/try-on.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -46,6 +49,9 @@ import databaseConfig from './config/database.config';
     AiModule,
     RetailerModule,
     CommerceModule,
+    AgentModule,
+    BrandsModule,
+    TryOnModule,
   ],
   controllers: [AppController],
   providers: [AppService],

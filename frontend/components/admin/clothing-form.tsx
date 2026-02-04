@@ -52,7 +52,9 @@ const initialFormData: FormData = {
 const categoryOptions = [
   { value: "TOP", label: "Top" },
   { value: "BOTTOM", label: "Bottom" },
-  { value: "SHOE", label: "Shoe" },
+  { value: "FOOTWEAR", label: "Footwear" },
+  { value: "OUTERWEAR", label: "OUTERWEAR" },
+  { value: "DRESS", label: "Dress" },
   { value: "ACCESSORY", label: "Accessory" },
 ]
 

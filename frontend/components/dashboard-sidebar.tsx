@@ -1,7 +1,7 @@
 "use client"
 
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"
-import { Home, Palette, Shirt, User, Settings } from "lucide-react"
+import { Home, Palette, Shirt, User, Settings, Sparkles } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -11,6 +11,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "My Color Analysis", href: "/color-analysis", icon: Palette },
   { name: "Virtual Wardrobe", href: "/virtual-wardrobe", icon: Shirt },
+  { name: "Find Your Own Style", href: "/find-your-style", icon: Sparkles },
   { name: "Style Profile", href: "/style-profile", icon: User },
   { name: "Settings", href: "/settings", icon: Settings },
 ]

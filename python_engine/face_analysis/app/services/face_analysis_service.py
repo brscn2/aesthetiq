@@ -11,9 +11,10 @@ import os
 import torch
 import numpy as np
 import pickle
+import threading
 from PIL import Image
 from transformers import pipeline
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 
 from app.core.logger import get_logger
 from app.utils.preprocessing import Preprocessor
@@ -120,19 +121,81 @@ class FaceAnalysisService:
         except Exception as e:
             logger.error(f"Failed to load ResNet model: {e}", exc_info=True)
             self.resnet = None
+        
+        # Verify ResNet model is loaded (required for service to be healthy)
+        if self.resnet is None:
+            logger.error("ResNet model failed to load - service will be unhealthy")
+        else:
+            logger.info("ResNet model loaded successfully - core service is ready")
             
-        # 2. Load Face Shape Classification Model
-        try:
-            # Pass the torch.device object directly to support CPU, CUDA, and MPS
-            self.face_shape_classifier = pipeline(
-                "image-classification", 
-                model="metadome/face_shape_classification", 
-                device=self.device
+        # 2. Load Face Shape Classification Model (optional - can fail gracefully)
+        logger.info("Attempting to load face shape classification model (optional)...")
+        self.face_shape_classifier = self._load_face_shape_classifier_with_timeout(
+            timeout_seconds=60
+        )
+        
+        if self.face_shape_classifier is None:
+            logger.warning(
+                "Face shape classifier not available - service will operate with "
+                "limited functionality (color season analysis only)"
             )
-            logger.info("Face shape classification model loaded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load face shape model: {e}", exc_info=True)
-            self.face_shape_classifier = None
+        else:
+            logger.info("Face shape classification model loaded successfully")
+    
+    def _load_face_shape_classifier_with_timeout(
+        self, 
+        timeout_seconds: int = 60
+    ) -> Optional[Any]:
+        """
+        Load HuggingFace face shape classifier with timeout.
+        
+        Args:
+            timeout_seconds: Maximum time to wait for model loading
+            
+        Returns:
+            Pipeline object if successful, None if timeout or error
+        """
+        result_container = {"pipeline": None, "error": None, "completed": False}
+        
+        def load_model():
+            """Load the model in a separate thread."""
+            try:
+                logger.info(f"Loading HuggingFace model 'metadome/face_shape_classification'...")
+                pipeline_obj = pipeline(
+                    "image-classification", 
+                    model="metadome/face_shape_classification", 
+                    device=self.device
+                )
+                result_container["pipeline"] = pipeline_obj
+                result_container["completed"] = True
+                logger.info("HuggingFace model loaded successfully")
+            except Exception as e:
+                result_container["error"] = str(e)
+                result_container["completed"] = True
+                logger.error(f"Error loading HuggingFace model: {e}", exc_info=True)
+        
+        # Start loading in a separate thread
+        load_thread = threading.Thread(target=load_model, daemon=True)
+        load_thread.start()
+        
+        # Wait for completion or timeout
+        load_thread.join(timeout=timeout_seconds)
+        
+        if not result_container["completed"]:
+            logger.warning(
+                f"Face shape classifier loading timed out after {timeout_seconds}s. "
+                "Service will continue without this feature."
+            )
+            return None
+        
+        if result_container["error"]:
+            logger.warning(
+                f"Face shape classifier failed to load: {result_container['error']}. "
+                "Service will continue without this feature."
+            )
+            return None
+        
+        return result_container["pipeline"]
     
     def process_image(self, image_input: Union[str, Image.Image]) -> Dict[str, Any]:
         """

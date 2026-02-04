@@ -2,8 +2,8 @@
  * Seasonal Color Analysis - Color Palette Definitions
  * Based on the 12-season color analysis system
  * 
- * Each palette has characteristic colors that complement specific skin tones,
- * hair colors, and eye colors.
+ * Each palette has characteristic colors that complement specific skin tones
+ * and eye colors.
  */
 
 export enum SeasonalPalette {

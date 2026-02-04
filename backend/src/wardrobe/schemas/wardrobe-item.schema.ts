@@ -7,8 +7,10 @@ export type WardrobeItemDocument = WardrobeItem & Document;
 export enum Category {
   TOP = 'TOP',
   BOTTOM = 'BOTTOM',
-  SHOE = 'SHOE',
+  OUTERWEAR = 'OUTERWEAR',
+  FOOTWEAR = 'FOOTWEAR',
   ACCESSORY = 'ACCESSORY',
+  DRESS = 'DRESS',
 }
 
 // Type for seasonal palette scores

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     FACE_ANALYSIS_URL: str = "http://face_analysis:8001"
     CLOTHING_RECOMMENDER_URL: str = "http://clothing_recommender:8002"
     EMBEDDING_SERVICE_URL: str = "http://embedding_service:8004"
+    TRY_ON_SERVICE_URL: str = "http://try_on_service:8005/api/v1/try-on"
     
     # Timeouts (seconds) - lenient for agentic workflows
     ML_SERVICE_TIMEOUT: float = 300.0  # 5 min - ML inference can be slow
