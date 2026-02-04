@@ -625,6 +625,7 @@ async def run_workflow(
     pending_context: Optional[Dict[str, Any]] = None,
     attached_outfits: Optional[List[Dict[str, Any]]] = None,
     swap_intents: Optional[List[Dict[str, Any]]] = None,
+    attached_images: Optional[List[str]] = None,
 ) -> ConversationState:
     """
     Run the workflow with the given input.
@@ -784,6 +785,7 @@ async def run_workflow_streaming(
     pending_context: Optional[Dict[str, Any]] = None,
     attached_outfits: Optional[List[Dict[str, Any]]] = None,
     swap_intents: Optional[List[Dict[str, Any]]] = None,
+    attached_images: Optional[List[str]] = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     """
     Run the workflow with streaming intermediate results.
@@ -829,6 +831,7 @@ async def run_workflow_streaming(
         pending_context=pending_context,
         attached_outfits=attached_outfits,
         swap_intents=swap_intents,
+        attached_images=attached_images,
     )
 
     # Add trace_id to state

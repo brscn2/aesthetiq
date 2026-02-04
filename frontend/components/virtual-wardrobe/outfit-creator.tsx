@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
 import {
   Category,
@@ -20,7 +21,7 @@ import { Check, X, Save, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CARD_TEMPLATES } from "@/lib/card-templates";
 
-const TEMP_USER_ID = "507f1f77bcf86cd799439011";
+const FALLBACK_USER_ID = "507f1f77bcf86cd799439011";
 
 interface OutfitCreatorProps {
   editOutfit?: Outfit | null;
@@ -46,9 +47,11 @@ export function OutfitCreator({
   prefillItemIds,
   prefillKey,
 }: OutfitCreatorProps) {
+  const { userId: authUserId } = useAuth();
   const { wardrobeApi, outfitApi } = useApi();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const wardrobeUserId = authUserId ?? FALLBACK_USER_ID;
 
   const [name, setName] = useState("");
   const [cardTemplate, setCardTemplate] = useState<CardTemplate>("minimal");
@@ -62,10 +65,10 @@ export function OutfitCreator({
   });
   const prefillAppliedRef = useRef<string | null>(null);
 
-  // Load wardrobe items
+  // Load wardrobe items (current user so list matches Gardırop)
   const { data: wardrobeItems, isLoading } = useQuery({
-    queryKey: ["wardrobe", TEMP_USER_ID],
-    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+    queryKey: ["wardrobe", wardrobeUserId],
+    queryFn: () => wardrobeApi.getAll(wardrobeUserId),
   });
 
   // Pre-populate for edit mode

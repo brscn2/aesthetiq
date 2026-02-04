@@ -98,6 +98,10 @@ class ChatRequest(BaseModel):
         None,
         description="One-shot swap intents per outfit",
     )
+    images: Optional[List[str]] = Field(
+        None,
+        description="Base64 data URLs of user-uploaded images (e.g. for 'what is this?' questions)",
+    )
 
     class Config:
         json_schema_extra = {
@@ -211,6 +215,7 @@ async def chat(
             pending_context=pending_context,
             attached_outfits=request.attached_outfits,
             swap_intents=request.swap_intents,
+            attached_images=request.images,
         )
 
         # Get the response
@@ -462,6 +467,7 @@ async def chat_stream(
                 pending_context=pending_context,
                 attached_outfits=request.attached_outfits,
                 swap_intents=request.swap_intents,
+                attached_images=request.images,
             ):
                 # Convert StreamEvent to SSE format
                 yield _format_sse_event(event.type, event.content)

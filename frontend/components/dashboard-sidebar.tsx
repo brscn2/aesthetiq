@@ -24,9 +24,9 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-full w-full flex-col bg-sidebar">
+    <div className="flex h-full w-full flex-col bg-sidebar" suppressHydrationWarning>
       {/* Logo */}
-      <div className="flex h-16 items-center border-b border-sidebar-border px-6">
+      <div className="flex h-16 items-center border-b border-sidebar-border px-6" suppressHydrationWarning>
         <h1 className="font-serif text-2xl font-bold tracking-tight text-sidebar-foreground">
           Aesthet<span className="text-gradient-ai">IQ</span>
         </h1>
@@ -56,7 +56,7 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
       </nav>
 
       {/* User Section */}
-      <div className="border-t border-sidebar-border p-4">
+      <div className="border-t border-sidebar-border p-4" suppressHydrationWarning>
         <SignedIn>
           <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">

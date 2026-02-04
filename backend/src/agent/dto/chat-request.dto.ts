@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  Allow,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -66,12 +67,33 @@ class OutfitItemSnapshotDto {
   @IsString()
   category?: string;
 
+  @ApiPropertyOptional({ description: 'Item subcategory / type' })
+  @IsOptional()
+  @IsString()
+  subCategory?: string;
+
   @ApiProperty({
     description: 'Item source',
     enum: ['wardrobe', 'commerce', 'web'],
   })
   @IsIn(['wardrobe', 'commerce', 'web'])
   source: string;
+
+  @ApiPropertyOptional({ description: 'Colors' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  colors?: string[];
+
+  @ApiPropertyOptional({ description: 'User notes / description' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional({ description: 'Brand' })
+  @IsOptional()
+  @IsString()
+  brand?: string;
 }
 
 class OutfitAttachmentDto {
@@ -160,4 +182,15 @@ export class ChatRequestDto {
   @ValidateNested({ each: true })
   @Type(() => OutfitSwapIntentDto)
   swapIntents?: OutfitSwapIntentDto[];
+
+  @ApiPropertyOptional({
+    description: 'Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions)',
+    type: [String],
+    maxItems: 5,
+  })
+  @Allow()
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 }

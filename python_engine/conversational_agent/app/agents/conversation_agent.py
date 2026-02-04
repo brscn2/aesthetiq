@@ -10,6 +10,7 @@ This agent handles the "general" intent path:
 from typing import Any, Dict, List, Optional
 
 import json
+import traceback
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
@@ -38,6 +39,10 @@ You help users with general fashion questions, provide style advice, and discuss
 3. Consider the user's personal style when relevant - use tools to fetch their style DNA
 4. Reference current trends when appropriate - use web search tools if needed
 5. Personalize advice based on user's style profile when available
+6. **User-uploaded images:** When the user attached image(s) to their message, they are asking about what is in the image(s). Do NOT reply with "which clothing item?", "please specify", or "what style/color/occasion?" — look at the image and describe the garment (style, color, occasion, etc.). If multiple images in one message, refer ONLY to the last image. Never describe an image from an earlier message in the chat.
+
+7. **CRITICAL — Color:** Never use "blue", "#0000ff", or any color as a default, placeholder, or guess when the actual color is unknown or not provided. If color is not specified in the context (attached items, image, or message), say "color not specified" or omit color—do not invent one.
+8. **Attached outfit/item context (source of truth for colors):** When the message includes an "Attached outfit context" section, the colors listed there are from the user's wardrobe and are the ONLY correct colors. If it says "color(s): Yellow" then the item is yellow—never reply that it is blue or #0000ff. If it says "not specified" then say the color was not provided. Do not override wardrobe colors with what you think you see in an image; trust the attached context. When multiple similar items are attached, identify each by its heading or color (e.g. "the red t-shirt", "the navy one").
 
 Keep responses concise but informative. Aim for 2-3 paragraphs maximum unless more detail is requested.
 """
@@ -62,8 +67,22 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
     trace_id = state.get("langfuse_trace_id")
     attached_outfits = state.get("attached_outfits") or []
     swap_intents = state.get("swap_intents") or []
+    attached_images = state.get("attached_images") or []
 
-    logger.info(f"Conversation agent processing: {message[:50]}...")
+    logger.info(f"Conversation agent processing: {message[:50]}... (images: {len(attached_images)})")
+    # [DEBUG] Log raw attached_outfits colors received from backend
+    for idx, outfit in enumerate(attached_outfits):
+        if not isinstance(outfit, dict):
+            logger.warning(f"[Chat DEBUG] attached_outfits[{idx}] is not a dict: {type(outfit)}")
+            continue
+        items = outfit.get("items") if isinstance(outfit.get("items"), dict) else {}
+        for slot in ("top", "bottom", "outerwear", "footwear", "dress"):
+            item = items.get(slot)
+            if isinstance(item, dict) and item.get("colors"):
+                logger.info(f"[Chat DEBUG] Python received outfit {idx + 1} {slot}: colors={item.get('colors')}")
+        for acc_idx, acc in enumerate(items.get("accessories") or []):
+            if isinstance(acc, dict) and acc.get("colors"):
+                logger.info(f"[Chat DEBUG] Python received outfit {idx + 1} accessory {acc_idx + 1}: colors={acc.get('colors')}")
 
     # Get services
     llm_service = get_llm_service()
@@ -91,50 +110,52 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         recommended_colors = None
         trends_data = None
 
-        if tools:
-            logger.info(f"Conversation agent has {len(tools)} tools available")
-
-            # Create react agent with tools
-            agent = create_react_agent(
-                llm_service.llm,
-                tools,
-                prompt=CONVERSATION_AGENT_PROMPT,
-            )
-
-            # Build messages with history
-            messages = []
-            if conversation_history:
-                for msg in conversation_history[-5:]:  # Last 5 messages
-                    role = msg.get("role", "user")
-                    content = msg.get("content", "")
-                    if role == "user":
-                        messages.append(HumanMessage(content=content))
-                    elif role == "assistant":
-                        messages.append(AIMessage(content=content))
-
-            def _build_outfit_context() -> str:
+        def _build_outfit_context() -> str:
                 if not attached_outfits and not swap_intents:
                     return ""
 
-                lines = ["\n\nAttached outfit context:"]
-                for outfit in attached_outfits:
+                lines = [
+                    "\n\n--- Attached outfit context ---",
+                    "The colors listed below are from the user's wardrobe and are the source of truth. Use only these colors in your answer; do not say blue or #0000ff unless that exact color appears below.",
+                    ""
+                ]
+                for idx, outfit in enumerate(attached_outfits):
                     if not isinstance(outfit, dict):
                         continue
                     name = outfit.get("name", "Outfit")
+                    # When multiple items are attached (e.g. 2 t-shirts), add index: "1. T-shirt (Red)"
+                    if len(attached_outfits) > 1:
+                        name = f"{idx + 1}. {name}"
                     items = (
                         outfit.get("items", {})
                         if isinstance(outfit.get("items"), dict)
                         else {}
                     )
 
-                    def _item_label(label: str, key: str) -> Optional[str]:
+                    def _item_detail(label: str, key: str) -> Optional[str]:
                         item = items.get(key)
-                        if isinstance(item, dict):
-                            name_value = (
-                                item.get("name") or item.get("category") or label
+                        if not isinstance(item, dict):
+                            return None
+                        name_value = (
+                            item.get("name") or item.get("category") or label
+                        )
+                        parts = [f"- {label}: {name_value}"]
+                        if item.get("subCategory"):
+                            parts.append(f"  type: {item.get('subCategory')}")
+                        # Always include color line so the model never invents one (e.g. "blue")
+                        c = item.get("colors")
+                        if c and isinstance(c, list) and len(c) > 0:
+                            colors_str = ", ".join(str(x) for x in c)
+                            parts.append(f"  color(s): {colors_str}")
+                        else:
+                            parts.append(
+                                "  color(s): not specified (do not guess or invent a color)"
                             )
-                            return f"- {label}: {name_value}"
-                        return None
+                        if item.get("brand"):
+                            parts.append(f"  brand: {item.get('brand')}")
+                        if item.get("notes"):
+                            parts.append(f"  notes: {item.get('notes')}")
+                        return "\n".join(parts)
 
                     lines.append(f"- {name}:")
                     for label, key in (
@@ -144,24 +165,36 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                         ("Footwear", "footwear"),
                         ("Dress", "dress"),
                     ):
-                        entry = _item_label(label, key)
+                        entry = _item_detail(label, key)
                         if entry:
                             lines.append(f"  {entry}")
 
                     accessories = items.get("accessories") or []
                     if isinstance(accessories, list) and accessories:
-                        accessory_names = []
                         for acc in accessories:
                             if isinstance(acc, dict):
-                                accessory_names.append(
+                                acc_name = (
                                     acc.get("name")
                                     or acc.get("category")
                                     or "Accessory"
                                 )
-                        if accessory_names:
-                            lines.append(
-                                f"  - Accessories: {', '.join(accessory_names)}"
-                            )
+                                acc_parts = [f"  - Accessory: {acc_name}"]
+                                if acc.get("subCategory"):
+                                    acc_parts.append(f"    type: {acc.get('subCategory')}")
+                                c_acc = acc.get("colors")
+                                if c_acc and isinstance(c_acc, list) and len(c_acc) > 0:
+                                    acc_parts.append(
+                                        f"    color(s): {', '.join(str(x) for x in c_acc)}"
+                                    )
+                                else:
+                                    acc_parts.append(
+                                        "    color(s): not specified (do not guess)"
+                                    )
+                                if acc.get("brand"):
+                                    acc_parts.append(f"    brand: {acc.get('brand')}")
+                                if acc.get("notes"):
+                                    acc_parts.append(f"    notes: {acc.get('notes')}")
+                                lines.append("\n".join(acc_parts))
 
                 if swap_intents:
                     swaps = []
@@ -177,12 +210,52 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
 
                 return "\n".join(lines)
 
-            # Add context about user if available
+        if tools:
+            logger.info(f"Conversation agent has {len(tools)} tools available")
+
+            # Use vision-capable model when user attached images (default model may not support images)
+            llm_for_agent = llm_service.vision_llm if attached_images else llm_service.llm
+            if attached_images:
+                logger.info("Using vision LLM for message with attached images")
+            agent = create_react_agent(
+                llm_for_agent,
+                tools,
+                prompt=CONVERSATION_AGENT_PROMPT,
+            )
+
+            # Build messages with conversation history for context
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Last 5 messages
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role == "user":
+                        messages.append(HumanMessage(content=content))
+                    elif role == "assistant":
+                        messages.append(AIMessage(content=content))
+
+            # Add context about user if available (for tools); keep it brief so the model does not confuse it with the main question
             user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
             outfit_context = _build_outfit_context()
-            messages.append(
-                HumanMessage(content=message + user_context + outfit_context)
-            )
+            # When user uploaded images: describe the image(s). Do not ask "which item?" or "please specify".
+            image_note = (
+                "\n\n[IMPORTANT: The user attached image(s) below and is asking about them. "
+                "Describe what you see in the image(s) (if multiple, use only the LAST image). Do NOT ask 'which item?', 'please specify', or for style/color/occasion — just describe the garment in the image.]"
+            ) if attached_images else ""
+            text_content = message + image_note + user_context + outfit_context
+
+            # [DEBUG] Log the exact outfit context string sent to the LLM (to verify colors are present)
+            if outfit_context:
+                logger.info(f"[Chat DEBUG] Outfit context sent to LLM:\n{outfit_context}")
+
+            # When user attaches images, send multimodal content so the LLM can see the image (vision)
+            if attached_images:
+                content: List[Any] = [{"type": "text", "text": text_content}]
+                for img_url in attached_images:
+                    content.append({"type": "image_url", "image_url": {"url": img_url}})
+                messages.append(HumanMessage(content=content))
+            else:
+                messages.append(HumanMessage(content=text_content))
 
             # Invoke agent
             agent_result = await agent.ainvoke({"messages": messages})
@@ -291,12 +364,37 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         else:
             logger.warning("No tools available, using direct LLM response")
 
-            # Fallback to direct LLM response without tools
-            response = await llm_service.chat_with_history(
-                system_prompt=CONVERSATION_AGENT_PROMPT,
-                user_message=message,
-                conversation_history=conversation_history[-5:],
-            )
+            # Fallback: build messages (with optional vision when user attached images)
+            # Must include outfit context here too so the model sees colors (no-tools path was missing it)
+            user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
+            outfit_context = _build_outfit_context()
+            image_note_fb = (
+                "\n\n[IMPORTANT: The user attached image(s) and wants you to describe them. Describe the garment(s) in the image(s) (if multiple, use the LAST image only). Do NOT ask which item or please specify — just describe what you see.]"
+            ) if attached_images else ""
+            fallback_text = message + image_note_fb + user_context + outfit_context
+            if outfit_context:
+                logger.info(f"[Chat DEBUG] Fallback path: outfit context sent to LLM:\n{outfit_context}")
+
+            fallback_messages: List[Any] = [SystemMessage(content=CONVERSATION_AGENT_PROMPT)]
+            if conversation_history:
+                for msg in conversation_history[-5:]:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role == "user":
+                        fallback_messages.append(HumanMessage(content=content))
+                    elif role == "assistant":
+                        fallback_messages.append(AIMessage(content=content))
+            if attached_images:
+                content: List[Any] = [{"type": "text", "text": fallback_text}]
+                for img_url in attached_images:
+                    content.append({"type": "image_url", "image_url": {"url": img_url}})
+                fallback_messages.append(HumanMessage(content=content))
+                logger.info("Fallback path: using vision LLM for attached images")
+                resp = await llm_service.vision_llm.ainvoke(fallback_messages)
+            else:
+                fallback_messages.append(HumanMessage(content=fallback_text))
+                resp = await llm_service.llm.ainvoke(fallback_messages)
+            response = resp.content if hasattr(resp, "content") else str(resp)
 
         # Log LLM call to Langfuse
         if trace_id:
@@ -333,6 +431,7 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Conversation agent failed: {e}")
+        logger.error(traceback.format_exc())
 
         # Log error
         if trace_id:

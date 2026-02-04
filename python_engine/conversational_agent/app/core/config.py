@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4.1-nano"  # Override via .env;
+    OPENAI_MODEL: str = "gpt-4.1-nano"  # Override via .env
+    OPENAI_VISION_MODEL: str = "gpt-4o-mini"  # Used when user attaches images (must support vision)
     OPENAI_TEMPERATURE: float = 0.7
     
     # Langfuse Tracing

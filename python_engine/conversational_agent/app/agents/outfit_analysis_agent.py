@@ -9,6 +9,8 @@ This agent handles outfit_analysis tasks:
 from typing import Any, Dict, List, Optional
 import json
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from app.workflows.state import ConversationState
 from app.services.llm_service import get_llm_service
 from app.services.tracing.langfuse_service import get_tracing_service
@@ -27,6 +29,23 @@ Keep the response concise and grounded in the provided outfit details.
 """
 
 
+def _item_detail_str(label: str, item: Dict[str, Any]) -> str:
+    """Format a single item with full details (type, colors, brand, notes)."""
+    name_value = item.get("name") or item.get("category") or label
+    parts = [f"- {label}: {name_value}"]
+    if item.get("subCategory"):
+        parts.append(f"  type: {item.get('subCategory')}")
+    if item.get("colors"):
+        c = item.get("colors")
+        colors_str = ", ".join(c) if isinstance(c, list) else str(c)
+        parts.append(f"  color(s): {colors_str}")
+    if item.get("brand"):
+        parts.append(f"  brand: {item.get('brand')}")
+    if item.get("notes"):
+        parts.append(f"  notes: {item.get('notes')}")
+    return "\n".join(parts) if len(parts) > 1 else parts[0]
+
+
 def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
     if not attached_outfits:
         return "No attached outfits provided."
@@ -38,13 +57,6 @@ def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
         name = outfit.get("name", "Outfit")
         items = outfit.get("items", {}) if isinstance(outfit.get("items"), dict) else {}
 
-        def _item_label(label: str, key: str) -> Optional[str]:
-            item = items.get(key)
-            if isinstance(item, dict):
-                name_value = item.get("name") or item.get("category") or label
-                return f"- {label}: {name_value}"
-            return None
-
         lines.append(f"- {name}:")
         for label, key in (
             ("Top", "top"),
@@ -53,20 +65,15 @@ def _build_outfit_context(attached_outfits: List[Dict[str, Any]]) -> str:
             ("Footwear", "footwear"),
             ("Dress", "dress"),
         ):
-            entry = _item_label(label, key)
-            if entry:
-                lines.append(f"  {entry}")
+            item = items.get(key)
+            if isinstance(item, dict):
+                lines.append(f"  {_item_detail_str(label, item)}")
 
         accessories = items.get("accessories") or []
         if isinstance(accessories, list) and accessories:
-            accessory_names = []
             for acc in accessories:
                 if isinstance(acc, dict):
-                    accessory_names.append(
-                        acc.get("name") or acc.get("category") or "Accessory"
-                    )
-            if accessory_names:
-                lines.append(f"  - Accessories: {', '.join(accessory_names)}")
+                    lines.append(f"  {_item_detail_str('Accessory', acc)}")
 
     return "\n".join(lines)
 
@@ -87,9 +94,11 @@ async def outfit_analysis_agent_node(state: ConversationState) -> Dict[str, Any]
     message = state.get("message", "")
     user_id = state.get("user_id", "")
     attached_outfits = state.get("attached_outfits") or []
+    attached_images = state.get("attached_images") or []
     trace_id = state.get("langfuse_trace_id")
+    conversation_history = state.get("conversation_history", [])
 
-    logger.info(f"Outfit analysis agent processing: {message[:80]}...")
+    logger.info(f"Outfit analysis agent processing: {message[:80]}... (images: {len(attached_images)})")
 
     llm_service = get_llm_service()
     tracing_service = get_tracing_service()
@@ -237,10 +246,41 @@ User profile: {user_profile or 'Not available'}
 Analyze the outfits based on the request and the user's style DNA. Provide a clear comparison if asked.
 """
 
-    response = await llm_service.chat_with_history(
-        system_prompt=OUTFIT_ANALYSIS_PROMPT,
-        user_message=prompt,
-    )
+    # Use vision LLM when user attached images
+    if attached_images:
+        logger.info("Using vision LLM for outfit analysis with attached images")
+        # Build messages with conversation history for context
+        messages: List[Any] = [SystemMessage(content=OUTFIT_ANALYSIS_PROMPT)]
+        
+        # Include conversation history for context
+        if conversation_history:
+            for msg in conversation_history[-5:]:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if content:
+                    if role == "user":
+                        messages.append(HumanMessage(content=content))
+                    elif role == "assistant":
+                        from langchain_core.messages import AIMessage
+                        messages.append(AIMessage(content=content))
+        
+        # Build multimodal message with images
+        image_note = (
+            "\n\n[IMPORTANT: The user attached image(s). Analyze the clothing in the image(s). "
+            "If multiple images, focus on the LAST/MOST RECENT one unless the user references earlier images.]"
+        )
+        content: List[Any] = [{"type": "text", "text": prompt + image_note}]
+        for img_url in attached_images:
+            content.append({"type": "image_url", "image_url": {"url": img_url}})
+        messages.append(HumanMessage(content=content))
+        
+        resp = await llm_service.vision_llm.ainvoke(messages)
+        response = resp.content if hasattr(resp, "content") else str(resp)
+    else:
+        response = await llm_service.chat_with_history(
+            system_prompt=OUTFIT_ANALYSIS_PROMPT,
+            user_message=prompt,
+        )
 
     if trace_id:
         tracing_service.log_llm_call(

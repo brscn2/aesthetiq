@@ -283,6 +283,7 @@ export interface UseChatApiReturn {
     options?: {
       attachedOutfits?: OutfitAttachment[];
       swapIntents?: OutfitSwapIntent[];
+      images?: string[];
     },
   ) => Promise<DoneEvent | null>;
   /** Cancel the current request */
@@ -444,6 +445,7 @@ export function useChatApi(
           pendingContext: sessionState.pendingClarification || undefined,
           attachedOutfits: messageOptions?.attachedOutfits,
           swapIntents: messageOptions?.swapIntents,
+          images: messageOptions?.images,
         };
 
         // Stream the response
