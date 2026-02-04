@@ -1,6 +1,7 @@
 """Clothing Recommender Agent for retrieving clothing items.
 
 This agent handles the "clothing" intent path:
+- For typical product requests (e.g. t-shirt, jacket), the default is to fetch user profile when not already available; user data may be omitted for clearly generic requests.
 - Fetches user context (profile, style DNA)
 - Searches commerce, wardrobe, or both based on scope
 - Uses web search as fallback when no items found
@@ -167,7 +168,7 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
 
 **Tool Usage Guidelines:**
 
-1. **When to fetch context:** Call get_user_profile, get_style_dna, or get_disliked_items_for_search **only when** you need personalization or de-ranking (e.g. user asks for recommendations that match their style, color season, or to avoid disliked items). **Do not** fetch user data if the request is generic or outside the user's domain (e.g. "show me black jackets", "what's trending") with no ask for personalized recommendations.
+1. **When to fetch context (default: fetch for product requests):** For product requests (e.g. t-shirt, jacket, dress, shoes), **fetch user profile (and get_style_dna / get_disliked_items_for_search as needed) if not already provided** in the message—we need that data for recommendations in most cases. **Exception:** Skip fetching user data only when the request is clearly generic or non-personalized (e.g. "show me black jackets", "what's trending") with no indication the user wants personalized results.
 2. **When cached:** If the request message includes **cached** user profile or style DNA, do **not** call get_user_profile or get_style_dna again for this turn; use the cached context.
 
 3. **WARDROBE-FIRST APPROACH** (for "both" or "wardrobe" scope):
@@ -1253,7 +1254,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             context_parts.append(" Do NOT call get_user_profile or get_style_dna for this request.")
             context_block = "".join(context_parts)
         else:
-            context_block = "\n\nCall get_user_profile, get_style_dna, or get_disliked_items_for_search only when you need personalization or de-ranking; do not fetch user data for generic or outside-domain requests."
+            context_block = "\n\nBy default fetch user profile (and get_style_dna / get_disliked_items_for_search as needed) for product requests (e.g. t-shirt, jacket) when not cached; only skip for clearly generic requests (e.g. 'show me black jackets', 'what's trending')."
 
         search_request = f"""User request: {enhanced_message}
     User ID: {user_id}
