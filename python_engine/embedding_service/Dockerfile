@@ -1,5 +1,9 @@
-# CUDA-enabled build for embedding service (GPU support)
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS base
+#######################################################################
+# EMBEDDING SERVICE - CUDA-enabled image optimized for fast builds
+# Uses official PyTorch image (PyTorch + CUDA preinstalled)
+#######################################################################
+
+FROM pytorch/pytorch:2.4.0-cuda11.8-cudnn9-runtime
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -7,31 +11,17 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     DEBIAN_FRONTEND=noninteractive
 
-# Install Python 3.11
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-venv \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
-
-# Upgrade pip
-RUN pip install --upgrade pip
-
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
+# Install Python dependencies (heavy PyTorch is already in base image)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app ./app
 
-# Download model weights on build (optional - speeds up startup)
+# Download model weights on build (so container startup is fast)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/clip-ViT-B-32')"
 
 # Expose port

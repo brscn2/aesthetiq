@@ -17,7 +17,7 @@ export class ChatService {
     private chatSessionModel: Model<ChatSessionDocument>,
   ) {}
 
-  async create(createChatSessionDto: CreateChatSessionDto): Promise<ChatSession> {
+  async create(createChatSessionDto: CreateChatSessionDto & { userId: string }): Promise<ChatSession> {
     const createdSession = new this.chatSessionModel(createChatSessionDto);
     return createdSession.save();
   }
@@ -74,6 +74,68 @@ export class ChatService {
     if (!result) {
       throw new NotFoundException(`Chat session with ID ${id} not found`);
     }
+  }
+
+  async updateBySessionId(
+    sessionId: string,
+    updateChatSessionDto: UpdateChatSessionDto,
+  ): Promise<ChatSession> {
+    const updatedSession = await this.chatSessionModel
+      .findOneAndUpdate({ sessionId }, updateChatSessionDto, { new: true })
+      .exec();
+    if (!updatedSession) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    return updatedSession;
+  }
+
+  async removeBySessionId(sessionId: string): Promise<void> {
+    const result = await this.chatSessionModel.findOneAndDelete({ sessionId }).exec();
+    if (!result) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+  }
+
+  async updateMetadata(
+    sessionId: string,
+    metadata: Record<string, any>,
+  ): Promise<ChatSession> {
+    const updatedSession = await this.chatSessionModel
+      .findOneAndUpdate(
+        { sessionId },
+        { $set: { metadata } },
+        { new: true },
+      )
+      .exec();
+    if (!updatedSession) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    return updatedSession;
+  }
+
+  async mergeMetadata(
+    sessionId: string,
+    metadata: Record<string, any>,
+  ): Promise<ChatSession> {
+    // Build nested $set operations for atomic updates
+    // This prevents race conditions by updating individual metadata fields atomically
+    const setOps: Record<string, any> = {};
+    for (const [key, value] of Object.entries(metadata)) {
+      setOps[`metadata.${key}`] = value;
+    }
+    
+    const updatedSession = await this.chatSessionModel
+      .findOneAndUpdate(
+        { sessionId },
+        { $set: setOps },
+        { new: true, upsert: false },
+      )
+      .exec();
+    
+    if (!updatedSession) {
+      throw new NotFoundException(`Chat session with sessionId ${sessionId} not found`);
+    }
+    return updatedSession;
   }
 }
 

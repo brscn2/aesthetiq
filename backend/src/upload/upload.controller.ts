@@ -109,6 +109,117 @@ export class UploadController {
     }
   }
 
+  @Post('from-url')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload an image from URL to Azure Blob Storage (for Chrome extension)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'The URL of the image to upload',
+          example: 'https://example.com/image.jpg',
+        },
+      },
+      required: ['url'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Image fetched and uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          example: 'https://youraccount.blob.core.windows.net/wardrobe-items/unique-filename.jpg',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid URL or failed to fetch image' })
+  async uploadFromUrl(@Body('url') imageUrl: string) {
+    if (!imageUrl) {
+      throw new BadRequestException('URL is required');
+    }
+
+    // Validate URL format
+    try {
+      new URL(imageUrl);
+    } catch {
+      throw new BadRequestException('Invalid URL format');
+    }
+
+    this.logger.log(`Fetching image from URL: ${imageUrl}`);
+
+    try {
+      // Fetch the image from the URL
+      const response = await fetch(imageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      });
+
+      if (!response.ok) {
+        throw new BadRequestException(`Failed to fetch image: HTTP ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      
+      // Validate content type
+      if (!ALLOWED_IMAGE_TYPES.some(type => contentType.includes(type.split('/')[1]))) {
+        throw new BadRequestException(
+          `Invalid image type: ${contentType}. Only JPEG, PNG, WebP, and GIF images are allowed.`
+        );
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      // Validate file size
+      if (buffer.length > MAX_FILE_SIZE) {
+        throw new PayloadTooLargeException(
+          `Image size exceeds the maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+        );
+      }
+
+      // Extract filename from URL or generate one
+      const urlPath = new URL(imageUrl).pathname;
+      const originalName = urlPath.split('/').pop() || `image-${Date.now()}.jpg`;
+
+      // Create a file-like object for Azure upload
+      const file: Express.Multer.File = {
+        fieldname: 'file',
+        originalname: originalName,
+        encoding: '7bit',
+        mimetype: contentType,
+        buffer: buffer,
+        size: buffer.length,
+        stream: null as any,
+        destination: '',
+        filename: originalName,
+        path: '',
+      };
+
+      const publicUrl = await this.azureStorageService.uploadImage(file);
+
+      this.logger.log(`Image from URL uploaded successfully: ${publicUrl}`);
+
+      return {
+        url: publicUrl,
+        originalUrl: imageUrl,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof PayloadTooLargeException) {
+        throw error;
+      }
+      this.logger.error(`Failed to upload image from URL: ${error.message}`, error.stack);
+      throw new BadRequestException(
+        `Failed to fetch and upload image: ${error.message}`
+      );
+    }
+  }
+
   @Post('brand-logo')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', uploadConfig))

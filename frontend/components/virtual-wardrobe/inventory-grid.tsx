@@ -162,8 +162,10 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
   // Group items by category
   const tops = filteredItems.filter((item: WardrobeItem) => item.category === Category.TOP)
   const bottoms = filteredItems.filter((item: WardrobeItem) => item.category === Category.BOTTOM)
-  const footwear = filteredItems.filter((item: WardrobeItem) => item.category === Category.SHOE)
+  const outerwear = filteredItems.filter((item: WardrobeItem) => item.category === Category.OUTERWEAR)
+  const footwear = filteredItems.filter((item: WardrobeItem) => item.category === Category.FOOTWEAR)
   const accessories = filteredItems.filter((item: WardrobeItem) => item.category === Category.ACCESSORY)
+  const dresses = filteredItems.filter((item: WardrobeItem) => item.category === Category.DRESS)
 
   return (
     <div className="space-y-10 pb-10">
@@ -203,6 +205,24 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
         </section>
       )}
 
+      {outerwear.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Outerwear</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {outerwear.map((item: WardrobeItem) => (
+              <ItemCard 
+                key={item._id} 
+                item={item}
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {footwear.length > 0 && (
         <section>
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Footwear</h2>
@@ -226,6 +246,24 @@ export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
           <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Accessories</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {accessories.map((item: WardrobeItem) => (
+              <ItemCard 
+                key={item._id} 
+                item={item}
+                onClick={() => {
+                  setSelectedItem(item)
+                  setIsModalOpen(true)
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {dresses.length > 0 && (
+        <section>
+          <h2 className="mb-6 font-serif text-2xl font-light text-foreground">Dresses</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {dresses.map((item: WardrobeItem) => (
               <ItemCard 
                 key={item._id} 
                 item={item}

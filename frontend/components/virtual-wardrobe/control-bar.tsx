@@ -30,8 +30,10 @@ interface WardrobeControlBarProps {
 const CATEGORY_OPTIONS = [
   { value: Category.TOP, label: "Tops" },
   { value: Category.BOTTOM, label: "Bottoms" },
-  { value: Category.SHOE, label: "Footwear" },
+  { value: Category.OUTERWEAR, label: "Outerwear" },
+  { value: Category.FOOTWEAR, label: "Footwear" },
   { value: Category.ACCESSORY, label: "Accessories" },
+  { value: Category.DRESS, label: "Dresses" },
 ]
 
 export function WardrobeControlBar({ 
@@ -200,6 +202,12 @@ export function WardrobeControlBar({
               className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
             >
               Wishlist
+            </TabsTrigger>
+            <TabsTrigger
+              value="disliked"
+              className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
+            >
+              Disliked
             </TabsTrigger>
           </TabsList>
         </Tabs>

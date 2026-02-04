@@ -28,8 +28,10 @@ interface ItemDetailModalProps {
 const CATEGORY_LABELS: Record<Category, string> = {
   [Category.TOP]: "Top",
   [Category.BOTTOM]: "Bottom",
-  [Category.SHOE]: "Footwear",
+  [Category.OUTERWEAR]: "Outerwear",
+  [Category.FOOTWEAR]: "Footwear",
   [Category.ACCESSORY]: "Accessory",
+  [Category.DRESS]: "Dress",
 }
 
 export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalProps) {
@@ -67,7 +69,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl">
             {item.brand || "Unknown Brand"}
@@ -76,7 +78,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
 
         <div className="space-y-6">
           {/* Image */}
-          <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-muted">
+          <div className="relative aspect-square w-full max-h-[50vh] overflow-hidden rounded-lg bg-muted">
             {item.processedImageUrl && (
               <div 
                 className="absolute inset-0"
@@ -92,6 +94,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
               src={item.processedImageUrl || item.imageUrl || "/placeholder.svg"}
               alt={item.brand || "Clothing item"}
               fill
+              sizes="(max-width: 448px) 100vw, 448px"
               className="object-contain p-4"
             />
           </div>

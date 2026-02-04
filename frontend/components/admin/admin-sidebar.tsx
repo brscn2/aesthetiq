@@ -3,14 +3,14 @@
 import { SignedIn, UserButton } from "@clerk/nextjs"
 import { 
   LayoutDashboard, 
-  Package, 
   Shirt, 
   Users, 
   FileText, 
   Settings,
   Shield,
-  Home,
-  ArrowLeft
+  ArrowLeft,
+  Store,
+  ShoppingBag
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
@@ -20,8 +20,9 @@ import { Button } from "@/components/ui/button"
 
 const navigation = [
   { name: "Overview", href: "/admin", icon: LayoutDashboard },
-  { name: "Brand Management", href: "/admin/brands", icon: Package },
-  { name: "Clothing Items", href: "/admin/clothing", icon: Shirt },
+  { name: "Retailer Management", href: "/admin/retailers", icon: Store },
+  { name: "Commerce Items", href: "/admin/commerce", icon: ShoppingBag },
+  { name: "Wardrobe Items", href: "/admin/clothing", icon: Shirt },
   { name: "User Management", href: "/admin/users", icon: Users },
   { name: "Audit Logs", href: "/admin/audit", icon: FileText },
   { name: "Settings", href: "/admin/settings", icon: Settings },
@@ -93,18 +94,25 @@ export function AdminSidebar({ onClose }: AdminSidebarProps) {
           </h3>
           <div className="space-y-1">
             <Link
-              href="/admin/brands?action=add"
+              href="/admin/retailers?action=add"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
             >
-              <Package className="h-3 w-3" />
-              Add Brand
+              <Store className="h-3 w-3" />
+              Add Retailer
+            </Link>
+            <Link
+              href="/admin/commerce?action=add"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <ShoppingBag className="h-3 w-3" />
+              Add Commerce Item
             </Link>
             <Link
               href="/admin/clothing?action=add"
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
             >
               <Shirt className="h-3 w-3" />
-              Add Item
+              Add Wardrobe Item
             </Link>
           </div>
         </div>

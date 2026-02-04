@@ -49,6 +49,9 @@ export class ChatSession {
     timestamp: Date;
     metadata: Record<string, any>;
   }>;
+
+  @Prop({ type: Object, default: {} })
+  metadata?: Record<string, any>;
 }
 
 export const ChatSessionSchema = SchemaFactory.createForClass(ChatSession);

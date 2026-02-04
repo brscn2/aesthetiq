@@ -2,11 +2,6 @@
 
 import { useApi } from "./api"
 import type {
-  Brand,
-  CreateBrandDto,
-  UpdateBrandDto,
-  BrandSearchOptions,
-  BrandStats,
   AuditLog,
   AuditLogFilters,
   AuditLogResponse,
@@ -18,6 +13,16 @@ import type {
   UploadResponse,
   SystemSettings,
   SystemInfo,
+  Retailer,
+  CreateRetailerDto,
+  UpdateRetailerDto,
+  RetailerSearchOptions,
+  RetailerStats,
+  CommerceItem,
+  CreateCommerceItemDto,
+  UpdateCommerceItemDto,
+  CommerceSearchOptions,
+  CommerceStats,
 } from "./api"
 
 /**
@@ -27,16 +32,6 @@ export const useAdminApi = () => {
   const api = useApi()
 
   return {
-    // Brand Management
-    brands: {
-      getAll: api.adminBrandsApi.getAll,
-      getById: api.adminBrandsApi.getById,
-      create: api.adminBrandsApi.create,
-      update: api.adminBrandsApi.update,
-      delete: api.adminBrandsApi.delete,
-      getStats: api.adminBrandsApi.getStats,
-    },
-
     // Wardrobe Management
     wardrobe: {
       getAll: api.adminWardrobeApi.getAll,
@@ -44,7 +39,7 @@ export const useAdminApi = () => {
       create: api.adminWardrobeApi.create,
       update: api.adminWardrobeApi.update,
       delete: api.adminWardrobeApi.delete,
-      getByBrand: api.adminWardrobeApi.getByBrand,
+      getByRetailer: api.adminWardrobeApi.getByRetailer,
       getStats: api.adminWardrobeApi.getStats,
     },
 
@@ -72,19 +67,35 @@ export const useAdminApi = () => {
 
     // File Upload
     upload: {
-      brandLogo: api.uploadApi.uploadBrandLogo,
       uploadImage: api.uploadApi.uploadImage,
+    },
+
+    // Retailer Management
+    retailers: {
+      getAll: api.adminRetailersApi.getAll,
+      getById: api.adminRetailersApi.getById,
+      create: api.adminRetailersApi.create,
+      update: api.adminRetailersApi.update,
+      delete: api.adminRetailersApi.delete,
+      getStats: api.adminRetailersApi.getStats,
+    },
+
+    // Commerce Item Management
+    commerce: {
+      getAll: api.adminCommerceApi.getAll,
+      getById: api.adminCommerceApi.getById,
+      create: api.adminCommerceApi.create,
+      createBulk: api.adminCommerceApi.createBulk,
+      update: api.adminCommerceApi.update,
+      delete: api.adminCommerceApi.delete,
+      getByRetailer: api.adminCommerceApi.getByRetailer,
+      getStats: api.adminCommerceApi.getStats,
     },
   }
 }
 
 // Export types for use in components
 export type {
-  Brand,
-  CreateBrandDto,
-  UpdateBrandDto,
-  BrandSearchOptions,
-  BrandStats,
   AuditLog,
   AuditLogFilters,
   AuditLogResponse,
@@ -96,4 +107,14 @@ export type {
   UploadResponse,
   SystemSettings,
   SystemInfo,
+  Retailer,
+  CreateRetailerDto,
+  UpdateRetailerDto,
+  RetailerSearchOptions,
+  RetailerStats,
+  CommerceItem,
+  CreateCommerceItemDto,
+  UpdateCommerceItemDto,
+  CommerceSearchOptions,
+  CommerceStats,
 }

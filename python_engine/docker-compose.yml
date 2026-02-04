@@ -14,14 +14,14 @@ services:
     environment:
       # Override service URLs to point to internal Docker network
       - FACE_ANALYSIS_URL=http://face_analysis:8001
-      - CLOTHING_RECOMMENDER_URL=http://clothing_recommender:8002
+      - CLOTHING_RECOMMENDER_URL=http://conversational_agent:8002
       - EMBEDDING_SERVICE_URL=http://embedding_service:8004
     networks:
       - aesthetiq-network
     depends_on:
       face_analysis:
         condition: service_healthy
-      clothing_recommender:
+      conversational_agent:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -59,7 +59,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s  # Longer start period for model loading
+      start_period: 180s  # Extended start period for model loading (ResNet + optional HuggingFace model with timeout)
     restart: unless-stopped
     # Resource limits for ML service
     deploy:
@@ -70,13 +70,13 @@ services:
           memory: 2G
 
   # =============================================================================
-  # CLOTHING RECOMMENDER - LLM/Agent Service (Port 8002 - Internal Only)
+  # CONVERSATIONAL AGENT - Multi-Agent LLM Service (Port 8002 - Internal Only)
   # =============================================================================
-  clothing_recommender:
+  conversational_agent:
     build:
-      context: ./clothing_recommender
+      context: ./conversational_agent
       dockerfile: Dockerfile
-    container_name: aesthetiq-clothing-recommender
+    container_name: aesthetiq-conversational-agent
     # No external port exposure - internal only
     expose:
       - "8002"
@@ -84,11 +84,19 @@ services:
       - .env
     environment:
       - PORT=8002
+      - BACKEND_URL=http://host.docker.internal:3001
+      # Override MCP_SERVERS_URL to use Docker network hostname
+      - MCP_SERVERS_URL=http://mcp_servers:8010
     volumes:
       # Mount logs directory for chat history
       - ./logs:/app/logs:rw
     networks:
       - aesthetiq-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mcp_servers:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
       interval: 30s
@@ -120,11 +128,17 @@ services:
     networks:
       - aesthetiq-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8004/health').raise_for_status()"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8004/health').raise_for_status()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s  # Model loading takes time
+      start_period: 60s # Model loading takes time
     restart: unless-stopped
     deploy:
       resources:
@@ -137,6 +151,112 @@ services:
           #   - driver: nvidia
           #     count: 1
           #     capabilities: [gpu]
+
+  # =============================================================================
+  # VIRTUAL TRY-ON SERVICE - OpenAI Image Edit (Port 8005 - Internal Only)
+  # =============================================================================
+  try_on_service:
+    build:
+      context: ./try_on_service
+      dockerfile: Dockerfile
+    container_name: aesthetiq-try-on
+    # No external port exposure - internal only
+    expose:
+      - "8005"
+    env_file:
+      - .env
+    environment:
+      - PORT=8005
+      - OPENAI_MODEL=gpt-image-1
+      - OPENAI_INPUT_FIDELITY=high
+      - OPENAI_QUALITY=low
+      - OPENAI_RESPONSE_FORMAT=b64_json
+    volumes:
+      # Mount uploads directory for mask debugging
+      - ./uploads:/app/uploads:rw
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # =============================================================================
+  # MCP SERVERS - Unified MCP tool service (Port 8010 - Internal Only)
+  # =============================================================================
+  mcp_servers:
+    build:
+      context: ./mcp_servers
+      dockerfile: Dockerfile
+    container_name: aesthetiq-mcp-servers
+    expose:
+      - "8010"
+    env_file:
+      - .env
+    environment:
+      - PORT=8010
+      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+    networks:
+      - aesthetiq-network
+    depends_on:
+      embedding_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # =============================================================================
+  # CRAWLER SERVICE - Nightly product crawler (Port 8005 - Internal Only)
+  # =============================================================================
+  # crawler_service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./crawler_service/Dockerfile
+  #   container_name: aesthetiq-crawler
+  #   ports:
+  #     - "8005:8005"
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - PORT=8005
+  #     - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+  #     - CRAWLER_TARGET_URLS_PATH=/app/config/target_urls.yaml
+  #   volumes:
+  #     # Mount config directory
+  #     - ./crawler_service/config:/app/config:ro
+  #   networks:
+  #     - aesthetiq-network
+  #   depends_on:
+  #     embedding_service:
+  #       condition: service_healthy
+  #     mcp_servers:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #       reservations:
+  #         memory: 1G
 
 networks:
   aesthetiq-network:

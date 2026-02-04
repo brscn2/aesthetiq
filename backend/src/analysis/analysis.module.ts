@@ -8,6 +8,7 @@ import {
   ColorAnalysisSchema,
 } from './schemas/color-analysis.schema';
 import { UploadModule } from '../upload/upload.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UploadModule } from '../upload/upload.module';
       maxRedirects: 5,
     }),
     UploadModule,
+    AiModule,
   ],
   controllers: [AnalysisController],
   providers: [AnalysisService],

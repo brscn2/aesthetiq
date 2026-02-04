@@ -7,46 +7,159 @@ import {
   AnalyzeClothingResponse,
 } from './dto/analyze-clothing.dto';
 import { ImageAnalysis } from '../style-profile/schemas/image-analysis-cache.schema';
+import {
+  SmartGapAnalysis,
+  GapRecommendation,
+} from '../wardrobe/intelligence/intelligence.types';
 
 // CSS color names to hex mapping (+ custom fashion colors)
 const COLOR_MAP: Record<string, string> = {
-  "aliceblue": "#f0f8ff", "antiquewhite": "#faebd7", "aqua": "#00ffff", "aquamarine": "#7fffd4",
-  "azure": "#f0ffff", "beige": "#f5f5dc", "bisque": "#ffe4c4", "black": "#000000",
-  "blanchedalmond": "#ffebcd", "blue": "#0000ff", "blueviolet": "#8a2be2", "brown": "#a52a2a",
-  "burgundy": "#800020", "burlywood": "#deb887", "cadetblue": "#5f9ea0", "camel": "#c19a6b",
-  "charcoal": "#36454f", "chartreuse": "#7fff00", "chocolate": "#d2691e", "coral": "#ff7f50",
-  "cornflowerblue": "#6495ed", "cornsilk": "#fff8dc", "cream": "#fffdd0", "crimson": "#dc143c",
-  "cyan": "#00ffff", "darkblue": "#00008b", "darkcyan": "#008b8b", "darkgoldenrod": "#b8860b",
-  "darkgray": "#a9a9a9", "darkgreen": "#006400", "darkkhaki": "#bdb76b", "darkmagenta": "#8b008b",
-  "darkolivegreen": "#556b2f", "darkorange": "#ff8c00", "darkorchid": "#9932cc", "darkred": "#8b0000",
-  "darksalmon": "#e9967a", "darkseagreen": "#8fbc8f", "darkslateblue": "#483d8b", "darkslategray": "#2f4f4f",
-  "darkturquoise": "#00ced1", "darkviolet": "#9400d3", "deeppink": "#ff1493", "deepskyblue": "#00bfff",
-  "dimgray": "#696969", "dodgerblue": "#1e90ff", "firebrick": "#b22222", "floralwhite": "#fffaf0",
-  "forestgreen": "#228b22", "fuchsia": "#ff00ff", "gainsboro": "#dcdcdc", "ghostwhite": "#f8f8ff",
-  "gold": "#ffd700", "goldenrod": "#daa520", "gray": "#808080", "green": "#008000",
-  "greenyellow": "#adff2f", "honeydew": "#f0fff0", "hotpink": "#ff69b4", "indianred": "#cd5c5c",
-  "indigo": "#4b0082", "ivory": "#fffff0", "khaki": "#f0e68c", "lavender": "#e6e6fa",
-  "lavenderblush": "#fff0f5", "lawngreen": "#7cfc00", "lemonchiffon": "#fffacd", "lightblue": "#add8e6",
-  "lightcoral": "#f08080", "lightcyan": "#e0ffff", "lightgoldenrodyellow": "#fafad2", "lightgrey": "#d3d3d3",
-  "lightgreen": "#90ee90", "lightpink": "#ffb6c1", "lightsalmon": "#ffa07a", "lightseagreen": "#20b2aa",
-  "lightskyblue": "#87cefa", "lightslategray": "#778899", "lightsteelblue": "#b0c4de", "lightyellow": "#ffffe0",
-  "lime": "#00ff00", "limegreen": "#32cd32", "linen": "#faf0e6", "magenta": "#ff00ff",
-  "maroon": "#800000", "mediumaquamarine": "#66cdaa", "mediumblue": "#0000cd", "mediumorchid": "#ba55d3",
-  "mediumpurple": "#9370d8", "mediumseagreen": "#3cb371", "mediumslateblue": "#7b68ee", "mediumspringgreen": "#00fa9a",
-  "mediumturquoise": "#48d1cc", "mediumvioletred": "#c71585", "midnightblue": "#191970", "mintcream": "#f5fffa",
-  "mistyrose": "#ffe4e1", "moccasin": "#ffe4b5", "navajowhite": "#ffdead", "navy": "#000080",
-  "offwhite": "#faf9f6", "oldlace": "#fdf5e6", "olive": "#808000", "olivedrab": "#6b8e23",
-  "orange": "#ffa500", "orangered": "#ff4500", "orchid": "#da70d6", "palegoldenrod": "#eee8aa",
-  "palegreen": "#98fb98", "paleturquoise": "#afeeee", "palevioletred": "#d87093", "papayawhip": "#ffefd5",
-  "peachpuff": "#ffdab9", "peru": "#cd853f", "pink": "#ffc0cb", "plum": "#dda0dd",
-  "powderblue": "#b0e0e6", "purple": "#800080", "rebeccapurple": "#663399", "red": "#ff0000",
-  "rosybrown": "#bc8f8f", "royalblue": "#4169e1", "saddlebrown": "#8b4513", "salmon": "#fa8072",
-  "sandybrown": "#f4a460", "seagreen": "#2e8b57", "seashell": "#fff5ee", "sienna": "#a0522d",
-  "silver": "#c0c0c0", "skyblue": "#87ceeb", "slateblue": "#6a5acd", "slategray": "#708090",
-  "snow": "#fffafa", "springgreen": "#00ff7f", "steelblue": "#4682b4", "tan": "#d2b48c",
-  "teal": "#008080", "thistle": "#d8bfd8", "tomato": "#ff6347", "turquoise": "#40e0d0",
-  "violet": "#ee82ee", "wheat": "#f5deb3", "white": "#ffffff", "whitesmoke": "#f5f5f5",
-  "yellow": "#ffff00", "yellowgreen": "#9acd32"
+  aliceblue: '#f0f8ff',
+  antiquewhite: '#faebd7',
+  aqua: '#00ffff',
+  aquamarine: '#7fffd4',
+  azure: '#f0ffff',
+  beige: '#f5f5dc',
+  bisque: '#ffe4c4',
+  black: '#000000',
+  blanchedalmond: '#ffebcd',
+  blue: '#0000ff',
+  blueviolet: '#8a2be2',
+  brown: '#a52a2a',
+  burgundy: '#800020',
+  burlywood: '#deb887',
+  cadetblue: '#5f9ea0',
+  camel: '#c19a6b',
+  charcoal: '#36454f',
+  chartreuse: '#7fff00',
+  chocolate: '#d2691e',
+  coral: '#ff7f50',
+  cornflowerblue: '#6495ed',
+  cornsilk: '#fff8dc',
+  cream: '#fffdd0',
+  crimson: '#dc143c',
+  cyan: '#00ffff',
+  darkblue: '#00008b',
+  darkcyan: '#008b8b',
+  darkgoldenrod: '#b8860b',
+  darkgray: '#a9a9a9',
+  darkgreen: '#006400',
+  darkkhaki: '#bdb76b',
+  darkmagenta: '#8b008b',
+  darkolivegreen: '#556b2f',
+  darkorange: '#ff8c00',
+  darkorchid: '#9932cc',
+  darkred: '#8b0000',
+  darksalmon: '#e9967a',
+  darkseagreen: '#8fbc8f',
+  darkslateblue: '#483d8b',
+  darkslategray: '#2f4f4f',
+  darkturquoise: '#00ced1',
+  darkviolet: '#9400d3',
+  deeppink: '#ff1493',
+  deepskyblue: '#00bfff',
+  dimgray: '#696969',
+  dodgerblue: '#1e90ff',
+  firebrick: '#b22222',
+  floralwhite: '#fffaf0',
+  forestgreen: '#228b22',
+  fuchsia: '#ff00ff',
+  gainsboro: '#dcdcdc',
+  ghostwhite: '#f8f8ff',
+  gold: '#ffd700',
+  goldenrod: '#daa520',
+  gray: '#808080',
+  green: '#008000',
+  greenyellow: '#adff2f',
+  honeydew: '#f0fff0',
+  hotpink: '#ff69b4',
+  indianred: '#cd5c5c',
+  indigo: '#4b0082',
+  ivory: '#fffff0',
+  khaki: '#f0e68c',
+  lavender: '#e6e6fa',
+  lavenderblush: '#fff0f5',
+  lawngreen: '#7cfc00',
+  lemonchiffon: '#fffacd',
+  lightblue: '#add8e6',
+  lightcoral: '#f08080',
+  lightcyan: '#e0ffff',
+  lightgoldenrodyellow: '#fafad2',
+  lightgrey: '#d3d3d3',
+  lightgreen: '#90ee90',
+  lightpink: '#ffb6c1',
+  lightsalmon: '#ffa07a',
+  lightseagreen: '#20b2aa',
+  lightskyblue: '#87cefa',
+  lightslategray: '#778899',
+  lightsteelblue: '#b0c4de',
+  lightyellow: '#ffffe0',
+  lime: '#00ff00',
+  limegreen: '#32cd32',
+  linen: '#faf0e6',
+  magenta: '#ff00ff',
+  maroon: '#800000',
+  mediumaquamarine: '#66cdaa',
+  mediumblue: '#0000cd',
+  mediumorchid: '#ba55d3',
+  mediumpurple: '#9370d8',
+  mediumseagreen: '#3cb371',
+  mediumslateblue: '#7b68ee',
+  mediumspringgreen: '#00fa9a',
+  mediumturquoise: '#48d1cc',
+  mediumvioletred: '#c71585',
+  midnightblue: '#191970',
+  mintcream: '#f5fffa',
+  mistyrose: '#ffe4e1',
+  moccasin: '#ffe4b5',
+  navajowhite: '#ffdead',
+  navy: '#000080',
+  offwhite: '#faf9f6',
+  oldlace: '#fdf5e6',
+  olive: '#808000',
+  olivedrab: '#6b8e23',
+  orange: '#ffa500',
+  orangered: '#ff4500',
+  orchid: '#da70d6',
+  palegoldenrod: '#eee8aa',
+  palegreen: '#98fb98',
+  paleturquoise: '#afeeee',
+  palevioletred: '#d87093',
+  papayawhip: '#ffefd5',
+  peachpuff: '#ffdab9',
+  peru: '#cd853f',
+  pink: '#ffc0cb',
+  plum: '#dda0dd',
+  powderblue: '#b0e0e6',
+  purple: '#800080',
+  rebeccapurple: '#663399',
+  red: '#ff0000',
+  rosybrown: '#bc8f8f',
+  royalblue: '#4169e1',
+  saddlebrown: '#8b4513',
+  salmon: '#fa8072',
+  sandybrown: '#f4a460',
+  seagreen: '#2e8b57',
+  seashell: '#fff5ee',
+  sienna: '#a0522d',
+  silver: '#c0c0c0',
+  skyblue: '#87ceeb',
+  slateblue: '#6a5acd',
+  slategray: '#708090',
+  snow: '#fffafa',
+  springgreen: '#00ff7f',
+  steelblue: '#4682b4',
+  tan: '#d2b48c',
+  teal: '#008080',
+  thistle: '#d8bfd8',
+  tomato: '#ff6347',
+  turquoise: '#40e0d0',
+  violet: '#ee82ee',
+  wheat: '#f5deb3',
+  white: '#ffffff',
+  whitesmoke: '#f5f5f5',
+  yellow: '#ffff00',
+  yellowgreen: '#9acd32',
 };
 
 // Cache entry with TTL
@@ -55,8 +168,15 @@ interface CacheEntry {
   timestamp: number;
 }
 
+interface GapCacheEntry {
+  result: SmartGapAnalysis;
+  timestamp: number;
+}
+
 // Cache TTL: 1 hour (in milliseconds)
 const CACHE_TTL = 60 * 60 * 1000;
+// Gap analysis cache TTL: 24 hours
+const GAP_CACHE_TTL = 24 * 60 * 60 * 1000;
 // Max cache size to prevent memory issues
 const MAX_CACHE_SIZE = 500;
 
@@ -66,11 +186,14 @@ export class AiService {
   private openai: OpenAI;
   // In-memory cache for analysis results
   private analysisCache: Map<string, CacheEntry> = new Map();
+  private gapAnalysisCache: Map<string, GapCacheEntry> = new Map();
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      this.logger.warn('OPENAI_API_KEY not configured - AI analysis will not work');
+      this.logger.warn(
+        'OPENAI_API_KEY not configured - AI analysis will not work',
+      );
     }
     this.openai = new OpenAI({ apiKey: apiKey || 'dummy-key' });
   }
@@ -81,6 +204,37 @@ export class AiService {
   private generateCacheKey(dto: AnalyzeClothingDto): string {
     const data = dto.imageUrl || dto.imageBase64 || '';
     return crypto.createHash('sha256').update(data).digest('hex');
+  }
+
+  private generateGapCacheKey(input: {
+    userId: string;
+    styleProfile: any;
+    wardrobeItems: any[];
+  }): string {
+    const style = input.styleProfile
+      ? {
+          archetype: input.styleProfile.archetype,
+          sliders: input.styleProfile.sliders,
+          negativeConstraints: input.styleProfile.negativeConstraints,
+          favoriteBrands: input.styleProfile.favoriteBrands,
+          sizes: input.styleProfile.sizes,
+          fitPreferences: input.styleProfile.fitPreferences,
+          budgetRange: input.styleProfile.budgetRange,
+          maxPricePerItem: input.styleProfile.maxPricePerItem,
+          updatedAt: input.styleProfile.updatedAt,
+        }
+      : {};
+
+    const wardrobe = input.wardrobeItems.map((item) => ({
+      category: item.category,
+      subCategory: item.subCategory,
+      brand: item.brand,
+      colors: item.colors,
+      notes: item.notes,
+    }));
+
+    const payload = JSON.stringify({ userId: input.userId, style, wardrobe });
+    return crypto.createHash('sha256').update(payload).digest('hex');
   }
 
   /**
@@ -119,7 +273,39 @@ export class AiService {
     this.logger.log(`Cached analysis result (key: ${key.substring(0, 8)}...)`);
   }
 
-  async analyzeClothing(dto: AnalyzeClothingDto): Promise<AnalyzeClothingResponse> {
+  private getGapCachedResult(key: string): SmartGapAnalysis | null {
+    const entry = this.gapAnalysisCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > GAP_CACHE_TTL) {
+      this.gapAnalysisCache.delete(key);
+      return null;
+    }
+    this.logger.log(
+      `Cache hit for gap analysis (key: ${key.substring(0, 8)}...)`,
+    );
+    return entry.result;
+  }
+
+  private setGapCachedResult(key: string, result: SmartGapAnalysis): void {
+    if (this.gapAnalysisCache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = this.gapAnalysisCache.keys().next().value;
+      if (oldestKey) {
+        this.gapAnalysisCache.delete(oldestKey);
+      }
+    }
+
+    this.gapAnalysisCache.set(key, {
+      result,
+      timestamp: Date.now(),
+    });
+    this.logger.log(
+      `Cached gap analysis result (key: ${key.substring(0, 8)}...)`,
+    );
+  }
+
+  async analyzeClothing(
+    dto: AnalyzeClothingDto,
+  ): Promise<AnalyzeClothingResponse> {
     if (!process.env.OPENAI_API_KEY) {
       return {
         success: false,
@@ -128,7 +314,9 @@ export class AiService {
     }
 
     if (!dto.imageUrl && !dto.imageBase64) {
-      throw new BadRequestException('Either imageUrl or imageBase64 must be provided');
+      throw new BadRequestException(
+        'Either imageUrl or imageBase64 must be provided',
+      );
     }
 
     // Check cache first
@@ -154,8 +342,8 @@ export class AiService {
               {
                 type: 'text',
                 text: `Analyze this clothing image and return a JSON object with:
-- category: one of "TOP", "BOTTOM", "SHOE", "ACCESSORY" (TOP includes shirts, jackets, sweaters; BOTTOM includes pants, shorts, skirts; SHOE includes all footwear; ACCESSORY includes bags, hats, jewelry, watches, belts)
-- subCategory: specific type (e.g., "T-Shirt", "Jeans", "Sneakers", "Watch", "Backpack")
+- category: one of "TOP", "BOTTOM", "OUTERWEAR", "FOOTWEAR", "ACCESSORY", "DRESS" (TOP includes shirts, sweaters, tanks; BOTTOM includes pants, shorts, skirts; OUTERWEAR includes coats, jackets, blazers, cardigans; FOOTWEAR includes all shoes; ACCESSORY includes bags, hats, jewelry, watches, belts; DRESS includes casual and formal dresses)
+- subCategory: specific type (e.g., "T-Shirt", "Jeans", "Sneakers", "Coat","Watch", "Backpack")
 - brand: brand name if visible on the item, otherwise null
 - colors: array of 1-3 DISTINCT dominant colors. Choose from: black, white, gray, darkgray, silver, navy, blue, royalblue, cornflowerblue, skyblue, lightblue, steelblue, slateblue, darkslateblue, teal, turquoise, green, olive, khaki, yellow, gold, orange, coral, red, crimson, pink, hotpink, purple, violet, indigo, brown, chocolate, tan, beige, ivory, cream, maroon, burgundy, salmon, lavender, plum, magenta, cyan, lime, forestgreen, darkgreen, darkblue, midnightblue, slategray, dimgray, charcoal, offwhite, camel
 - styleNotes: A brief 1-2 sentence styling tip including: suitable occasions (casual, business, formal, sport, date night, etc.), what to pair it with, and optionally the season. Keep it concise and helpful.
@@ -192,7 +380,10 @@ Return ONLY valid JSON. Example:
 
       return result;
     } catch (error: any) {
-      this.logger.error(`OpenAI analysis failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `OpenAI analysis failed: ${error.message}`,
+        error.stack,
+      );
 
       // Handle specific OpenAI errors
       if (error.code === 'invalid_api_key') {
@@ -234,10 +425,62 @@ Return ONLY valid JSON. Example:
       const parsed = JSON.parse(jsonStr);
 
       // Validate and normalize the response
-      const validCategories = ['TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'];
-      const category = validCategories.includes(parsed.category?.toUpperCase())
-        ? parsed.category.toUpperCase()
-        : 'ACCESSORY';
+      const validCategories = [
+        'TOP',
+        'BOTTOM',
+        'OUTERWEAR',
+        'FOOTWEAR',
+        'ACCESSORY',
+        'DRESS',
+      ];
+
+      const normalizedCategory =
+        typeof parsed.category === 'string'
+          ? parsed.category.toUpperCase().trim()
+          : '';
+
+      const subCategoryText =
+        typeof parsed.subCategory === 'string'
+          ? parsed.subCategory.toLowerCase()
+          : '';
+
+      const inferredCategory = (() => {
+        if (
+          subCategoryText.includes('coat') ||
+          subCategoryText.includes('jacket') ||
+          subCategoryText.includes('blazer') ||
+          subCategoryText.includes('cardigan') ||
+          subCategoryText.includes('parka') ||
+          subCategoryText.includes('puffer') ||
+          subCategoryText.includes('trench')
+        ) {
+          return 'OUTERWEAR';
+        }
+
+        if (
+          subCategoryText.includes('sneaker') ||
+          subCategoryText.includes('boot') ||
+          subCategoryText.includes('loafer') ||
+          subCategoryText.includes('sandal') ||
+          subCategoryText.includes('heel') ||
+          subCategoryText.includes('shoe') ||
+          subCategoryText.includes('flat')
+        ) {
+          return 'FOOTWEAR';
+        }
+
+        if (subCategoryText.includes('dress')) {
+          return 'DRESS';
+        }
+
+        return '';
+      })();
+
+      const category = validCategories.includes(normalizedCategory)
+        ? normalizedCategory
+        : validCategories.includes(inferredCategory)
+          ? inferredCategory
+          : 'ACCESSORY';
 
       // Convert color names to hex codes
       const colors = (parsed.colors || [])
@@ -255,9 +498,11 @@ Return ONLY valid JSON. Example:
         .slice(0, 5);
 
       // Extract and validate styleNotes
-      const styleNotes = typeof parsed.styleNotes === 'string' && parsed.styleNotes.trim().length > 0
-        ? parsed.styleNotes.trim()
-        : undefined;
+      const styleNotes =
+        typeof parsed.styleNotes === 'string' &&
+        parsed.styleNotes.trim().length > 0
+          ? parsed.styleNotes.trim()
+          : undefined;
 
       return {
         category: category as ClothingAnalysisResult['category'],
@@ -283,7 +528,9 @@ Return ONLY valid JSON. Example:
     }
 
     try {
-      this.logger.log(`Analyzing inspiration image: ${imageUrl.substring(0, 50)}...`);
+      this.logger.log(
+        `Analyzing inspiration image: ${imageUrl.substring(0, 50)}...`,
+      );
 
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -340,22 +587,47 @@ Return ONLY valid JSON. Example:
       const parsed = JSON.parse(jsonStr);
 
       // Validate and normalize
-      const validFormalityLevels = ['casual', 'smart-casual', 'business', 'formal'];
-      const formalityLevel = validFormalityLevels.includes(parsed.formalityLevel?.toLowerCase())
+      const validFormalityLevels = [
+        'casual',
+        'smart-casual',
+        'business',
+        'formal',
+      ];
+      const formalityLevel = validFormalityLevels.includes(
+        parsed.formalityLevel?.toLowerCase(),
+      )
         ? parsed.formalityLevel.toLowerCase()
         : 'casual';
 
       return {
-        styleKeywords: Array.isArray(parsed.styleKeywords) ? parsed.styleKeywords : [],
-        colorPalette: Array.isArray(parsed.colorPalette) ? parsed.colorPalette : [],
-        aestheticNotes: typeof parsed.aestheticNotes === 'string' ? parsed.aestheticNotes : '',
-        formalityLevel: formalityLevel as 'casual' | 'smart-casual' | 'business' | 'formal',
-        silhouettePreferences: Array.isArray(parsed.silhouettePreferences) ? parsed.silhouettePreferences : undefined,
+        styleKeywords: Array.isArray(parsed.styleKeywords)
+          ? parsed.styleKeywords
+          : [],
+        colorPalette: Array.isArray(parsed.colorPalette)
+          ? parsed.colorPalette
+          : [],
+        aestheticNotes:
+          typeof parsed.aestheticNotes === 'string'
+            ? parsed.aestheticNotes
+            : '',
+        formalityLevel: formalityLevel as
+          | 'casual'
+          | 'smart-casual'
+          | 'business'
+          | 'formal',
+        silhouettePreferences: Array.isArray(parsed.silhouettePreferences)
+          ? parsed.silhouettePreferences
+          : undefined,
         patterns: Array.isArray(parsed.patterns) ? parsed.patterns : undefined,
-        dominantColors: Array.isArray(parsed.dominantColors) ? parsed.dominantColors : undefined,
+        dominantColors: Array.isArray(parsed.dominantColors)
+          ? parsed.dominantColors
+          : undefined,
       };
     } catch (error: any) {
-      this.logger.error(`OpenAI inspiration analysis failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `OpenAI inspiration analysis failed: ${error.message}`,
+        error.stack,
+      );
       throw new Error(`Failed to analyze inspiration image: ${error.message}`);
     }
   }
@@ -385,13 +657,17 @@ Return ONLY valid JSON. Example:
       // Aggregate image analysis data
       const allStyleKeywords = analyses.flatMap((a) => a.styleKeywords || []);
       const allColors = analyses.flatMap((a) => a.colorPalette || []);
-      const aestheticNotes = analyses.map((a) => a.aestheticNotes).filter(Boolean).join('; ');
+      const aestheticNotes = analyses
+        .map((a) => a.aestheticNotes)
+        .filter(Boolean)
+        .join('; ');
       const formalityLevels = analyses.map((a) => a.formalityLevel);
 
       // Count keyword frequency
       const keywordCounts: Record<string, number> = {};
       allStyleKeywords.forEach((keyword) => {
-        keywordCounts[keyword.toLowerCase()] = (keywordCounts[keyword.toLowerCase()] || 0) + 1;
+        keywordCounts[keyword.toLowerCase()] =
+          (keywordCounts[keyword.toLowerCase()] || 0) + 1;
       });
 
       const topKeywords = Object.entries(keywordCounts)
@@ -405,12 +681,18 @@ Return ONLY valid JSON. Example:
         topStyleKeywords: topKeywords,
         dominantColors: [...new Set(allColors)].slice(0, 8),
         aestheticNotes,
-        averageFormality: formalityLevels.length > 0
-          ? formalityLevels.reduce((acc, level) => {
-              const levels = { casual: 1, 'smart-casual': 2, business: 3, formal: 4 };
-              return acc + (levels[level] || 1);
-            }, 0) / formalityLevels.length
-          : 2,
+        averageFormality:
+          formalityLevels.length > 0
+            ? formalityLevels.reduce((acc, level) => {
+                const levels = {
+                  casual: 1,
+                  'smart-casual': 2,
+                  business: 3,
+                  formal: 4,
+                };
+                return acc + (levels[level] || 1);
+              }, 0) / formalityLevels.length
+            : 2,
         userPreferences: {
           sliders: preferences.sliders || {},
           favoriteBrands: preferences.favoriteBrands || [],
@@ -483,15 +765,25 @@ Return ONLY valid JSON. Example:
       const parsed = JSON.parse(jsonStr);
 
       return {
-        archetype: typeof parsed.archetype === 'string' ? parsed.archetype : 'Urban Minimalist',
-        description: typeof parsed.description === 'string' ? parsed.description : 'Your unique style profile is being developed based on your preferences and wardrobe.',
+        archetype:
+          typeof parsed.archetype === 'string'
+            ? parsed.archetype
+            : 'Urban Minimalist',
+        description:
+          typeof parsed.description === 'string'
+            ? parsed.description
+            : 'Your unique style profile is being developed based on your preferences and wardrobe.',
       };
     } catch (error: any) {
-      this.logger.error(`OpenAI persona determination failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `OpenAI persona determination failed: ${error.message}`,
+        error.stack,
+      );
       // Fallback to default
       return {
         archetype: 'Urban Minimalist',
-        description: 'Your unique style profile is being developed based on your preferences and wardrobe.',
+        description:
+          'Your unique style profile is being developed based on your preferences and wardrobe.',
       };
     }
   }
@@ -510,7 +802,10 @@ Return ONLY valid JSON. Example:
 
     try {
       const allStyleKeywords = analyses.flatMap((a) => a.styleKeywords || []);
-      const aestheticNotes = analyses.map((a) => a.aestheticNotes).filter(Boolean).join('; ');
+      const aestheticNotes = analyses
+        .map((a) => a.aestheticNotes)
+        .filter(Boolean)
+        .join('; ');
 
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -533,17 +828,162 @@ The description should be personalized and specific to their style, not generic.
         return content.trim();
       }
     } catch (error: any) {
-      this.logger.error(`Failed to generate persona description: ${error.message}`);
+      this.logger.error(
+        `Failed to generate persona description: ${error.message}`,
+      );
     }
 
     // Fallback to default descriptions
     const defaultDescriptions: Record<string, string> = {
-      'Urban Minimalist': 'You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette over pattern, favoring architectural shapes that bridge the gap between office sophistication and street-style edge.',
-      'Classic Elegance': 'You value timeless pieces and refined sophistication. Your style is built on quality basics and elegant silhouettes that never go out of fashion.',
-      'Bold Innovator': "You're not afraid to experiment with color, pattern, and shape. Your wardrobe reflects your creative spirit and willingness to push boundaries.",
-      'Casual Comfort': 'Comfort and ease are your priorities. You favor relaxed fits and versatile pieces that work for any occasion.',
+      'Urban Minimalist':
+        'You prefer clean lines, monochromatic tones, and functional fabrics. Your aesthetic prioritizes silhouette over pattern, favoring architectural shapes that bridge the gap between office sophistication and street-style edge.',
+      'Classic Elegance':
+        'You value timeless pieces and refined sophistication. Your style is built on quality basics and elegant silhouettes that never go out of fashion.',
+      'Bold Innovator':
+        "You're not afraid to experiment with color, pattern, and shape. Your wardrobe reflects your creative spirit and willingness to push boundaries.",
+      'Casual Comfort':
+        'Comfort and ease are your priorities. You favor relaxed fits and versatile pieces that work for any occasion.',
     };
 
-    return defaultDescriptions[archetype] || 'Your unique style profile is being developed based on your preferences and wardrobe.';
+    return (
+      defaultDescriptions[archetype] ||
+      'Your unique style profile is being developed based on your preferences and wardrobe.'
+    );
+  }
+
+  async generateWardrobeGapAnalysis(input: {
+    userId: string;
+    styleProfile: any;
+    wardrobeItems: any[];
+  }): Promise<SmartGapAnalysis> {
+    if (!process.env.OPENAI_API_KEY) {
+      return { recommendations: [], generatedAt: new Date() };
+    }
+
+    const cacheKey = this.generateGapCacheKey(input);
+    const cached = this.getGapCachedResult(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const styleProfile = input.styleProfile || {};
+    const wardrobeSummary = (input.wardrobeItems || []).map((item) => ({
+      category: item.category,
+      subCategory: item.subCategory,
+      brand: item.brand,
+      colors: item.colors,
+      notes: item.notes,
+    }));
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a fashion stylist. Recommend wardrobe gaps based on style profile, preferences, and current wardrobe. Return ONLY valid JSON.',
+          },
+          {
+            role: 'user',
+            content: `Generate 3-5 wardrobe gap recommendations as JSON with fields:
+{
+  "recommendations": [
+    {
+      "title": string,
+      "category": string,
+      "reason": string,
+      "alignmentScore": number (0-100),
+      "priceRange": string (optional)
+    }
+  ]
+}
+
+Rules:
+- Use the user's budget range if provided (budget/mid-range/premium/luxury) to set priceRange.
+- Respect negative constraints and style preferences.
+- Favor items that increase outfit versatility and align with their archetype.
+
+Style Profile:
+${JSON.stringify({
+  archetype: styleProfile.archetype,
+  sliders: styleProfile.sliders,
+  negativeConstraints: styleProfile.negativeConstraints,
+  favoriteBrands: styleProfile.favoriteBrands,
+  sizes: styleProfile.sizes,
+  fitPreferences: styleProfile.fitPreferences,
+  budgetRange: styleProfile.budgetRange,
+  maxPricePerItem: styleProfile.maxPricePerItem,
+})}
+
+Wardrobe Items:
+${JSON.stringify(wardrobeSummary)}
+`,
+          },
+        ],
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      const parsed = this.parseGapAnalysisResponse(content);
+      const result: SmartGapAnalysis = {
+        recommendations: parsed,
+        generatedAt: new Date(),
+      };
+
+      this.setGapCachedResult(cacheKey, result);
+      return result;
+    } catch (error: any) {
+      this.logger.error(
+        `OpenAI gap analysis failed: ${error.message}`,
+        error.stack,
+      );
+      return { recommendations: [], generatedAt: new Date() };
+    }
+  }
+
+  private parseGapAnalysisResponse(content: string): GapRecommendation[] {
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith('```json')) {
+      jsonStr = jsonStr.slice(7);
+    }
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.slice(3);
+    }
+    if (jsonStr.endsWith('```')) {
+      jsonStr = jsonStr.slice(0, -3);
+    }
+    jsonStr = jsonStr.trim();
+
+    try {
+      const parsed = JSON.parse(jsonStr);
+      const recommendations = Array.isArray(parsed.recommendations)
+        ? parsed.recommendations
+        : [];
+
+      return recommendations
+        .map((rec: any) => ({
+          title: typeof rec.title === 'string' ? rec.title : 'Recommendation',
+          category: typeof rec.category === 'string' ? rec.category : undefined,
+          reason:
+            typeof rec.reason === 'string'
+              ? rec.reason
+              : 'Complements your wardrobe',
+          alignmentScore:
+            typeof rec.alignmentScore === 'number'
+              ? rec.alignmentScore
+              : undefined,
+          priceRange:
+            typeof rec.priceRange === 'string' ? rec.priceRange : undefined,
+        }))
+        .slice(0, 5);
+    } catch (error) {
+      this.logger.warn('Failed to parse gap analysis JSON');
+      return [];
+    }
   }
 }

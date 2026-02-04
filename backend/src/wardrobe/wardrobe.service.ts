@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, PipelineStage } from 'mongoose';
 import {
   WardrobeItem,
   WardrobeItemDocument,
   Category,
 } from './schemas/wardrobe-item.schema';
+import { ItemFeedback, ItemFeedbackDocument } from './schemas/item-feedback.schema';
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
@@ -19,6 +20,8 @@ export class WardrobeService {
   constructor(
     @InjectModel(WardrobeItem.name)
     private wardrobeItemModel: Model<WardrobeItemDocument>,
+    @InjectModel(ItemFeedback.name)
+    private itemFeedbackModel: Model<ItemFeedbackDocument>,
     private azureStorageService: AzureStorageService,
     private embeddingService: EmbeddingService,
   ) {}
@@ -43,10 +46,10 @@ export class WardrobeService {
       this.logger.warn(`Failed to get embedding, continuing without: ${error.message}`);
     }
 
-    // Convert brandId string to ObjectId if provided
+    // Convert retailerId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
-      brandId: createWardrobeItemDto.brandId ? new Types.ObjectId(createWardrobeItemDto.brandId) : undefined,
+      retailerId: createWardrobeItemDto.retailerId ? new Types.ObjectId(createWardrobeItemDto.retailerId) : undefined,
       seasonalPaletteScores,
       embedding,
     };
@@ -60,7 +63,7 @@ export class WardrobeService {
     userId: string,
     category?: Category,
     colorHex?: string,
-    brandId?: string,
+    retailerId?: string,
     search?: string,
     seasonalPalette?: string,
     minPaletteScore?: number,
@@ -72,8 +75,8 @@ export class WardrobeService {
     if (colorHex) {
       filter.colorHex = colorHex;
     }
-    if (brandId) {
-      filter.brandId = new Types.ObjectId(brandId);
+    if (retailerId) {
+      filter.retailerId = new Types.ObjectId(retailerId);
     }
     if (search && search.trim()) {
       const searchRegex = { $regex: search.trim(), $options: 'i' };
@@ -91,14 +94,14 @@ export class WardrobeService {
       filter[paletteKey] = { $gte: threshold };
     }
     
-    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
+    return this.wardrobeItemModel.find(filter).populate('retailerId').exec();
   }
 
-  async findAllWithBrands(
+  async findAllWithRetailers(
     userId: string,
     category?: Category,
     colorHex?: string,
-    brandId?: string,
+    retailerId?: string,
   ): Promise<WardrobeItem[]> {
     const filter: any = {};
     // Only filter by userId if provided and not empty
@@ -111,22 +114,22 @@ export class WardrobeService {
     if (colorHex) {
       filter.colorHex = colorHex;
     }
-    if (brandId) {
-      filter.brandId = new Types.ObjectId(brandId);
+    if (retailerId) {
+      filter.retailerId = new Types.ObjectId(retailerId);
     }
-    return this.wardrobeItemModel.find(filter).populate('brandId').exec();
+    return this.wardrobeItemModel.find(filter).populate('retailerId').exec();
   }
 
   async findOne(id: string): Promise<WardrobeItem> {
-    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
     return item;
   }
 
-  async findByBrandId(brandId: string): Promise<WardrobeItem[]> {
-    return this.wardrobeItemModel.find({ brandId: new Types.ObjectId(brandId) }).populate('brandId').exec();
+  async findByRetailerId(retailerId: string): Promise<WardrobeItem[]> {
+    return this.wardrobeItemModel.find({ retailerId: new Types.ObjectId(retailerId) }).populate('retailerId').exec();
   }
 
   async update(
@@ -134,7 +137,7 @@ export class WardrobeService {
     updateWardrobeItemDto: UpdateWardrobeItemDto,
   ): Promise<{ updated: WardrobeItem; oldData: WardrobeItem }> {
     // Get the old data first for audit logging
-    const oldItem = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const oldItem = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!oldItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -144,10 +147,10 @@ export class WardrobeService {
       ? calculateSeasonalPaletteScores(updateWardrobeItemDto.colors)
       : null;
 
-    // Convert brandId string to ObjectId if provided
+    // Convert retailerId string to ObjectId if provided
     const updateData: any = {
       ...updateWardrobeItemDto,
-      brandId: updateWardrobeItemDto.brandId ? new Types.ObjectId(updateWardrobeItemDto.brandId) : undefined,
+      retailerId: updateWardrobeItemDto.retailerId ? new Types.ObjectId(updateWardrobeItemDto.retailerId) : undefined,
     };
 
     // Only update palette scores if colors were provided
@@ -158,7 +161,7 @@ export class WardrobeService {
     
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })
-      .populate('brandId')
+      .populate('retailerId')
       .exec();
     
     if (!updatedItem) {
@@ -170,7 +173,7 @@ export class WardrobeService {
 
   async remove(id: string): Promise<WardrobeItem> {
     // Find the item first to get the image URL and return it for audit logging
-    const item = await this.wardrobeItemModel.findById(id).populate('brandId').exec();
+    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -202,6 +205,98 @@ export class WardrobeService {
     this.logger.log(`Wardrobe item ${id} deleted successfully`);
     
     return item;
+  }
+
+  async getDislikedWardrobeFeedback(
+    userId: string,
+    limit = 20,
+    offset = 0,
+  ): Promise<{ items: Array<{ item: WardrobeItem; feedback: any }>; total: number; limit: number; offset: number }> {
+    const cappedLimit = Math.min(Math.max(limit, 1), 50);
+    const safeOffset = Math.max(offset, 0);
+
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          user_id: userId,
+          feedback: { $in: ['dislike', 'irrelevant'] },
+        },
+      },
+      { $sort: { updated_at: -1, created_at: -1 } },
+      {
+        $addFields: {
+          itemObjectId: {
+            $convert: {
+              input: '$item_id',
+              to: 'objectId',
+              onError: null,
+              onNull: null,
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: 'wardrobeitems',
+          localField: 'itemObjectId',
+          foreignField: '_id',
+          as: 'item',
+        },
+      },
+      { $unwind: '$item' },
+      { $match: { 'item.userId': userId } },
+      {
+        $facet: {
+          items: [
+            { $skip: safeOffset },
+            { $limit: cappedLimit },
+            {
+              $project: {
+                item: 1,
+                feedback: {
+                  itemId: '$item_id',
+                  feedback: '$feedback',
+                  reason: '$reason',
+                  reasonText: '$reason_text',
+                  createdAt: '$created_at',
+                  updatedAt: '$updated_at',
+                },
+              },
+            },
+          ],
+          total: [{ $count: 'count' }],
+        },
+      },
+    ];
+
+    const aggResult = await this.itemFeedbackModel.aggregate(pipeline).exec();
+    const result = aggResult?.[0] || { items: [], total: [] };
+    const total = result.total?.[0]?.count ?? 0;
+
+    const items = (result.items || []).map((entry) => {
+      const item = entry.item || {};
+      const normalizedItem = {
+        ...item,
+        _id: item._id?.toString?.() ?? item._id,
+        retailerId: item.retailerId?.toString?.() ?? item.retailerId,
+      } as WardrobeItem;
+      return {
+        item: normalizedItem,
+        feedback: entry.feedback,
+      };
+    });
+
+    return {
+      items,
+      total,
+      limit: cappedLimit,
+      offset: safeOffset,
+    };
+  }
+
+  async deleteItemFeedback(userId: string, itemId: string): Promise<boolean> {
+    const result = await this.itemFeedbackModel.deleteOne({ user_id: userId, item_id: itemId }).exec();
+    return (result?.deletedCount ?? 0) > 0;
   }
 }
 

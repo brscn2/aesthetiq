@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Upload, X, Shirt, Loader2, Palette } from "lucide-react"
-import { useAdminApi, WardrobeItem, Category, CreateWardrobeItemDto, UpdateWardrobeItemDto, Brand } from "@/lib/admin-api"
+import { useAdminApi, WardrobeItem, Category, CreateWardrobeItemDto, UpdateWardrobeItemDto, Retailer } from "@/lib/admin-api"
 import { useAdminLoading } from "@/hooks/use-admin-loading"
 import { AdminErrorHandler } from "@/lib/admin-error-handler"
 
@@ -36,7 +36,7 @@ interface FormData {
   category: Category | ""
   subCategory: string
   brand: string
-  brandId: string
+  retailerId: string
   colorHex: string
 }
 
@@ -45,14 +45,16 @@ const initialFormData: FormData = {
   category: "",
   subCategory: "",
   brand: "",
-  brandId: "",
+  retailerId: "",
   colorHex: "",
 }
 
 const categoryOptions = [
   { value: "TOP", label: "Top" },
   { value: "BOTTOM", label: "Bottom" },
-  { value: "SHOE", label: "Shoe" },
+  { value: "FOOTWEAR", label: "Footwear" },
+  { value: "OUTERWEAR", label: "OUTERWEAR" },
+  { value: "DRESS", label: "Dress" },
   { value: "ACCESSORY", label: "Accessory" },
 ]
 
@@ -67,45 +69,45 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>("")
-  const [brands, setBrands] = useState<Brand[]>([])
+  const [retailers, setRetailers] = useState<Retailer[]>([])
   const [errors, setErrors] = useState<Partial<FormData>>({})
   const [isDragging, setIsDragging] = useState(false)
   
   const api = useAdminApi()
   const { isLoading, execute } = useAdminLoading()
   const { isLoading: uploadLoading, execute: executeUpload } = useAdminLoading()
-  const { isLoading: brandsLoading, execute: executeBrands } = useAdminLoading()
+  const { isLoading: retailersLoading, execute: executeRetailers } = useAdminLoading()
 
   const isEditing = !!item
 
-  // Load brands on mount
+  // Load retailers on mount
   useEffect(() => {
-    const loadBrands = async () => {
-      const result = await executeBrands(
-        () => api.brands.getAll(),
-        "Loading brands"
+    const loadRetailers = async () => {
+      const result = await executeRetailers(
+        () => api.retailers.getAll(),
+        "Loading retailers"
       )
       if (result) {
-        setBrands(result.brands)
+        setRetailers(result.retailers)
       }
     }
-    loadBrands()
+    loadRetailers()
   }, [])
 
   useEffect(() => {
-    if (item && brands.length > 0) {
-      // Find brandId by matching brand name
-      const matchingBrand = item.brand 
-        ? brands.find(b => b.name === item.brand)
-        : null
+    if (item && retailers.length > 0) {
+      // Get retailerId from the item
+      const retailerId = typeof item.retailerId === 'object' 
+        ? (item.retailerId as Retailer)?._id 
+        : item.retailerId
       
       setFormData({
         userId: item.userId,
         category: item.category,
         subCategory: item.subCategory || "",
         brand: item.brand || "",
-        brandId: matchingBrand?._id || (item as any).brandId?.toString() || "",
-        colorHex: item.colorHex || "",
+        retailerId: retailerId || "",
+        colorHex: (item as any).colorHex || "",
       })
       setImagePreview(item.processedImageUrl || item.imageUrl)
     } else if (!item) {
@@ -114,7 +116,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     }
     setImageFile(null)
     setErrors({})
-  }, [item, open, brands])
+  }, [item, open, retailers])
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
@@ -168,20 +170,17 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     reader.readAsDataURL(file)
   }
 
-  const handleBrandChange = (brandId: string) => {
-    if (brandId === "none") {
+  const handleRetailerChange = (retailerId: string) => {
+    if (retailerId === "none") {
       setFormData(prev => ({
         ...prev,
-        brandId: "",
-        brand: "",
+        retailerId: "",
       }))
       return
     }
-    const selectedBrand = brands.find((b) => b._id === brandId)
     setFormData((prev) => ({
       ...prev,
-      brandId,
-      brand: selectedBrand?.name || "",
+      retailerId,
     }))
   }
 
@@ -237,7 +236,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
       category: formData.category as Category,
       subCategory: formData.subCategory.trim() || undefined,
       brand: formData.brand.trim() || undefined,
-      brandId: formData.brandId || undefined,
+      retailerId: formData.retailerId || undefined,
       colorHex: formData.colorHex.trim() || undefined,
     }
 
@@ -423,22 +422,33 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             </div>
           </div>
 
-          {/* Brand Selection */}
+          {/* Brand (text) */}
           <div className="space-y-2">
-            <Label>Brand</Label>
+            <Label htmlFor="brand">Brand</Label>
+            <Input
+              id="brand"
+              value={formData.brand}
+              onChange={(e) => handleInputChange("brand", e.target.value)}
+              placeholder="e.g., Nike, Adidas"
+            />
+          </div>
+
+          {/* Retailer Selection */}
+          <div className="space-y-2">
+            <Label>Retailer</Label>
             <Select
-              value={formData.brandId || "none"}
-              onValueChange={handleBrandChange}
-              disabled={brandsLoading}
+              value={formData.retailerId || "none"}
+              onValueChange={handleRetailerChange}
+              disabled={retailersLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder={brandsLoading ? "Loading brands..." : "Select brand"} />
+                <SelectValue placeholder={retailersLoading ? "Loading retailers..." : "Select retailer"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No brand</SelectItem>
-                {brands.map((brand) => (
-                  <SelectItem key={brand._id} value={brand._id}>
-                    {brand.name}
+                <SelectItem value="none">No retailer</SelectItem>
+                {retailers.map((retailer) => (
+                  <SelectItem key={retailer._id} value={retailer._id}>
+                    {retailer.name}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -42,7 +42,7 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
     onProfileUpdate?.()
   }
 
-  const getDisplayValue = (type: "top" | "bottom" | "shoe") => {
+  const getDisplayValue = (type: "top" | "bottom" | "footwear") => {
     const size = sizes[type]
     if (!size) return "Not set"
     // Size is already saved with the correct region format, just display it as is
@@ -234,7 +234,7 @@ export function BrandSizing({ styleProfile, onProfileUpdate }: BrandSizingProps)
           <CardContent className="space-y-4">
             <SizeRow label="Top" value={getDisplayValue("top")} />
             <SizeRow label="Bottom" value={getDisplayValue("bottom")} />
-            <SizeRow label="Shoe" value={getDisplayValue("shoe")} />
+            <SizeRow label="Footwear" value={getDisplayValue("footwear")} />
             <div className="pt-2">
               <Button
                 variant="ghost"

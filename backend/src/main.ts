@@ -31,11 +31,12 @@ async function bootstrap() {
   });
 
   // Enable CORS
-  // Allow localhost for local dev, Vercel deployments, and any additional frontend URLs from env
+  // Allow localhost for local dev, Vercel deployments, Chrome extensions, and any additional frontend URLs from env
   const allowedOrigins = [
     'http://localhost:3000',
     'https://v0-fashion-advisory-dashboard-prdv4qk99-brscn2s-projects.vercel.app',
     /\.vercel\.app$/, // Allows ANY Vercel app subdomain
+    /^chrome-extension:\/\//, // Allow Chrome extensions
   ];
 
   // Add FRONTEND_URL from environment if provided

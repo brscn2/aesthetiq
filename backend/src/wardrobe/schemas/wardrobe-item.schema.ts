@@ -7,8 +7,10 @@ export type WardrobeItemDocument = WardrobeItem & Document;
 export enum Category {
   TOP = 'TOP',
   BOTTOM = 'BOTTOM',
-  SHOE = 'SHOE',
+  OUTERWEAR = 'OUTERWEAR',
+  FOOTWEAR = 'FOOTWEAR',
   ACCESSORY = 'ACCESSORY',
+  DRESS = 'DRESS',
 }
 
 // Type for seasonal palette scores
@@ -34,8 +36,8 @@ export class WardrobeItem {
   @Prop()
   brand?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Brand' })
-  brandId?: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Retailer' })
+  retailerId?: Types.ObjectId;
 
   @Prop({ type: [String], default: [] })
   colors: string[];
@@ -75,7 +77,7 @@ export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 // Create indexes for efficient queries
 WardrobeItemSchema.index({ userId: 1, category: 1 });
 WardrobeItemSchema.index({ userId: 1, colors: 1 });
-WardrobeItemSchema.index({ brandId: 1 });
+WardrobeItemSchema.index({ retailerId: 1 });
 // Index for seasonal palette queries
 WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_AUTUMN': 1 });
 WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_SPRING': 1 });
@@ -89,4 +91,3 @@ WardrobeItemSchema.index({ 'seasonalPaletteScores.MUTED_AUTUMN': 1 });
 WardrobeItemSchema.index({ 'seasonalPaletteScores.MUTED_SUMMER': 1 });
 WardrobeItemSchema.index({ 'seasonalPaletteScores.BRIGHT_SPRING': 1 });
 WardrobeItemSchema.index({ 'seasonalPaletteScores.BRIGHT_WINTER': 1 });
-
