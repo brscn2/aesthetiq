@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,7 +10,7 @@ import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle, Lo
 import { useSettings } from "@/contexts/settings-context"
 import { useUser } from "@/contexts/user-context"
 import { useApi } from "@/lib/api"
-import { Currency, ShoppingRegion, Units } from "@/types/api"
+import { Currency, ShoppingRegion, Units, Gender } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 import { AvatarCropper } from "./avatar-cropper"
 
@@ -23,11 +23,21 @@ export function SettingsPanel() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const [cropperImage, setCropperImage] = useState<string | null>(null)
+  const [genderValue, setGenderValue] = useState<Gender | "">("")
+  const [isUpdatingGender, setIsUpdatingGender] = useState(false)
 
   const isLoading = userLoading || settingsLoading
   
   // Use local avatar if set, otherwise use user's avatar
   const displayAvatarUrl = localAvatarUrl ?? user?.avatarUrl
+
+  useEffect(() => {
+    if (user?.gender) {
+      setGenderValue(user.gender)
+    } else {
+      setGenderValue("")
+    }
+  }, [user?.gender])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -100,6 +110,23 @@ export function SettingsPanel() {
       toast({ title: "Profile picture removed" })
     } catch (error) {
       toast({ title: "Failed to remove profile picture", variant: "destructive" })
+    }
+  }
+
+  const handleGenderChange = async (value: string) => {
+    const gender = value as Gender
+    setGenderValue(gender)
+    setIsUpdatingGender(true)
+    try {
+      await userApi.updateCurrentUser({ gender })
+      await refetchUser()
+      toast({ title: "Gender updated" })
+    } catch (error) {
+      console.error("Failed to update gender:", error)
+      setGenderValue(user?.gender ?? "")
+      toast({ title: "Failed to update gender", variant: "destructive" })
+    } finally {
+      setIsUpdatingGender(false)
     }
   }
 
@@ -191,6 +218,36 @@ export function SettingsPanel() {
                   </Button>
                 )}
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Profile Basics */}
+      <Card className="border-border">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h3 className="font-medium text-lg">Profile Basics</h3>
+              <p className="text-sm text-muted-foreground">
+                Used to personalize recommendations and sizing.
+              </p>
+            </div>
+            <div className="w-full sm:w-64 space-y-2">
+              <Label>Gender</Label>
+              <Select
+                value={genderValue}
+                onValueChange={handleGenderChange}
+                disabled={isUpdatingGender}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select gender" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={Gender.MALE}>Male</SelectItem>
+                  <SelectItem value={Gender.FEMALE}>Female</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

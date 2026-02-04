@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole } from '../schemas/user.schema';
+import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole, Gender } from '../schemas/user.schema';
 
 class UserSettingsDto {
   // Measurement & Regional
@@ -71,6 +71,11 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @ApiProperty({ enum: Gender, required: false })
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
 
   @ApiProperty({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   @IsEnum(SubscriptionStatus)

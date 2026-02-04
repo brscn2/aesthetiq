@@ -5,6 +5,7 @@ import type React from "react"
 import { DashboardSidebar } from "./dashboard-sidebar"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
+import { GenderOnboardingBanner } from "@/components/gender-onboarding-banner"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -48,7 +49,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             Aesthet<span className="text-gradient-ai">IQ</span>
           </h1>
         </div>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6">
+          <GenderOnboardingBanner />
+          {children}
+        </main>
       </div>
     </div>
   )

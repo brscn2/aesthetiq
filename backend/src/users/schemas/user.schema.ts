@@ -37,6 +37,11 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+export enum Gender {
+  MALE = 'MALE',
+  FEMALE = 'FEMALE',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true })
@@ -47,6 +52,9 @@ export class User {
 
   @Prop({ required: true })
   name: string;
+
+  @Prop({ enum: Gender })
+  gender?: Gender;
 
   @Prop()
   avatarUrl?: string;

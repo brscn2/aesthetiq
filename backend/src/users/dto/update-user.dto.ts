@@ -17,6 +17,7 @@ import {
   Currency,
   ShoppingRegion,
   UserRole,
+  Gender,
 } from '../schemas/user.schema';
 
 class UserSettingsDto {
@@ -91,6 +92,11 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @ApiProperty({ enum: Gender, required: false })
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
 
   @ApiProperty({ enum: SubscriptionStatus, required: false })
   @IsEnum(SubscriptionStatus)

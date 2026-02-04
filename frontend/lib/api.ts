@@ -27,6 +27,7 @@ import type {
   UpdateUserDto,
   UpdateWardrobeItemDto,
   User,
+  Gender,
   WardrobeItem,
   DislikedWardrobeItemsResponse,
   PersonaAnalysisStatus,
@@ -106,6 +107,7 @@ const createUserApi = (client: AxiosInstance) => ({
   updateCurrentUser: (data: {
     name?: string;
     avatarUrl?: string;
+    gender?: Gender;
   }): Promise<User> => client.patch("/users/me", data).then((res) => res.data),
   updateTryOnPhoto: (photoUrl: string): Promise<User> =>
     client
