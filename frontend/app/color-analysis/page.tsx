@@ -667,10 +667,9 @@ function AnalysisReport({
       <section className="space-y-6 pb-20">
         <h3 className="font-serif text-2xl font-bold">Styling Recommendations</h3>
         <Tabs defaultValue="jewelry" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-3 bg-card/50 p-1 backdrop-blur-sm">
+          <TabsList className="grid w-full max-w-md grid-cols-2 bg-card/50 p-1 backdrop-blur-sm">
             <TabsTrigger value="jewelry">Jewelry</TabsTrigger>
             <TabsTrigger value="makeup">Makeup</TabsTrigger>
-            <TabsTrigger value="hair">Hair</TabsTrigger>
           </TabsList>
 
           <TabsContent value="jewelry" className="mt-6 animate-in fade-in-50">
@@ -776,13 +775,6 @@ function AnalysisReport({
             </Card>
           </TabsContent>
 
-          <TabsContent value="hair" className="mt-6">
-            <Card className="bg-card/30 backdrop-blur-sm">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                Additional hair color recommendations available in the full report.
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </section>
     </div>

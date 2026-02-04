@@ -6,13 +6,11 @@ import { ChatStylist } from "@/components/chat-stylist"
 import { ChatSidebar, type ChatSidebarRef } from "@/components/chat-sidebar"
 import { StyleDnaSummary } from "@/components/style-dna-summary"
 import { StyleDnaPanel } from "@/components/style-dna-panel"
-import { TrendsSidebar } from "@/components/trends-sidebar"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, X, Palette, Menu } from "lucide-react"
+import { X, Menu } from "lucide-react"
 import { useChatSessionsApi, type ChatSessionDetail } from "@/lib/chat-sessions"
 
 export default function DashboardPage() {
-  const [showTrends, setShowTrends] = useState(false)
   const [showStyleDna, setShowStyleDna] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -106,26 +104,6 @@ export default function DashboardPage() {
               >
                 <StyleDnaSummary />
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowTrends(!showTrends)}
-                className="border-border/50 w-full sm:w-auto"
-              >
-                {showTrends ? (
-                  <>
-                    <X className="mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Hide Trends</span>
-                    <span className="sm:hidden">Hide</span>
-                  </>
-                ) : (
-                  <>
-                    <TrendingUp className="mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Show Trends</span>
-                    <span className="sm:hidden">Trends</span>
-                  </>
-                )}
-              </Button>
             </div>
           </div>
         )}
@@ -213,7 +191,7 @@ export default function DashboardPage() {
           {/* Chat Interface */}
           <div
             className={`flex-1 overflow-hidden min-h-0 transition-all ${
-              showStyleDna ? "lg:w-3/5" : showTrends ? "lg:w-2/3" : "w-full"
+              showStyleDna ? "lg:w-3/5" : "w-full"
             }`}
           >
             {/* Mobile sidebar toggle button */}
@@ -237,36 +215,6 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Trends Sidebar - Toggle */}
-          {showTrends && (
-            <>
-              {/* Mobile: Full Screen Modal */}
-              <div className="lg:hidden fixed inset-0 z-50 bg-background overflow-hidden">
-                <div className="flex h-full flex-col">
-                  <div className="flex items-center justify-between border-b border-border p-4">
-                    <h2 className="font-semibold text-foreground">Trending Now</h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowTrends(false)}
-                      className="border-border/50"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="mx-auto w-full max-w-md px-4">
-                      <TrendsSidebar />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Desktop: Side Panel */}
-              <div className="hidden lg:block w-80 border-l border-border">
-                <TrendsSidebar />
-              </div>
-            </>
-          )}
         </div>
       </div>
     </DashboardLayout>
