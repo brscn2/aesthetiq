@@ -5,6 +5,7 @@ import tempfile
 from typing import List
 import aiohttp
 import replicate
+from PIL import Image
 
 from app.core.config import get_settings
 from app.core.logger import get_logger
@@ -35,6 +36,44 @@ class IDMVTONService:
             '.webp': 'image/webp',
         }
         return mime_types.get(ext, 'image/jpeg')
+    
+    def _preprocess_image(self, image_path: str, target_height: int = 768) -> str:
+        """
+        Preprocess image to ensure proper aspect ratio and dimensions.
+        IDM-VTON works best with specific aspect ratios (e.g., 3:4 for human images).
+        
+        Args:
+            image_path: Path to the image file
+            target_height: Target height for the image (default 768)
+        
+        Returns:
+            Path to the preprocessed image
+        """
+        try:
+            # Open image
+            img = Image.open(image_path)
+            logger.debug(f"Original image size: {img.size}")
+            
+            # Get original dimensions
+            width, height = img.size
+            aspect_ratio = width / height
+            
+            # Calculate target width to maintain aspect ratio
+            target_width = int(target_height * aspect_ratio)
+            
+            # Resize image maintaining aspect ratio
+            img_resized = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            logger.debug(f"Resized image to: {img_resized.size}")
+            
+            # Save the processed image back
+            img_resized.save(image_path, quality=95)
+            logger.debug(f"Saved preprocessed image to: {image_path}")
+            
+            return image_path
+        
+        except Exception as e:
+            logger.warning(f"Image preprocessing failed: {e}. Continuing with original image.")
+            return image_path
     
     async def _download_image(
         self,
@@ -107,9 +146,17 @@ class IDMVTONService:
             logger.info(f"Downloading user photo from: {user_photo_url[:50]}...")
             user_photo_path = await self._download_image(user_photo_url, temp_dir, 0)
             
+            # Preprocess user photo to ensure proper aspect ratio
+            logger.info("Preprocessing user photo...")
+            user_photo_path = self._preprocess_image(user_photo_path, target_height=768)
+            
             # Download first clothing image (IDM-VTON works with one garment at a time)
             logger.info(f"Downloading clothing image from: {clothing_image_urls[0][:50]}...")
             clothing_path = await self._download_image(clothing_image_urls[0], temp_dir, 1)
+            
+            # Preprocess clothing image
+            logger.info("Preprocessing clothing image...")
+            clothing_path = self._preprocess_image(clothing_path, target_height=768)
             
             logger.info("Calling IDM-VTON via Replicate API...")
             logger.debug(f"Files exist: user={os.path.exists(user_photo_path)}, clothing={os.path.exists(clothing_path)}")
