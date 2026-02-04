@@ -156,13 +156,11 @@ services:
     container_name: aesthetiq-mcp-servers
     expose:
       - "8010"
-    env_file:
-      - .env.prod
     environment:
-      - PORT=8010
-      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
-      - BACKEND_URL=https://aesthetiq-backend.onrender.com
-      - MONGODB_URI=${MONGODB_URI}
+      PORT: "8010"
+      EMBEDDING_SERVICE_URL: "http://embedding_service:8004"
+      BACKEND_URL: "https://aesthetiq-backend.onrender.com"
+      MONGODB_URI: "mongodb+srv://avdbecker_db_user:0iHyTbUnlhjurYMR@cluster0.aeh5vrn.mongodb.net/?retryWrites=true&w=majority"
     networks:
       - aesthetiq-network
     depends_on:
