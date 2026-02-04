@@ -96,6 +96,20 @@ export class AgentService {
 
     if (request.attached_outfits) {
       body.attached_outfits = request.attached_outfits;
+      request.attached_outfits.forEach((outfit: any, i: number) => {
+        const items = outfit?.items ?? {};
+        ['top', 'bottom', 'outerwear', 'footwear', 'dress'].forEach((slot) => {
+          const item = items[slot];
+          if (item?.colors?.length) {
+            this.logger.log(`[Chat DEBUG] Forwarding outfit ${i + 1} ${slot}: colors=${JSON.stringify(item.colors)}`);
+          }
+        });
+        (items.accessories ?? []).forEach((acc: any, j: number) => {
+          if (acc?.colors?.length) {
+            this.logger.log(`[Chat DEBUG] Forwarding outfit ${i + 1} accessory ${j + 1}: colors=${JSON.stringify(acc.colors)}`);
+          }
+        });
+      });
     }
 
     if (request.swap_intents) {
@@ -175,6 +189,21 @@ export class AgentService {
 
       if (request.attached_outfits) {
         body.attached_outfits = request.attached_outfits;
+        // [DEBUG] Log outfit colors forwarded to Python
+        request.attached_outfits.forEach((outfit: any, i: number) => {
+          const items = outfit?.items ?? {};
+          ['top', 'bottom', 'outerwear', 'footwear', 'dress'].forEach((slot) => {
+            const item = items[slot];
+            if (item?.colors?.length) {
+              this.logger.log(`[Chat DEBUG] Forwarding outfit ${i + 1} ${slot}: colors=${JSON.stringify(item.colors)}`);
+            }
+          });
+          (items.accessories ?? []).forEach((acc: any, j: number) => {
+            if (acc?.colors?.length) {
+              this.logger.log(`[Chat DEBUG] Forwarding outfit ${i + 1} accessory ${j + 1}: colors=${JSON.stringify(acc.colors)}`);
+            }
+          });
+        });
       }
 
       if (request.swap_intents) {

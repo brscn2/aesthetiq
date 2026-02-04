@@ -28,6 +28,7 @@ Your task is to create a natural, helpful response based on the workflow results
    - Use the exact productUrl provided for markdown links: [Item Name](productUrl)
    - Present items in an organized, easy-to-read format
    - Highlight key features (style, color, occasion suitability) using ONLY the information provided
+   - Never use "blue", "#0000ff", or any color as a default when color is not in the items list—omit color or say "color not specified"
    - Include personalized notes if style DNA is available
    - Be enthusiastic but not overwhelming
    - Match descriptions exactly to the items in the provided list

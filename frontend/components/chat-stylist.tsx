@@ -15,8 +15,10 @@ import { Markdown } from "@/components/ui/markdown"
 import { AgentProgress } from "@/components/agent-progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { useAuth } from "@clerk/nextjs"
 import { useChatApi, generateMessageId } from "@/lib/chat-api"
 import { useApi } from "@/lib/api"
+import { getClosestColorName } from "@/lib/colors"
 import type { ClothingItem, DoneEvent, OutfitAttachment, OutfitSwapIntent } from "@/types/chat"
 import type { Outfit, WardrobeItem, UpdateOutfitDto } from "@/types/api"
 
@@ -64,7 +66,7 @@ declare global {
 }
 
 const contextChips = ["Business Casual", "Date Night", "Travel", "Eco-Friendly"]
-const TEMP_USER_ID = "507f1f77bcf86cd799439011"
+const FALLBACK_USER_ID = "507f1f77bcf86cd799439011" // used only when not signed in
 
 interface Message {
   id: string
@@ -135,10 +137,13 @@ export function ChatStylist({
   const previousSessionIdRef = useRef<string | null>(null)
   const previousResetTriggerRef = useRef<number>(0)
 
-  // Load wardrobe items for attaching individual clothing pieces
+  const { userId: authUserId } = useAuth()
+  const wardrobeUserId = authUserId ?? FALLBACK_USER_ID
+
+  // Load wardrobe items for attaching (use real user so list matches Gardırop page and new items appear)
   const { data: wardrobeItems, isLoading: isLoadingWardrobe } = useQuery({
-    queryKey: ["chat-wardrobe", TEMP_USER_ID],
-    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+    queryKey: ["chat-wardrobe", wardrobeUserId],
+    queryFn: () => wardrobeApi.getAll(wardrobeUserId),
     enabled: isWardrobeDialogOpen,
   })
 
@@ -247,6 +252,12 @@ export function ChatStylist({
   const buildOutfitItemSnapshot = useCallback((item: string | WardrobeItem | undefined) => {
     if (!item || typeof item === "string") return undefined
     const isWardrobe = "_id" in item && "userId" in item
+    const wardrobeItem = item as WardrobeItem
+    // Renkleri AI için okunabilir isimlere çevir (hex -> "Red", "Navy" vb.)
+    const colorNames =
+      isWardrobe && wardrobeItem.colors?.length
+        ? wardrobeItem.colors.map((hex) => getClosestColorName(hex))
+        : []
     return {
       id: item._id,
       name: item.subCategory || item.category || "Item",
@@ -255,9 +266,9 @@ export function ChatStylist({
       subCategory: item.subCategory,
       source: "wardrobe" as const,
       ...(isWardrobe && {
-        colors: (item as WardrobeItem).colors,
-        notes: (item as WardrobeItem).notes,
-        brand: (item as WardrobeItem).brand,
+        colors: colorNames.length > 0 ? colorNames : [],
+        notes: wardrobeItem.notes,
+        brand: wardrobeItem.brand,
       }),
     }
   }, [])
@@ -327,9 +338,19 @@ export function ChatStylist({
         }
       }
 
+      // When multiple items of the same type (e.g. 2 t-shirts) are attached, include color in the
+      // attachment name so the AI can tell them apart: "T-shirt (Red)", "T-shirt (Navy)"
+      const baseName = item.subCategory || item.category || item.brand || "Wardrobe item"
+      const colorSuffix =
+        snapshot?.colors?.length &&
+        snapshot.colors.length > 0
+          ? ` (${snapshot.colors.join(", ")})`
+          : ""
+      const name = `${baseName}${colorSuffix}`
+
       return {
         id: `wardrobe:${item._id}`,
-        name: item.subCategory || item.category || item.brand || "Wardrobe item",
+        name,
         items,
       }
     },
@@ -552,6 +573,24 @@ export function ChatStylist({
     // Use activeSessionId from props if provided, otherwise use sessionState.sessionId
     const sessionIdToUse = activeSessionId ?? sessionState.sessionId ?? null
 
+    // [DEBUG] Log outfit colors being sent so we can verify they reach the model
+    if (attachedOutfits.length > 0) {
+      attachedOutfits.forEach((outfit, i) => {
+        const items = outfit.items as Record<string, { name?: string; colors?: string[] } | undefined>
+        ;["top", "bottom", "outerwear", "footwear", "dress"].forEach((slot) => {
+          const item = items?.[slot]
+          if (item?.colors?.length) {
+            console.log(`[Chat DEBUG] Sending outfit ${i + 1} ${slot}: name=${item.name} colors=`, item.colors)
+          }
+        })
+        ;(items?.accessories as { name?: string; colors?: string[] }[] | undefined)?.forEach((acc, j) => {
+          if (acc?.colors?.length) {
+            console.log(`[Chat DEBUG] Sending outfit ${i + 1} accessory ${j + 1}: colors=`, acc.colors)
+          }
+        })
+      })
+    }
+
     // Send to the conversational agent API
     await sendMessage(messageContent, sessionIdToUse, {
       attachedOutfits: attachedOutfits.length > 0 ? attachedOutfits : undefined,
@@ -574,40 +613,51 @@ export function ChatStylist({
     })
   }
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
+  const handleImageSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files) return
 
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"))
-    if (imageFiles.length === 0) {
-      toast.error("Please select image files only")
-      return
-    }
-
-    if (imageFiles.length + attachedImages.length > 5) {
-      toast.error("Maximum 5 images allowed")
-      return
-    }
-
-    imageFiles.forEach((file) => {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`Image ${file.name} is too large. Maximum size is 5MB.`)
+      const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"))
+      if (imageFiles.length === 0) {
+        toast.error("Please select image files only")
         return
       }
 
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const imageUrl = event.target?.result as string
-        setAttachedImages((prev) => [...prev, imageUrl])
+      if (imageFiles.length + attachedImages.length > 5) {
+        toast.error("Maximum 5 images allowed")
+        return
       }
-      reader.readAsDataURL(file)
-    })
 
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-  }
+      for (const file of imageFiles) {
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`Image ${file.name} is too large. Maximum size is 5MB.`)
+          return
+        }
+      }
+
+      // Read files in selection order so the same order is sent to the model (no async reordering)
+      const readAsDataUrl = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(file)
+        })
+
+      try {
+        const dataUrls = await Promise.all(imageFiles.map(readAsDataUrl))
+        setAttachedImages((prev) => [...prev, ...dataUrls])
+      } catch {
+        toast.error("Failed to read one or more images")
+      }
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    },
+    [attachedImages.length],
+  )
 
   const removeImage = (index: number) => {
     setAttachedImages((prev) => prev.filter((_, i) => i !== index))

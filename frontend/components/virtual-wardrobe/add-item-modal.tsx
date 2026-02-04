@@ -431,17 +431,16 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     },
     onMutate: async () => {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["wardrobe", userId] })
+      await queryClient.cancelQueries({ queryKey: ["wardrobe"] })
 
-      // Snapshot the previous value
-      const previousItems = queryClient.getQueryData(["wardrobe", userId])
-
-      // Return context with the previous items for rollback
+      // Snapshot the previous value for rollback
+      const previousItems = queryClient.getQueriesData({ queryKey: ["wardrobe"] })
       return { previousItems }
     },
     onSuccess: () => {
-      // Invalidate and refetch to get the real data from server
-      queryClient.invalidateQueries({ queryKey: ["wardrobe", userId] })
+      // Invalidate wardrobe lists so they refresh (wardrobe page + chat "Attach from wardrobe" dialog)
+      queryClient.invalidateQueries({ queryKey: ["wardrobe"] })
+      queryClient.invalidateQueries({ queryKey: ["chat-wardrobe"] })
       
       toast.success("Item added to wardrobe successfully!", { duration: 2000 })
       
@@ -470,8 +469,10 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     },
     onError: (error: any, _newItem, context) => {
       // Rollback to previous state on error
-      if (context?.previousItems) {
-        queryClient.setQueryData(["wardrobe", userId], context.previousItems)
+      if (context?.previousItems && Array.isArray(context.previousItems)) {
+        context.previousItems.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data)
+        })
       }
 
       // Extract detailed error message
@@ -486,7 +487,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     },
     onSettled: () => {
       // Always refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["wardrobe", userId] })
+      queryClient.invalidateQueries({ queryKey: ["wardrobe"] })
     },
   })
 

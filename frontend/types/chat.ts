@@ -194,11 +194,11 @@ export interface OutfitItemSnapshot {
   category?: string;
   subCategory?: string;
   source: "wardrobe" | "commerce" | "web";
-  /** Renk(ler) - AI için bağlam */
+  /** Color(s) for AI context */
   colors?: string[];
-  /** Kullanıcı notu / açıklama */
+  /** User notes / description */
   notes?: string;
-  /** Marka */
+  /** Brand */
   brand?: string;
 }
 

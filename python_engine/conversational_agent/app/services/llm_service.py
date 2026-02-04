@@ -47,9 +47,11 @@ class LLMService:
         self.settings = get_settings()
         self.model = model or self.settings.OPENAI_MODEL
         self.temperature = temperature if temperature is not None else self.settings.OPENAI_TEMPERATURE
-        
+
         self._llm: Optional[ChatOpenAI] = None
+        self._vision_llm: Optional[ChatOpenAI] = None
         self._init_llm()
+        self._init_vision_llm()
     
     def _init_llm(self) -> None:
         """Initialize the ChatOpenAI instance."""
@@ -67,6 +69,24 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
             raise
+
+    def _init_vision_llm(self) -> None:
+        """Initialize the vision-capable LLM (for messages with images)."""
+        if not self.settings.OPENAI_API_KEY:
+            return
+        try:
+            vision_model = getattr(
+                self.settings, "OPENAI_VISION_MODEL", "gpt-4o-mini"
+            )
+            self._vision_llm = ChatOpenAI(
+                model=vision_model,
+                temperature=self.temperature,
+                api_key=self.settings.OPENAI_API_KEY,
+            )
+            logger.info(f"Vision LLM initialized with model: {vision_model}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize vision LLM: {e}")
+            self._vision_llm = None
     
     @property
     def llm(self) -> ChatOpenAI:
@@ -74,6 +94,13 @@ class LLMService:
         if self._llm is None:
             raise RuntimeError("LLM not initialized. Check OPENAI_API_KEY.")
         return self._llm
+
+    @property
+    def vision_llm(self) -> ChatOpenAI:
+        """Get the vision-capable LLM (for image inputs). Falls back to llm if not set."""
+        if self._vision_llm is not None:
+            return self._vision_llm
+        return self.llm
     
     async def chat(
         self,

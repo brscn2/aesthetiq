@@ -5,13 +5,13 @@ import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
+import { useAuth } from "@clerk/nextjs"
 import { useApi } from "@/lib/api"
 import { Category, WardrobeItem } from "@/types/api"
 import { colorMatchesFilter } from "@/lib/colors"
 import { ItemDetailModal } from "./item-detail-modal"
 
-// Temporary userId - in production, get from auth context
-const TEMP_USER_ID = "507f1f77bcf86cd799439011" // Replace with actual user ID from auth
+const FALLBACK_USER_ID = "507f1f77bcf86cd799439011" // used only when not signed in
 
 interface WardrobeFilters {
   category: Category | null
@@ -87,19 +87,21 @@ function LoadingSkeleton() {
 }
 
 export function InventoryGrid({ searchQuery, filters }: InventoryGridProps) {
+  const { userId: authUserId } = useAuth()
   const { wardrobeApi } = useApi()
   const [selectedItem, setSelectedItem] = useState<WardrobeItem | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  
+  const wardrobeUserId = authUserId ?? FALLBACK_USER_ID
+
   // Fetch all items (without search) to know if wardrobe is truly empty
   const { data: allItems } = useQuery({
-    queryKey: ["wardrobe", TEMP_USER_ID],
-    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID),
+    queryKey: ["wardrobe", wardrobeUserId],
+    queryFn: () => wardrobeApi.getAll(wardrobeUserId),
   })
-  
+
   const { data: wardrobeItems, isLoading, error } = useQuery({
-    queryKey: ["wardrobe", TEMP_USER_ID, searchQuery, filters],
-    queryFn: () => wardrobeApi.getAll(TEMP_USER_ID, undefined, undefined, searchQuery),
+    queryKey: ["wardrobe", wardrobeUserId, searchQuery, filters],
+    queryFn: () => wardrobeApi.getAll(wardrobeUserId, undefined, undefined, searchQuery),
     placeholderData: (previousData) => previousData, // Keep previous data while fetching
   })
   

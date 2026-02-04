@@ -30,9 +30,17 @@ import databaseConfig from './config/database.config';
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('database.uri'),
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const uri = configService.get<string>('database.uri') ?? 'mongodb://127.0.0.1:27017/aesthetiq';
+        // Force IPv4 and single-instance: avoid ECONNREFUSED when MongoDB runs in Docker with 27017:27017
+        const normalizedUri = uri.replace(/^mongodb:\/\/localhost/, 'mongodb://127.0.0.1');
+        return {
+          uri: normalizedUri,
+          directConnection: true,
+          serverSelectionTimeoutMS: 10000,
+          connectTimeoutMS: 10000,
+        };
+      },
       inject: [ConfigService],
     }),
     UsersModule,
