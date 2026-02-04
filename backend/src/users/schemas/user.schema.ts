@@ -57,6 +57,9 @@ export class User {
   gender?: Gender;
 
   @Prop()
+  birthDate?: Date;
+
+  @Prop()
   avatarUrl?: string;
 
   @Prop()

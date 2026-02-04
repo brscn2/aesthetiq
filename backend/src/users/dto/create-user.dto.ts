@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsOptional,
+  IsDateString,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -76,6 +77,11 @@ export class CreateUserDto {
   @IsEnum(Gender)
   @IsOptional()
   gender?: Gender;
+
+  @ApiProperty({ required: false, example: '1995-06-15' })
+  @IsDateString()
+  @IsOptional()
+  birthDate?: string;
 
   @ApiProperty({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   @IsEnum(SubscriptionStatus)

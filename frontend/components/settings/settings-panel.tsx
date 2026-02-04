@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
@@ -25,6 +26,8 @@ export function SettingsPanel() {
   const [cropperImage, setCropperImage] = useState<string | null>(null)
   const [genderValue, setGenderValue] = useState<Gender | "">("")
   const [isUpdatingGender, setIsUpdatingGender] = useState(false)
+  const [birthDateValue, setBirthDateValue] = useState("")
+  const [isUpdatingBirthDate, setIsUpdatingBirthDate] = useState(false)
 
   const isLoading = userLoading || settingsLoading
   
@@ -38,6 +41,14 @@ export function SettingsPanel() {
       setGenderValue("")
     }
   }, [user?.gender])
+
+  useEffect(() => {
+    if (user?.birthDate) {
+      setBirthDateValue(user.birthDate.slice(0, 10))
+    } else {
+      setBirthDateValue("")
+    }
+  }, [user?.birthDate])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -127,6 +138,28 @@ export function SettingsPanel() {
       toast({ title: "Failed to update gender", variant: "destructive" })
     } finally {
       setIsUpdatingGender(false)
+    }
+  }
+
+  const handleBirthDateChange = async (value: string) => {
+    const previousBirthDate = user?.birthDate ? user.birthDate.slice(0, 10) : ""
+    setBirthDateValue(value)
+
+    if (!value || value === previousBirthDate) {
+      return
+    }
+
+    setIsUpdatingBirthDate(true)
+    try {
+      await userApi.updateCurrentUser({ birthDate: value })
+      await refetchUser()
+      toast({ title: "Birth date updated" })
+    } catch (error) {
+      console.error("Failed to update birth date:", error)
+      setBirthDateValue(previousBirthDate)
+      toast({ title: "Failed to update birth date", variant: "destructive" })
+    } finally {
+      setIsUpdatingBirthDate(false)
     }
   }
 
@@ -224,7 +257,7 @@ export function SettingsPanel() {
       </Card>
 
       {/* Profile Basics */}
-      <Card className="border-border">
+      <Card className="border-border" id="profile-basics">
         <CardContent className="p-4 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
@@ -233,21 +266,32 @@ export function SettingsPanel() {
                 Used to personalize recommendations and sizing.
               </p>
             </div>
-            <div className="w-full sm:w-64 space-y-2">
-              <Label>Gender</Label>
-              <Select
-                value={genderValue}
-                onValueChange={handleGenderChange}
-                disabled={isUpdatingGender}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={Gender.MALE}>Male</SelectItem>
-                  <SelectItem value={Gender.FEMALE}>Female</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="w-full sm:w-96 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Gender</Label>
+                <Select
+                  value={genderValue}
+                  onValueChange={handleGenderChange}
+                  disabled={isUpdatingGender}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={Gender.MALE}>Male</SelectItem>
+                    <SelectItem value={Gender.FEMALE}>Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Birth Date</Label>
+                <Input
+                  type="date"
+                  value={birthDateValue}
+                  onChange={(event) => handleBirthDateChange(event.target.value)}
+                  disabled={isUpdatingBirthDate}
+                />
+              </div>
             </div>
           </div>
         </CardContent>

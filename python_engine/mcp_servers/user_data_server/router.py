@@ -61,6 +61,8 @@ async def test_profile(user_id: str = Query(...)):
             "user_id": user_id,
             "name": profile.name,
             "email": profile.email,
+            "gender": profile.gender,
+            "birth_date": profile.birth_date,
             "subscription_status": profile.subscription_status,
             "role": profile.role,
             "settings": profile.settings.model_dump(),

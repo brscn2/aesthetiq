@@ -108,6 +108,7 @@ const createUserApi = (client: AxiosInstance) => ({
     name?: string;
     avatarUrl?: string;
     gender?: Gender;
+    birthDate?: string;
   }): Promise<User> => client.patch("/users/me", data).then((res) => res.data),
   updateTryOnPhoto: (photoUrl: string): Promise<User> =>
     client

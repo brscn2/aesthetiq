@@ -7,11 +7,14 @@ from typing import Any, Dict, Optional
 from bson import ObjectId
 
 from mcp_servers.user_data_server import db
+from datetime import date, datetime
+
 from mcp_servers.user_data_server.schemas import (
     UserProfile,
     UserSettings,
     SubscriptionStatus,
     UserRole,
+    Gender,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,6 +75,31 @@ def _parse_role(doc: Dict[str, Any]) -> UserRole:
         return UserRole.USER
 
 
+def _parse_gender(doc: Dict[str, Any]) -> Optional[Gender]:
+    """Parse gender from document."""
+    gender = doc.get("gender")
+    if not gender:
+        return None
+    try:
+        return Gender(gender)
+    except ValueError:
+        return None
+
+
+def _parse_birth_date(doc: Dict[str, Any]) -> Optional[str]:
+    """Parse birth date as ISO (YYYY-MM-DD) string."""
+    birth_date = doc.get("birthDate") or doc.get("birth_date")
+    if not birth_date:
+        return None
+    if isinstance(birth_date, datetime):
+        return birth_date.date().isoformat()
+    if isinstance(birth_date, date):
+        return birth_date.isoformat()
+    if isinstance(birth_date, str):
+        return birth_date[:10]
+    return None
+
+
 async def get_user_profile(user_id: str) -> Optional[UserProfile]:
     """
     Get user profile by clerkId.
@@ -101,6 +129,8 @@ async def get_user_profile(user_id: str) -> Optional[UserProfile]:
                 email=doc.get("email", ""),
                 name=doc.get("name", ""),
                 avatar_url=doc.get("avatarUrl"),
+                gender=_parse_gender(doc),
+                birth_date=_parse_birth_date(doc),
                 subscription_status=_parse_subscription_status(doc),
                 role=_parse_role(doc),
                 settings=_parse_settings(doc),

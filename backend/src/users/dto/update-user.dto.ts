@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsInt,
+  IsDateString,
   Min,
   Max,
   ValidateNested,
@@ -97,6 +98,11 @@ export class UpdateUserDto {
   @IsEnum(Gender)
   @IsOptional()
   gender?: Gender;
+
+  @ApiProperty({ required: false, example: '1995-06-15' })
+  @IsDateString()
+  @IsOptional()
+  birthDate?: string;
 
   @ApiProperty({ enum: SubscriptionStatus, required: false })
   @IsEnum(SubscriptionStatus)

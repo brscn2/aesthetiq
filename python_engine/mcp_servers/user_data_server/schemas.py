@@ -45,6 +45,11 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
 
 
+class Gender(str, Enum):
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+
+
 # -----------------------------------------------------------------------------
 # Nested models for User
 # -----------------------------------------------------------------------------
@@ -80,6 +85,8 @@ class User(BaseModel):
     email: str
     name: str
     avatarUrl: Optional[str] = None
+    gender: Optional[Gender] = None
+    birthDate: Optional[str] = None
     subscriptionStatus: SubscriptionStatus = SubscriptionStatus.FREE
     role: UserRole = UserRole.USER
     settings: UserSettings = Field(default_factory=UserSettings)
@@ -99,6 +106,8 @@ class UserProfile(BaseModel):
     email: str
     name: str
     avatar_url: Optional[str] = None
+    gender: Optional[Gender] = None
+    birth_date: Optional[str] = None
     subscription_status: SubscriptionStatus = SubscriptionStatus.FREE
     role: UserRole = UserRole.USER
     settings: UserSettings = Field(default_factory=UserSettings)

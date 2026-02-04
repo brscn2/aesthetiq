@@ -60,6 +60,7 @@ export interface User {
   name: string;
   avatarUrl?: string;
   gender?: Gender;
+  birthDate?: string;
   subscriptionStatus: SubscriptionStatus;
   role?: "USER" | "ADMIN";
   settings: UserSettings;
@@ -73,6 +74,7 @@ export interface CreateUserDto {
   name: string;
   avatarUrl?: string;
   gender?: Gender;
+  birthDate?: string;
   subscriptionStatus?: SubscriptionStatus;
   settings?: UserSettings;
 }
@@ -83,6 +85,7 @@ export interface UpdateUserDto {
   name?: string;
   avatarUrl?: string;
   gender?: Gender;
+  birthDate?: string;
   subscriptionStatus?: SubscriptionStatus;
   settings?: UserSettings;
 }
