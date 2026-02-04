@@ -161,6 +161,8 @@ services:
     environment:
       - PORT=8010
       - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+      - BACKEND_URL=https://aesthetiq-backend.onrender.com
+      - MONGODB_URI=${MONGODB_URI}
     networks:
       - aesthetiq-network
     depends_on:
