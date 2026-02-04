@@ -160,8 +160,10 @@ function formatCategory(category) {
   const categories = {
     TOP: 'Top',
     BOTTOM: 'Bottom',
-    SHOE: 'Shoe',
+    OUTERWEAR: 'Outerwear',
+    FOOTWEAR: 'Footwear',
     ACCESSORY: 'Accessory',
+    DRESS: 'Dress',
   };
   return categories[category] || category;
 }

@@ -12,6 +12,8 @@ import type {
   ChatSessionState,
   StreamingProgress,
   ClothingItem,
+  OutfitAttachment,
+  OutfitSwapIntent,
 } from "@/types/chat";
 
 // =============================================================================
@@ -278,6 +280,10 @@ export interface UseChatApiReturn {
   sendMessage: (
     message: string,
     sessionId?: string | null,
+    options?: {
+      attachedOutfits?: OutfitAttachment[];
+      swapIntents?: OutfitSwapIntent[];
+    },
   ) => Promise<DoneEvent | null>;
   /** Cancel the current request */
   cancelRequest: () => void;
@@ -304,7 +310,9 @@ function filterItemsByResponseIds(
  * React hook for using the conversational agent chat API.
  * Handles streaming, session management, and multi-turn conversations.
  */
-export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
+export function useChatApi(
+  hookOptions: UseChatApiOptions = {},
+): UseChatApiReturn {
   const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -388,6 +396,10 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
     async (
       message: string,
       sessionId?: string | null,
+      messageOptions?: {
+        attachedOutfits?: OutfitAttachment[];
+        swapIntents?: OutfitSwapIntent[];
+      },
     ): Promise<DoneEvent | null> => {
       // Cancel any existing request
       cancelRequest();
@@ -418,7 +430,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
         error: null,
       }));
 
-      options.onStreamStart?.();
+      hookOptions.onStreamStart?.();
 
       try {
         const token = await getClerkJwt(getToken);
@@ -430,6 +442,8 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
           sessionId: sessionId ?? sessionState.sessionId ?? undefined,
           // Include pending clarification context if available
           pendingContext: sessionState.pendingClarification || undefined,
+          attachedOutfits: messageOptions?.attachedOutfits,
+          swapIntents: messageOptions?.swapIntents,
         };
 
         // Stream the response
@@ -538,7 +552,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
           currentNode: null,
         }));
 
-        options.onStreamEnd?.(result);
+        hookOptions.onStreamEnd?.(result);
         return result;
       } catch (error) {
         const errorMessage =
@@ -551,7 +565,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
           currentNode: null,
           error: errorMessage,
         }));
-        options.onStreamEnd?.(null);
+        hookOptions.onStreamEnd?.(null);
         return null;
       }
     },
@@ -560,7 +574,7 @@ export function useChatApi(options: UseChatApiOptions = {}): UseChatApiReturn {
       sessionState.sessionId,
       progress.currentNode,
       cancelRequest,
-      options,
+      hookOptions,
     ],
   );
 

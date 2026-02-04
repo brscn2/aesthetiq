@@ -14,6 +14,22 @@ export interface AgentChatRequest {
     retrieved_items?: any[];
     iteration?: number;
   };
+  attached_outfits?: Array<{
+    id: string;
+    name: string;
+    items: {
+      outerwear?: any;
+      top?: any;
+      bottom?: any;
+      footwear?: any;
+      dress?: any;
+      accessories: any[];
+    };
+  }>;
+  swap_intents?: Array<{
+    outfitId: string;
+    category: string;
+  }>;
   auth_token?: string;
 }
 
@@ -31,9 +47,14 @@ export class AgentService {
   private readonly timeout: number;
 
   constructor(private configService: ConfigService) {
-    this.gatewayUrl = this.configService.get<string>('PYTHON_GATEWAY_URL', 'http://localhost:8000');
+    this.gatewayUrl = this.configService.get<string>(
+      'PYTHON_GATEWAY_URL',
+      'http://localhost:8000',
+    );
     this.timeout = this.configService.get<number>('AGENT_TIMEOUT', 120000); // 2 minutes default
-    this.logger.log(`Agent service initialized with gateway: ${this.gatewayUrl}`);
+    this.logger.log(
+      `Agent service initialized with gateway: ${this.gatewayUrl}`,
+    );
   }
 
   /**
@@ -41,19 +62,23 @@ export class AgentService {
    */
   async chat(request: AgentChatRequest): Promise<AgentChatResponse> {
     const url = `${this.gatewayUrl}/api/v1/agent/chat`;
-    
+
     this.logger.log(`Sending chat request for user ${request.user_id}`);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     // Forward the auth token if provided
     if (request.auth_token) {
       headers['X-Auth-Token'] = request.auth_token;
-      this.logger.debug(`Forwarding auth token to Python agent (length: ${request.auth_token.length})`);
+      this.logger.debug(
+        `Forwarding auth token to Python agent (length: ${request.auth_token.length})`,
+      );
     } else {
-      this.logger.warn(`No auth token provided for user ${request.user_id} - session saves will fail`);
+      this.logger.warn(
+        `No auth token provided for user ${request.user_id} - session saves will fail`,
+      );
     }
 
     const body: any = {
@@ -61,10 +86,18 @@ export class AgentService {
       session_id: request.session_id,
       message: request.message,
     };
-    
+
     // Forward pending_context if provided (map camelCase to snake_case for Python)
     if (request.pending_context) {
       body.pending_context = request.pending_context;
+    }
+
+    if (request.attached_outfits) {
+      body.attached_outfits = request.attached_outfits;
+    }
+
+    if (request.swap_intents) {
+      body.swap_intents = request.swap_intents;
     }
 
     const response = await fetch(url, {
@@ -91,7 +124,7 @@ export class AgentService {
    */
   async streamChat(request: AgentChatRequest, res: Response): Promise<void> {
     const url = `${this.gatewayUrl}/api/v1/agent/chat/stream`;
-    
+
     this.logger.log(`Starting streaming chat for user ${request.user_id}`);
 
     // Set SSE headers
@@ -114,9 +147,9 @@ export class AgentService {
     // Build headers
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
+      Accept: 'text/event-stream',
     };
-    
+
     // Forward the auth token if provided
     if (request.auth_token) {
       headers['X-Auth-Token'] = request.auth_token;
@@ -128,10 +161,18 @@ export class AgentService {
         session_id: request.session_id,
         message: request.message,
       };
-      
+
       // Forward pending_context if provided (map camelCase to snake_case for Python)
       if (request.pending_context) {
         body.pending_context = request.pending_context;
+      }
+
+      if (request.attached_outfits) {
+        body.attached_outfits = request.attached_outfits;
+      }
+
+      if (request.swap_intents) {
+        body.swap_intents = request.swap_intents;
       }
 
       const response = await fetch(url, {
@@ -143,15 +184,21 @@ export class AgentService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error(`Agent stream failed: ${response.status} - ${errorText}`);
-        res.write(`data: ${JSON.stringify({ type: 'error', message: `Agent service error: ${response.status}` })}\n\n`);
+        this.logger.error(
+          `Agent stream failed: ${response.status} - ${errorText}`,
+        );
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: `Agent service error: ${response.status}` })}\n\n`,
+        );
         res.end();
         return;
       }
 
       if (!response.body) {
         this.logger.error('No response body from agent');
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'No response from agent' })}\n\n`);
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'No response from agent' })}\n\n`,
+        );
         res.end();
         return;
       }
@@ -163,7 +210,7 @@ export class AgentService {
       try {
         while (true) {
           const { done, value } = await reader.read();
-          
+
           if (done) {
             this.logger.log('Stream completed');
             break;
@@ -185,20 +232,23 @@ export class AgentService {
 
       clearTimeout(timeoutId);
       res.end();
-      
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error.name === 'AbortError') {
         this.logger.log('Request timed out or was aborted');
         if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ type: 'error', message: 'Request timed out' })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: 'Request timed out' })}\n\n`,
+          );
           res.end();
         }
       } else {
         this.logger.error(`Stream error: ${error.message}`);
         if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`,
+          );
           res.end();
         }
       }
@@ -213,7 +263,7 @@ export class AgentService {
       const response = await fetch(`${this.gatewayUrl}/api/v1/health`, {
         signal: AbortSignal.timeout(5000),
       });
-      
+
       if (response.ok) {
         return { status: 'healthy', gateway: this.gatewayUrl };
       }

@@ -30,8 +30,10 @@ interface WardrobeControlBarProps {
 const CATEGORY_OPTIONS = [
   { value: Category.TOP, label: "Tops" },
   { value: Category.BOTTOM, label: "Bottoms" },
-  { value: Category.SHOE, label: "Footwear" },
+  { value: Category.OUTERWEAR, label: "Outerwear" },
+  { value: Category.FOOTWEAR, label: "Footwear" },
   { value: Category.ACCESSORY, label: "Accessories" },
+  { value: Category.DRESS, label: "Dresses" },
 ]
 
 export function WardrobeControlBar({ 

@@ -1,15 +1,16 @@
 "use client";
 
 import { StyleItem } from "@/lib/style-api";
+import { WardrobeItem } from "@/types/api";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Check } from "lucide-react";
 import Image from "next/image";
 
 interface StyleItemCardProps {
-  item: StyleItem;
+  item: StyleItem | WardrobeItem;
   isSelected?: boolean;
-  onSelect?: (item: StyleItem) => void;
+  onSelect?: (item: StyleItem | WardrobeItem) => void;
 }
 
 export function StyleItemCard({
@@ -17,9 +18,18 @@ export function StyleItemCard({
   isSelected = false,
   onSelect,
 }: StyleItemCardProps) {
-  // Use the first image from imageUrls
-  const imageUrl =
-    item.imageUrls?.[0] || item.primaryImageUrl || "/placeholder.png";
+  // Check if it's a StyleItem or WardrobeItem
+  const isStyleItem = "name" in item;
+
+  // Use the first image from imageUrls for StyleItem, or imageUrl for WardrobeItem
+  const imageUrl = isStyleItem
+    ? item.imageUrls?.[0] || item.primaryImageUrl || "/placeholder.png"
+    : item.processedImageUrl || item.imageUrl || "/placeholder.png";
+
+  // Get name - StyleItem has name, WardrobeItem uses subCategory or category
+  const itemName = isStyleItem
+    ? item.name
+    : item.subCategory || item.category || "Wardrobe Item";
 
   const handleCardClick = () => {
     if (onSelect) {
@@ -48,31 +58,47 @@ export function StyleItemCard({
           </div>
         )}
 
-        {/* External Link Button - Visible on hover with primary color */}
-        <a
-          href={item.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:scale-110 border border-primary opacity-0 group-hover:opacity-100"
-          onClick={handleLinkClick}
-          title="View on store website"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </a>
+        {/* External Link Button - Only show for StyleItems with sourceUrl */}
+        {isStyleItem && item.sourceUrl && (
+          <a
+            href={item.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:scale-110 border border-primary opacity-0 group-hover:opacity-100"
+            onClick={handleLinkClick}
+            title="View on store website"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
 
         <Image
           src={imageUrl}
-          alt={item.name}
+          alt={itemName}
           fill
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
         />
-        {item.colorHex && (
+        {/* Color indicator - Only for StyleItem with colorHex */}
+        {isStyleItem && item.colorHex && (
           <div
             className="absolute right-2 bottom-2 h-8 w-8 rounded-full border-2 border-white shadow-lg"
             style={{ backgroundColor: item.colorHex }}
             title={item.color}
           />
+        )}
+        {/* Color indicator - For WardrobeItem with colors array */}
+        {!isStyleItem && item.colors && item.colors.length > 0 && (
+          <div className="absolute right-2 bottom-2 flex gap-1">
+            {item.colors.slice(0, 3).map((color, idx) => (
+              <div
+                key={idx}
+                className="h-6 w-6 rounded-full border-2 border-white shadow-lg"
+                style={{ backgroundColor: color }}
+                title={color}
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -86,7 +112,7 @@ export function StyleItemCard({
                 {item.brand}
               </Badge>
             )}
-            {item.store && (
+            {isStyleItem && item.store && (
               <span className="text-xs text-muted-foreground uppercase">
                 {item.store}
               </span>
@@ -95,7 +121,7 @@ export function StyleItemCard({
 
           {/* Name */}
           <h3 className="line-clamp-2 font-medium text-foreground group-hover:text-primary">
-            {item.name}
+            {itemName}
           </h3>
 
           {/* Category & SubCategory */}
@@ -109,17 +135,24 @@ export function StyleItemCard({
             )}
           </div>
 
-          {/* Description */}
-          {item.description && (
+          {/* Description - Only for StyleItem */}
+          {isStyleItem && item.description && (
             <p className="line-clamp-2 text-xs text-muted-foreground">
               {item.description}
             </p>
           )}
 
-          {/* Material */}
-          {item.material && (
+          {/* Material - Only for StyleItem */}
+          {isStyleItem && item.material && (
             <p className="text-xs text-muted-foreground">
               <span className="font-medium">Material:</span> {item.material}
+            </p>
+          )}
+
+          {/* Notes - Only for WardrobeItem */}
+          {!isStyleItem && item.notes && (
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {item.notes}
             </p>
           )}
         </div>
@@ -128,9 +161,14 @@ export function StyleItemCard({
       {/* Footer */}
       <CardFooter className="flex items-center justify-between border-t p-4">
         <div className="flex flex-col">
-          {item.price && (
+          {isStyleItem && item.price && (
             <span className="text-lg font-semibold text-foreground">
               {item.price.formatted}
+            </span>
+          )}
+          {!isStyleItem && (
+            <span className="text-sm text-muted-foreground">
+              From your wardrobe
             </span>
           )}
         </div>

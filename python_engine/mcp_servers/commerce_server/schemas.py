@@ -1,4 +1,5 @@
 """Commerce server schemas - aligned with backend CommerceItem schema."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -13,8 +14,10 @@ from mcp_servers.shared.schemas import Category, SeasonalPaletteScores
 # Collection: commerceitems
 # -----------------------------------------------------------------------------
 
+
 class CommerceItem(BaseModel):
     """Commerce item as stored in MongoDB 'commerceitems' collection."""
+
     id: str = Field(..., description="Commerce item id (stringified ObjectId)")
     name: str
     description: Optional[str] = None
@@ -45,8 +48,10 @@ class CommerceItem(BaseModel):
 # Filter models (matching backend/src/commerce/dto/search-commerce-items.dto.ts)
 # -----------------------------------------------------------------------------
 
+
 class CommerceFilters(BaseModel):
     """Filters for querying commerce items."""
+
     search: Optional[str] = None  # Text search in name, description, tags
     category: Optional[Category] = None
     subCategory: Optional[str] = None  # Specific type: Jacket, Dress, Sneakers, etc.
@@ -67,6 +72,7 @@ class CommerceFilters(BaseModel):
 # -----------------------------------------------------------------------------
 # Request/Response models for MCP tool endpoints
 # -----------------------------------------------------------------------------
+
 
 class SearchCommerceItemsRequest(BaseModel):
     query: str

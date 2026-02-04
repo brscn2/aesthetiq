@@ -28,8 +28,10 @@ interface ItemDetailModalProps {
 const CATEGORY_LABELS: Record<Category, string> = {
   [Category.TOP]: "Top",
   [Category.BOTTOM]: "Bottom",
-  [Category.SHOE]: "Footwear",
+  [Category.OUTERWEAR]: "Outerwear",
+  [Category.FOOTWEAR]: "Footwear",
   [Category.ACCESSORY]: "Accessory",
+  [Category.DRESS]: "Dress",
 }
 
 export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalProps) {

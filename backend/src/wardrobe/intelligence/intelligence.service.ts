@@ -122,10 +122,16 @@ export class IntelligenceService {
     const topCount = items.filter((i) => i.category === 'TOP').length || 1;
     const bottomCount =
       items.filter((i) => i.category === 'BOTTOM').length || 1;
-    const shoeCount = items.filter((i) => i.category === 'SHOE').length || 1;
+    const footwearCount =
+      items.filter((i) => i.category === 'FOOTWEAR').length || 1;
+    const outerwearCount =
+      items.filter((i) => i.category === 'OUTERWEAR').length || 1;
+    const dressCount = items.filter((i) => i.category === 'DRESS').length || 1;
+    const accessoryCount =
+      items.filter((i) => i.category === 'ACCESSORY').length || 1;
 
     // Conservative estimate: cap at reasonable number to avoid inflated metrics
-    const combos = Math.min(topCount * bottomCount * shoeCount, 999);
+    const combos = Math.min(((topCount * bottomCount) + dressCount) * footwearCount * outerwearCount * accessoryCount, 999);
     return combos;
   }
 

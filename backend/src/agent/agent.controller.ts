@@ -83,6 +83,8 @@ export class AgentController {
       session_id: chatRequest.sessionId,
       message: chatRequest.message,
       pending_context: chatRequest.pendingContext,
+      attached_outfits: chatRequest.attachedOutfits,
+      swap_intents: chatRequest.swapIntents,
       auth_token: authToken,
     });
   }
@@ -133,6 +135,8 @@ Returns real-time progress updates as the AI processes your request.
         session_id: chatRequest.sessionId,
         message: chatRequest.message,
         pending_context: chatRequest.pendingContext,
+        attached_outfits: chatRequest.attachedOutfits,
+        swap_intents: chatRequest.swapIntents,
         auth_token: authToken,
       },
       res,

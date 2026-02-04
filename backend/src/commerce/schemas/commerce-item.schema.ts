@@ -7,8 +7,10 @@ export type CommerceItemDocument = CommerceItem & Document;
 export enum Category {
   TOP = 'TOP',
   BOTTOM = 'BOTTOM',
-  SHOE = 'SHOE',
+  OUTERWEAR = 'OUTERWEAR',
+  FOOTWEAR = 'FOOTWEAR',
   ACCESSORY = 'ACCESSORY',
+  DRESS = 'DRESS',
 }
 
 // Type for seasonal palette scores
@@ -101,7 +103,10 @@ CommerceItemSchema.index({ colors: 1 });
 CommerceItemSchema.index({ tags: 1 });
 CommerceItemSchema.index({ inStock: 1 });
 CommerceItemSchema.index({ price: 1 });
-CommerceItemSchema.index({ sku: 1, retailerId: 1 }, { unique: true, sparse: true });
+CommerceItemSchema.index(
+  { sku: 1, retailerId: 1 },
+  { unique: true, sparse: true },
+);
 
 // Text index for search
 CommerceItemSchema.index({ name: 'text', description: 'text', tags: 'text' });

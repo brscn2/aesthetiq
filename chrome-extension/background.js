@@ -269,7 +269,7 @@ async function handleMessage(message, sender) {
       }
 
     case 'GET_CATEGORIES':
-      return { categories: ['TOP', 'BOTTOM', 'SHOE', 'ACCESSORY'] };
+      return { categories: ['TOP', 'BOTTOM', 'OUTERWEAR', 'FOOTWEAR', 'ACCESSORY', 'DRESS'] };
 
     case 'GET_RECENT_ITEMS':
       await api.loadSettings();

@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/mcp"
 
     # CORS (internal service, called via gateway/agent)
-    ALLOWED_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: Union[list[str], str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -35,8 +38,10 @@ class Settings(BaseSettings):
     MONGODB_DB_COMMERCE: Optional[str] = None  # Defaults to MONGODB_DB_NAME if not set
     MONGODB_DB_USERS: Optional[str] = None  # Defaults to MONGODB_DB_NAME if not set
     MONGODB_DB_STYLE: Optional[str] = None  # Defaults to MONGODB_DB_NAME if not set
-    MONGODB_DB_COLOR_ANALYSIS: Optional[str] = None  # Defaults to MONGODB_DB_NAME if not set
-    
+    MONGODB_DB_COLOR_ANALYSIS: Optional[str] = (
+        None  # Defaults to MONGODB_DB_NAME if not set
+    )
+
     def model_post_init(self, __context):
         """Set default database names from MONGODB_DB_NAME if not explicitly set."""
         if self.MONGODB_DB_WARDROBE is None:
@@ -78,7 +83,9 @@ class Settings(BaseSettings):
     # Crawler service
     CRAWLER_TARGET_URLS_PATH: Optional[str] = None  # Path to target URLs YAML file
     CACHE_FRESHNESS_DAYS: int = 30  # Days for cache freshness threshold
-    ENABLE_RETAILITEMS_FALLBACK: bool = False  # Enable fallback to retailitems if commerceitems empty
+    ENABLE_RETAILITEMS_FALLBACK: bool = (
+        False  # Enable fallback to retailitems if commerceitems empty
+    )
 
     # Server
     HOST: str = "0.0.0.0"
@@ -99,4 +106,3 @@ def get_settings() -> Settings:
 def clear_settings_cache():
     """Clear the settings cache to force reload."""
     get_settings.cache_clear()
-
