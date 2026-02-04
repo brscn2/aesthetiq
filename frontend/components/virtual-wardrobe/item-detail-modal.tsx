@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { format } from "date-fns"
 import {
@@ -11,10 +11,14 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Palette, Shirt, Loader2, Sparkles, MessageSquare } from "lucide-react"
-import { WardrobeItem, Category } from "@/types/api"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Trash2, Calendar, Palette, Shirt, Loader2, Sparkles, MessageSquare, Check, X, Plus, Pencil } from "lucide-react"
+import { WardrobeItem, Category, UpdateWardrobeItemDto } from "@/types/api"
 import { useApi } from "@/lib/api"
-import { getClosestColorName } from "@/lib/colors"
+import { getClosestColorName, WARDROBE_COLORS } from "@/lib/colors"
+import { cn } from "@/lib/utils"
 import { getBestMatchingPalettes, getPaletteDisplayName, formatScore, getScoreBgColor, getScoreColor } from "@/lib/seasonal-colors"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -34,10 +38,82 @@ const CATEGORY_LABELS: Record<Category, string> = {
   [Category.DRESS]: "Dress",
 }
 
+const SUB_CATEGORIES_BY_CATEGORY: Record<Category, string[]> = {
+  [Category.TOP]: ['T-Shirt', 'Shirt', 'Polo', 'Hoodie', 'Sweater', 'Tank Top'],
+  [Category.BOTTOM]: ['Jeans', 'Chinos', 'Shorts', 'Joggers', 'Trousers', 'Sweatpants', 'Skirt', 'Leggings'],
+  [Category.OUTERWEAR]: ['Jacket', 'Coat', 'Blazer', 'Cardigan', 'Puffer', 'Trench Coat', 'Parka', 'Windbreaker'],
+  [Category.FOOTWEAR]: ['Sneakers', 'Boots', 'Loafers', 'Sandals', 'Running Shoes', 'Dress Shoes', 'Slippers', 'High Heels'],
+  [Category.ACCESSORY]: ['Watch', 'Sunglasses', 'Cap', 'Hat', 'Belt', 'Bag', 'Backpack', 'Scarf', 'Gloves', 'Jewelry'],
+  [Category.DRESS]: ['Maxi', 'Midi', 'Mini', 'Cocktail', 'Evening', 'Casual', 'Wrap', 'Shirt Dress'],
+}
+
 export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalProps) {
   const { wardrobeApi } = useApi()
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  // Editable fields
+  const [editBrand, setEditBrand] = useState("")
+  const [editCategory, setEditCategory] = useState<Category>(Category.TOP)
+  const [editSubCategory, setEditSubCategory] = useState("")
+  const [editColors, setEditColors] = useState<string[]>([])
+  const [editNotes, setEditNotes] = useState("")
+  
+  // Color picker state
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const colorPickerRef = useRef<HTMLDivElement>(null)
+  
+  // Track last saved values for cancel functionality
+  const savedValuesRef = useRef({
+    brand: "",
+    category: Category.TOP as Category,
+    subCategory: "",
+    colors: [] as string[],
+    notes: "",
+  })
+
+  // Initialize edit fields when item changes
+  useEffect(() => {
+    if (item) {
+      const values = {
+        brand: item.brand || "",
+        category: item.category,
+        subCategory: item.subCategory || "",
+        colors: item.colors || [],
+        notes: item.notes || "",
+      }
+      setEditBrand(values.brand)
+      setEditCategory(values.category)
+      setEditSubCategory(values.subCategory)
+      setEditColors(values.colors)
+      setEditNotes(values.notes)
+      savedValuesRef.current = values
+    }
+  }, [item])
+
+  // Reset edit state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setIsEditing(false)
+      setShowColorPicker(false)
+    }
+  }, [open])
+
+  // Close color picker when clicking outside
+  useEffect(() => {
+    if (!showColorPicker) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
+        setShowColorPicker(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showColorPicker])
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => wardrobeApi.delete(id),
@@ -52,6 +128,33 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateWardrobeItemDto }) => 
+      wardrobeApi.update(id, data),
+    onSuccess: (updatedItem) => {
+      // Update the cache immediately with the new data
+      queryClient.setQueryData(["wardrobe"], (oldData: WardrobeItem[] | undefined) => {
+        if (!oldData) return oldData
+        return oldData.map(i => i._id === updatedItem._id ? updatedItem : i)
+      })
+      queryClient.invalidateQueries({ queryKey: ["wardrobe"] })
+      // Save current values as the new baseline for cancel
+      savedValuesRef.current = {
+        brand: editBrand,
+        category: editCategory,
+        subCategory: editSubCategory,
+        colors: editColors,
+        notes: editNotes,
+      }
+      toast.success("Item updated successfully")
+      setIsEditing(false)
+    },
+    onError: (error) => {
+      console.error("Failed to update item:", error)
+      toast.error("Failed to update item")
+    },
+  })
+
   const handleDelete = async () => {
     if (!item) return
     
@@ -63,17 +166,73 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
     }
   }
 
+  const handleSave = async () => {
+    if (!item) return
+
+    setIsSaving(true)
+    try {
+      await updateMutation.mutateAsync({
+        id: item._id,
+        data: {
+          brand: editBrand || undefined,
+          category: editCategory,
+          subCategory: editSubCategory || undefined,
+          colors: editColors.length > 0 ? editColors : undefined,
+          notes: editNotes || undefined,
+        },
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    // Reset to last saved values (not item prop which may be stale)
+    setEditBrand(savedValuesRef.current.brand)
+    setEditCategory(savedValuesRef.current.category)
+    setEditSubCategory(savedValuesRef.current.subCategory)
+    setEditColors(savedValuesRef.current.colors)
+    setEditNotes(savedValuesRef.current.notes)
+    setIsEditing(false)
+    setShowColorPicker(false)
+  }
+
+  const handleRemoveColor = (colorToRemove: string) => {
+    setEditColors(editColors.filter(c => c !== colorToRemove))
+  }
+
+  // Helper to determine if a color is light or dark
+  const isLightColor = (hex: string): boolean => {
+    const color = hex.replace("#", "")
+    const r = parseInt(color.substring(0, 2), 16)
+    const g = parseInt(color.substring(2, 4), 16)
+    const b = parseInt(color.substring(4, 6), 16)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return luminance > 0.5
+  }
+
   if (!item) return null
 
   const createdDate = item.createdAt ? format(new Date(item.createdAt), "PPP") : "Unknown"
+  // Always use editColors for display - they're synced from item and updated after save
+  const displayColors = editColors
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" showCloseButton={!isEditing}>
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl">
-            {item.brand || "Unknown Brand"}
-          </DialogTitle>
+          {isEditing ? (
+            <Input
+              value={editBrand}
+              onChange={(e) => setEditBrand(e.target.value)}
+              placeholder="Name your item"
+              className="font-serif text-xl h-auto py-1 px-2 placeholder:text-xl"
+            />
+          ) : (
+            <DialogTitle className="font-serif text-xl">
+              {editBrand || "Unknown Brand"}
+            </DialogTitle>
+          )}
         </DialogHeader>
 
         <div className="space-y-6">
@@ -100,36 +259,136 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
           </div>
 
           {/* Details */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm">
-              <Shirt className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Category:</span>
-              <Badge variant="secondary">{CATEGORY_LABELS[item.category]}</Badge>
-              {item.subCategory && (
-                <Badge variant="outline">{item.subCategory}</Badge>
+          <div className="space-y-4">
+            {/* Category */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Shirt className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Category:</span>
+              </div>
+              {isEditing ? (
+                <div className="flex gap-2">
+                  <Select value={editCategory} onValueChange={(value) => {
+                    setEditCategory(value as Category)
+                    setEditSubCategory("") // Reset subcategory when category changes
+                  }}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={editSubCategory} onValueChange={setEditSubCategory}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUB_CATEGORIES_BY_CATEGORY[editCategory].map((sub) => (
+                        <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{CATEGORY_LABELS[editCategory]}</Badge>
+                  {editSubCategory && (
+                    <Badge variant="outline">{editSubCategory}</Badge>
+                  )}
+                </div>
               )}
             </div>
 
-            {item.colors && item.colors.length > 0 && (
+            {/* Colors */}
+            <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
                 <Palette className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Colors:</span>
-                <div className="flex items-center gap-1 flex-wrap">
-                  {item.colors.map((color, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-card"
-                    >
-                      <div
-                        className="h-3 w-3 rounded-full border border-border"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span className="text-xs">{getClosestColorName(color)}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
-            )}
+              <div className="flex items-center gap-1 flex-wrap">
+                {displayColors.map((color, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-card group"
+                  >
+                    <div
+                      className="h-3 w-3 rounded-full border border-border"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-xs">{getClosestColorName(color)}</span>
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveColor(color)}
+                        className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {isEditing && (
+                  <div className="relative" ref={colorPickerRef}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowColorPicker(!showColorPicker)}
+                      className="h-7 px-2"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add
+                    </Button>
+                    {showColorPicker && (
+                      <div className="absolute z-50 mt-2 p-3 bg-popover border rounded-lg shadow-lg w-[280px]">
+                        <div className="grid grid-cols-7 gap-1.5">
+                          {WARDROBE_COLORS.map((color) => {
+                            const isSelected = editColors.includes(color.hex)
+                            const isLight = isLightColor(color.hex)
+                            return (
+                              <button
+                                key={color.hex}
+                                type="button"
+                                onClick={() => {
+                                  if (!isSelected) {
+                                    setEditColors([...editColors, color.hex])
+                                  }
+                                  setShowColorPicker(false)
+                                }}
+                                disabled={isSelected}
+                                className={cn(
+                                  "relative h-8 w-8 rounded-full border-2 transition-all hover:scale-110",
+                                  isSelected
+                                    ? "border-muted-foreground opacity-50 cursor-not-allowed"
+                                    : "border-border hover:border-primary"
+                                )}
+                                style={{ backgroundColor: color.hex }}
+                                title={color.name}
+                              >
+                                {isSelected && (
+                                  <Check
+                                    className={cn(
+                                      "absolute inset-0 m-auto h-4 w-4",
+                                      isLight ? "text-black" : "text-white"
+                                    )}
+                                  />
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {displayColors.length === 0 && !isEditing && (
+                  <span className="text-xs text-muted-foreground">No colors</span>
+                )}
+              </div>
+            </div>
 
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -138,18 +397,29 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
             </div>
 
             {/* Style Notes */}
-            {item.notes && (
-              <div className="flex items-start gap-2 text-sm">
-                <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <span className="text-muted-foreground">Style Notes:</span>
-                  <p className="text-foreground mt-1">{item.notes}</p>
-                </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Style Notes:</span>
               </div>
-            )}
+              {isEditing ? (
+                <Textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Add notes about styling, occasions, or pairings..."
+                  className="min-h-[80px] text-sm"
+                />
+              ) : (
+                editNotes ? (
+                  <p className="text-sm text-foreground">{editNotes}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No style notes</p>
+                )
+              )}
+            </div>
 
-            {/* Seasonal Palette Compatibility */}
-            {item.seasonalPaletteScores && (
+            {/* Seasonal Palette Compatibility - Only show in view mode */}
+            {!isEditing && item.seasonalPaletteScores && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                   <Sparkles className="h-4 w-4 text-muted-foreground" />
@@ -177,26 +447,67 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
             )}
           </div>
 
-          {/* Delete Button */}
-          <div className="pt-4 border-t">
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Item
-                </>
-              )}
-            </Button>
+          {/* Action Buttons */}
+          <div className="pt-4 border-t space-y-2">
+            {isEditing ? (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit Item
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Item
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
