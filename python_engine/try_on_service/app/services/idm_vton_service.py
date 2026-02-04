@@ -79,7 +79,8 @@ class IDMVTONService:
         self,
         user_photo_url: str,
         clothing_image_urls: List[str],
-        prompt: str
+        prompt: str,
+        category: str = "upper_body"
     ) -> str:
         """
         Generate virtual try-on image using IDM-VTON via Replicate.
@@ -119,10 +120,12 @@ class IDMVTONService:
             input_dict = {
                 "human_img": open(user_photo_path, "rb"),
                 "garm_img": open(clothing_path, "rb"),
-                "denoise_steps": 30,  # Quality vs speed (20-50)
-                "seed": 42  # For reproducibility
+                "category": category,  # REQUIRED: upper_body, lower_body, dress, etc.
+                "garment_des": prompt,  # Garment description
+                "steps": 30,  # Number of inference steps (1-40, default 30)
             }
             logger.info(f"Calling replicate with model: {settings.IDM_VTON_MODEL}")
+            logger.debug(f"Input params: category={category}, steps=30, has_prompt={bool(prompt)}")
             
             try:
                 output = replicate.run(

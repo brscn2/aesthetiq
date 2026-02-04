@@ -107,13 +107,26 @@ async def generate_try_on(try_on_request: TryOnRequest):
         
         garment_description = ' '.join(description_parts) if description_parts else "clothing item"
         
-        logger.info(f"Calling IDM-VTON with {len(clothing_image_urls)} clothing items")
+        # Map category to IDM-VTON format
+        # IDM-VTON accepts: upper_body, lower_body, dress, etc.
+        category_mapping = {
+            "TOP": "upper_body",
+            "BOTTOM": "lower_body",
+            "DRESS": "dress",
+            "OUTERWEAR": "upper_body",
+            "ACCESSORY": "upper_body",
+            "SHOES": "lower_body",
+        }
+        garment_category = category_mapping.get(first_item.category, "upper_body")
+        
+        logger.info(f"Calling IDM-VTON with {len(clothing_image_urls)} clothing items, category={garment_category}")
         
         # Generate try-on image
         image_base64 = await idm_vton_service.generate_try_on(
             user_photo_url=user_photo_url,
             clothing_image_urls=clothing_image_urls,
-            prompt=garment_description
+            prompt=garment_description,
+            category=garment_category
         )
         
         logger.info("Try-on generation successful")
