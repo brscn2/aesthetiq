@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
@@ -26,7 +25,9 @@ export function SettingsPanel() {
   const [cropperImage, setCropperImage] = useState<string | null>(null)
   const [genderValue, setGenderValue] = useState<Gender | "">("")
   const [isUpdatingGender, setIsUpdatingGender] = useState(false)
-  const [birthDateValue, setBirthDateValue] = useState("")
+  const [birthYear, setBirthYear] = useState("")
+  const [birthMonth, setBirthMonth] = useState("")
+  const [birthDay, setBirthDay] = useState("")
   const [isUpdatingBirthDate, setIsUpdatingBirthDate] = useState(false)
 
   const isLoading = userLoading || settingsLoading
@@ -44,11 +45,60 @@ export function SettingsPanel() {
 
   useEffect(() => {
     if (user?.birthDate) {
-      setBirthDateValue(user.birthDate.slice(0, 10))
+      const datePart = user.birthDate.slice(0, 10)
+      const [year, month, day] = datePart.split("-")
+      setBirthYear(year || "")
+      setBirthMonth(month || "")
+      setBirthDay(day || "")
     } else {
-      setBirthDateValue("")
+      setBirthYear("")
+      setBirthMonth("")
+      setBirthDay("")
     }
   }, [user?.birthDate])
+
+  const birthDateValue =
+    birthYear && birthMonth && birthDay
+      ? `${birthYear}-${birthMonth}-${birthDay}`
+      : ""
+
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 100 }, (_, index) =>
+    String(currentYear - index)
+  )
+
+  const months = [
+    { value: "01", label: "January" },
+    { value: "02", label: "February" },
+    { value: "03", label: "March" },
+    { value: "04", label: "April" },
+    { value: "05", label: "May" },
+    { value: "06", label: "June" },
+    { value: "07", label: "July" },
+    { value: "08", label: "August" },
+    { value: "09", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ]
+
+  const daysInMonth =
+    birthYear && birthMonth
+      ? new Date(Number(birthYear), Number(birthMonth), 0).getDate()
+      : 31
+  const days = Array.from({ length: daysInMonth }, (_, index) =>
+    String(index + 1).padStart(2, "0")
+  )
+
+  useEffect(() => {
+    if (!birthDay) {
+      return
+    }
+    const numericDay = Number(birthDay)
+    if (numericDay > daysInMonth) {
+      setBirthDay("")
+    }
+  }, [birthDay, daysInMonth])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -141,27 +191,38 @@ export function SettingsPanel() {
     }
   }
 
-  const handleBirthDateChange = async (value: string) => {
+  useEffect(() => {
     const previousBirthDate = user?.birthDate ? user.birthDate.slice(0, 10) : ""
-    setBirthDateValue(value)
-
-    if (!value || value === previousBirthDate) {
+    if (!birthDateValue || birthDateValue === previousBirthDate) {
       return
     }
 
-    setIsUpdatingBirthDate(true)
-    try {
-      await userApi.updateCurrentUser({ birthDate: value })
-      await refetchUser()
-      toast({ title: "Birth date updated" })
-    } catch (error) {
-      console.error("Failed to update birth date:", error)
-      setBirthDateValue(previousBirthDate)
-      toast({ title: "Failed to update birth date", variant: "destructive" })
-    } finally {
-      setIsUpdatingBirthDate(false)
+    const updateBirthDate = async () => {
+      setIsUpdatingBirthDate(true)
+      try {
+        await userApi.updateCurrentUser({ birthDate: birthDateValue })
+        await refetchUser()
+        toast({ title: "Birth date updated" })
+      } catch (error) {
+        console.error("Failed to update birth date:", error)
+        const [year, month, day] = previousBirthDate.split("-")
+        setBirthYear(year || "")
+        setBirthMonth(month || "")
+        setBirthDay(day || "")
+        toast({ title: "Failed to update birth date", variant: "destructive" })
+      } finally {
+        setIsUpdatingBirthDate(false)
+      }
     }
-  }
+
+    updateBirthDate()
+  }, [
+    birthDateValue,
+    refetchUser,
+    toast,
+    user?.birthDate,
+    userApi,
+  ])
 
   if (isLoading) {
     return (
@@ -266,15 +327,15 @@ export function SettingsPanel() {
                 Used to personalize recommendations and sizing.
               </p>
             </div>
-            <div className="w-full sm:w-96 grid gap-4 sm:grid-cols-2">
+            <div className="w-full sm:w-96 space-y-4">
               <div className="space-y-2">
                 <Label>Gender</Label>
                 <Select
-                  value={genderValue}
+                  value={genderValue || undefined}
                   onValueChange={handleGenderChange}
                   disabled={isUpdatingGender}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -285,12 +346,56 @@ export function SettingsPanel() {
               </div>
               <div className="space-y-2">
                 <Label>Birth Date</Label>
-                <Input
-                  type="date"
-                  value={birthDateValue}
-                  onChange={(event) => handleBirthDateChange(event.target.value)}
-                  disabled={isUpdatingBirthDate}
-                />
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Select
+                    value={birthMonth || undefined}
+                    onValueChange={setBirthMonth}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={birthDay || undefined}
+                    onValueChange={setBirthDay}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {days.map((day) => (
+                        <SelectItem key={day} value={day}>
+                          {day}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={birthYear || undefined}
+                    onValueChange={setBirthYear}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
