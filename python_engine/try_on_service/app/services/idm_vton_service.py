@@ -111,18 +111,27 @@ class IDMVTONService:
             clothing_path = await self._download_image(clothing_image_urls[0], temp_dir, 1)
             
             logger.info("Calling IDM-VTON via Replicate API...")
+            logger.debug(f"Files exist: user={os.path.exists(user_photo_path)}, clothing={os.path.exists(clothing_path)}")
+            logger.debug(f"File sizes: user={os.path.getsize(user_photo_path)}, clothing={os.path.getsize(clothing_path)}")
             
             # Call IDM-VTON via Replicate using file paths
             # Replicate will handle file upload internally
-            output = replicate.run(
-                settings.IDM_VTON_MODEL,
-                input={
-                    "human_img": open(user_photo_path, "rb"),
-                    "garm_img": open(clothing_path, "rb"),
-                    "denoise_steps": 30,  # Quality vs speed (20-50)
-                    "seed": 42  # For reproducibility
-                }
-            )
+            input_dict = {
+                "human_img": open(user_photo_path, "rb"),
+                "garm_img": open(clothing_path, "rb"),
+                "denoise_steps": 30,  # Quality vs speed (20-50)
+                "seed": 42  # For reproducibility
+            }
+            logger.info(f"Calling replicate with model: {settings.IDM_VTON_MODEL}")
+            
+            try:
+                output = replicate.run(
+                    settings.IDM_VTON_MODEL,
+                    input=input_dict
+                )
+            except Exception as replicate_error:
+                logger.error(f"Replicate API error details: {type(replicate_error).__name__}: {str(replicate_error)}")
+                raise
             
             logger.info("IDM-VTON API response received")
             
