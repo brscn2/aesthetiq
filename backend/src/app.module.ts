@@ -30,10 +30,9 @@ import databaseConfig from './config/database.config';
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-            useFactory: async (configService: ConfigService) => ({
+        useFactory: async (configService: ConfigService) => ({
         uri: configService.get<string>('database.uri'),
-      }),
-      },
+      }),      
       inject: [ConfigService],
     }),
     UsersModule,
