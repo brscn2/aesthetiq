@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
 const requiresAuth = createRouteMatcher([
   "/dashboard(.*)",
   "/virtual-wardrobe(.*)",
+  "/wishlist(.*)",
   "/settings(.*)",
   "/admin(.*)",
 ])

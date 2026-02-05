@@ -566,3 +566,71 @@ export interface PersonaAnalysisStatus {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Wishlist Types (mirrors CommerceItem structure)
+export interface WishlistItem {
+  _id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  imageUrl: string;
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId?: string;
+  retailerName?: string;
+  colors: string[];
+  price?: number;
+  currency: string;
+  productUrl: string;
+  sku?: string;
+  tags: string[];
+  inStock: boolean;
+  metadata?: Record<string, any>;
+  externalId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateWishlistItemDto {
+  name: string;
+  description?: string;
+  imageUrl: string;
+  category: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId?: string;
+  retailerName?: string;
+  colors?: string[];
+  price?: number;
+  currency?: string;
+  productUrl: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  metadata?: Record<string, any>;
+  externalId?: string;
+}
+
+export interface UpdateWishlistItemDto {
+  name?: string;
+  description?: string;
+  imageUrl?: string;
+  category?: Category;
+  subCategory?: string;
+  brand?: string;
+  brandId?: string;
+  retailerId?: string;
+  retailerName?: string;
+  colors?: string[];
+  price?: number;
+  currency?: string;
+  productUrl?: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  metadata?: Record<string, any>;
+  externalId?: string;
+}

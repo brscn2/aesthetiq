@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2, Check, Upload } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2, Check, Upload, Heart } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,8 @@ import { useApi } from "@/lib/api"
 import { getClosestColorName } from "@/lib/colors"
 import { useWardrobeRecommendation } from "@/contexts/wardrobe-recommendation-context"
 import type { ClothingItem, DoneEvent, OutfitAttachment, OutfitSwapIntent } from "@/types/chat"
-import type { Outfit, WardrobeItem, UpdateOutfitDto } from "@/types/api"
+import type { Outfit, WardrobeItem, UpdateOutfitDto, WishlistItem } from "@/types/api"
+import { Category } from "@/types/api"
 
 // Speech Recognition types
 interface SpeechRecognition extends EventTarget {
@@ -116,7 +117,8 @@ export function ChatStylist({
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const router = useRouter()
-  const { outfitApi, wardrobeApi } = useApi()
+  const queryClient = useQueryClient()
+  const { outfitApi, wardrobeApi, wishlistApi } = useApi()
   const { recommendation, clearRecommendation } = useWardrobeRecommendation()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -132,6 +134,7 @@ export function ChatStylist({
   const [selectedItemsForAdd, setSelectedItemsForAdd] = useState<Set<string>>(new Set())
   const [isAddingToOutfit, setIsAddingToOutfit] = useState(false)
   const [addingItemIds, setAddingItemIds] = useState<Set<string>>(new Set())
+  const [addingToWishlistIds, setAddingToWishlistIds] = useState<Set<string>>(new Set())
   const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -149,6 +152,25 @@ export function ChatStylist({
     queryFn: () => wardrobeApi.getAll(wardrobeUserId),
     enabled: isWardrobeDialogOpen,
   })
+
+  // Load wishlist items to track which items are already saved
+  const { data: wishlistItems } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => wishlistApi.getAll(),
+  })
+
+  // Create a map of externalId -> wishlistItem for quick lookup
+  const wishlistItemsMap = new Map<string, WishlistItem>()
+  wishlistItems?.forEach((item) => {
+    if (item.externalId) {
+      wishlistItemsMap.set(item.externalId, item)
+    }
+  })
+
+  // Check if an item is in the wishlist
+  const isInWishlist = useCallback((itemId: string) => {
+    return wishlistItemsMap.has(itemId)
+  }, [wishlistItemsMap])
 
   // Use the chat API hook (must be called before useEffect that uses setPendingClarification)
   const {
@@ -230,6 +252,83 @@ export function ChatStylist({
       }
     },
   })
+
+  const handleToggleWishlist = useCallback(async (item: ClothingItem) => {
+    if (!item.id) return
+
+    // Prevent duplicate operations
+    if (addingToWishlistIds.has(item.id)) return
+
+    setAddingToWishlistIds((prev) => new Set(prev).add(item.id))
+
+    const existingWishlistItem = wishlistItemsMap.get(item.id)
+
+    // Helper to determine category from item
+    const getCategory = (): Category => {
+      // Try item.category first (should be uppercase like "DRESS", "TOP", etc.)
+      if (item.category && Object.values(Category).includes(item.category as Category)) {
+        return item.category as Category
+      }
+      // Try to infer from subCategory
+      const subCat = item.subCategory?.toLowerCase() || ""
+      if (subCat.includes("dress")) return Category.DRESS
+      if (subCat.includes("shirt") || subCat.includes("blouse") || subCat.includes("top") || subCat.includes("sweater") || subCat.includes("hoodie")) return Category.TOP
+      if (subCat.includes("pants") || subCat.includes("jeans") || subCat.includes("shorts") || subCat.includes("skirt") || subCat.includes("trouser")) return Category.BOTTOM
+      if (subCat.includes("jacket") || subCat.includes("coat") || subCat.includes("blazer") || subCat.includes("cardigan")) return Category.OUTERWEAR
+      if (subCat.includes("shoe") || subCat.includes("sneaker") || subCat.includes("boot") || subCat.includes("sandal") || subCat.includes("heel") || subCat.includes("loafer")) return Category.FOOTWEAR
+      // Try to infer from name
+      const name = item.name?.toLowerCase() || ""
+      if (name.includes("dress")) return Category.DRESS
+      if (name.includes("shirt") || name.includes("blouse") || name.includes("top") || name.includes("sweater") || name.includes("hoodie")) return Category.TOP
+      if (name.includes("pants") || name.includes("jeans") || name.includes("shorts") || name.includes("skirt") || name.includes("trouser")) return Category.BOTTOM
+      if (name.includes("jacket") || name.includes("coat") || name.includes("blazer") || name.includes("cardigan")) return Category.OUTERWEAR
+      if (name.includes("shoe") || name.includes("sneaker") || name.includes("boot") || name.includes("sandal") || name.includes("heel") || name.includes("loafer")) return Category.FOOTWEAR
+      // Default fallback
+      return Category.ACCESSORY
+    }
+
+    try {
+      if (existingWishlistItem) {
+        // Remove from wishlist
+        await wishlistApi.remove(existingWishlistItem._id)
+        toast.success("Removed from wishlist")
+      } else {
+        // Add to wishlist - map ClothingItem to CommerceItem-like structure
+        await wishlistApi.create({
+          name: item.name,
+          description: item.metadata?.description,
+          imageUrl: item.imageUrl || "",
+          category: getCategory(),
+          subCategory: item.subCategory,
+          brand: item.brand,
+          brandId: item.metadata?.brandId,
+          retailerId: item.metadata?.retailerId,
+          retailerName: item.metadata?.retailerName || item.metadata?.retailer,
+          colors: item.colorHex ? [item.colorHex] : (item.metadata?.colors || []),
+          price: item.price,
+          currency: item.metadata?.currency || "USD",
+          productUrl: item.productUrl || "",
+          sku: item.metadata?.sku,
+          tags: item.metadata?.tags || [],
+          inStock: item.metadata?.inStock ?? true,
+          metadata: item.metadata,
+          externalId: item.id,
+        })
+        toast.success("Added to wishlist")
+      }
+      // Invalidate wishlist query to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] })
+    } catch (error) {
+      console.error("Failed to update wishlist:", error)
+      toast.error(existingWishlistItem ? "Failed to remove from wishlist" : "Failed to add to wishlist")
+    } finally {
+      setAddingToWishlistIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }, [wishlistApi, addingToWishlistIds, wishlistItemsMap, queryClient])
 
   const handleCreateOutfitFromItems = useCallback((items: ClothingItem[]) => {
     const wardrobeItems = items.filter((item) => item.id && item.source === "wardrobe")
@@ -1391,6 +1490,29 @@ export function ChatStylist({
                                 Add
                               </Button>
                             )}
+                            {/* Wishlist button for non-wardrobe items */}
+                            {item.source !== "wardrobe" && item.id && (() => {
+                              const inWishlist = isInWishlist(item.id)
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`h-6 text-[10px] px-2 w-full transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleWishlist(item)
+                                  }}
+                                  disabled={addingToWishlistIds.has(item.id)}
+                                >
+                                  {addingToWishlistIds.has(item.id) ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Heart className={`h-3 w-3 mr-1 ${inWishlist ? "fill-current" : ""}`} />
+                                  )}
+                                  {inWishlist ? "Saved" : "Wishlist"}
+                                </Button>
+                              )
+                            })()}
                           </div>
                         ))}
                       </div>
@@ -1902,13 +2024,34 @@ export function ChatStylist({
                   </div>
                 )}
               </div>
-              {selectedItem.productUrl && (
-                <Button asChild className="w-full">
-                  <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
-                    View item
-                  </a>
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {selectedItem.source !== "wardrobe" && (() => {
+                  const inWishlist = isInWishlist(selectedItem.id)
+                  return (
+                    <Button
+                      variant="outline"
+                      className={`flex-1 transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
+                      onClick={() => handleToggleWishlist(selectedItem)}
+                      disabled={addingToWishlistIds.has(selectedItem.id)}
+                    >
+                      {addingToWishlistIds.has(selectedItem.id) ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Heart className={`h-4 w-4 mr-2 ${inWishlist ? "fill-current" : ""}`} />
+                      )}
+                      {inWishlist ? "Saved to Wishlist" : "Add to Wishlist"}
+                    </Button>
+                  )
+                })()}
+                {selectedItem.productUrl && (
+                  <Button asChild className={`gradient-ai text-white hover:opacity-90 ${selectedItem.source !== "wardrobe" ? "flex-1" : "w-full"}`}>
+                    <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Shop Now
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
           </DialogContent>
         )}

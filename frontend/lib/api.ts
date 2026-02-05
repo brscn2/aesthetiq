@@ -19,6 +19,7 @@ import type {
   CreateStyleProfileDto,
   CreateUserDto,
   CreateWardrobeItemDto,
+  CreateWishlistItemDto,
   Outfit,
   StyleProfile,
   UpdateChatSessionDto,
@@ -26,9 +27,11 @@ import type {
   UpdateStyleProfileDto,
   UpdateUserDto,
   UpdateWardrobeItemDto,
+  UpdateWishlistItemDto,
   User,
   Gender,
   WardrobeItem,
+  WishlistItem,
   DislikedWardrobeItemsResponse,
   PersonaAnalysisStatus,
 } from "@/types/api";
@@ -642,6 +645,22 @@ const createAiApi = (client: AxiosInstance) => ({
   },
 });
 
+// Wishlist API
+const createWishlistApi = (client: AxiosInstance) => ({
+  getAll: (): Promise<WishlistItem[]> =>
+    client.get("/wishlist").then((res) => res.data),
+  getById: (id: string): Promise<WishlistItem> =>
+    client.get(`/wishlist/${id}`).then((res) => res.data),
+  create: (dto: CreateWishlistItemDto): Promise<WishlistItem> =>
+    client.post("/wishlist", dto).then((res) => res.data),
+  update: (id: string, dto: UpdateWishlistItemDto): Promise<WishlistItem> =>
+    client.patch(`/wishlist/${id}`, dto).then((res) => res.data),
+  remove: (id: string): Promise<void> =>
+    client.delete(`/wishlist/${id}`).then((res) => res.data),
+  clearAll: (): Promise<{ deletedCount: number }> =>
+    client.delete("/wishlist").then((res) => res.data),
+});
+
 const createApiHelpers = (client: AxiosInstance) => ({
   userApi: createUserApi(client),
   wardrobeApi: createWardrobeApi(client),
@@ -653,6 +672,7 @@ const createApiHelpers = (client: AxiosInstance) => ({
   aiApi: createAiApi(client),
   commerceApi: createCommerceApi(client),
   brandsApi: createBrandsApi(client),
+  wishlistApi: createWishlistApi(client),
   // Admin APIs
   adminWardrobeApi: createAdminWardrobeApi(client),
   adminAuditApi: createAdminAuditApi(client),
