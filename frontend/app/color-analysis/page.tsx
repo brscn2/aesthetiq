@@ -571,28 +571,6 @@ function AnalysisReport({
             <Image src="/placeholder-user.jpg" alt="User Analysis" fill className="object-cover" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-
-          {/* Feature Extraction Cards - Glassmorphism */}
-          <GlassCard
-            label="Undertone"
-            value={analysis.undertone}
-            hex={analysis.palette?.[0]?.hex || "#E8C4A6"}
-            className="absolute top-12 right-4 translate-x-4 lg:right-8 lg:translate-x-0"
-          />
-          <GlassCard
-            label="Contrast"
-            value={analysis.contrastLevel}
-            hex={analysis.palette?.[1]?.hex || "#3E2723"}
-            className="absolute top-1/3 left-4 -translate-x-4 lg:left-8 lg:translate-x-0"
-          />
-          {analysis.faceShape && (
-            <GlassCard
-              label="Face Shape"
-              value={analysis.faceShape}
-              hex={analysis.palette?.[2]?.hex || "#1A1A1A"}
-              className="absolute bottom-1/3 right-4 translate-x-4 lg:right-8 lg:translate-x-0"
-            />
-          )}
         </div>
 
         {/* The Verdict */}
@@ -635,6 +613,12 @@ function AnalysisReport({
                 />
               </div>
             </div>
+            {analysis.faceShape && (
+              <div className="pt-2">
+                <span className="text-sm font-medium">Face Shape</span>
+                <p className="text-primary font-medium">{analysis.faceShape}</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
