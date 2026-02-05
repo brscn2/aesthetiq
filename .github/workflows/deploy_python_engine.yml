@@ -89,14 +89,22 @@ jobs:
           docker compose -f docker-compose.prod.yml push
 
       - name: Copy docker-compose to VM
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+          eval "$(ssh-agent -s)"
+          echo "$SSH_KEY" | ssh-add -
+          scp -o StrictHostKeyChecking=no \
             python_engine/docker-compose.prod.yml \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/srv/aesthetiq/project/
 
       - name: Deploy on VM
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+          eval "$(ssh-agent -s)"
+          echo "$SSH_KEY" | ssh-add -
+          ssh -o StrictHostKeyChecking=no \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'DEPLOY'
           set -e
           cd /srv/aesthetiq/project
