@@ -20,6 +20,7 @@ import { CommerceModule } from './commerce/commerce.module';
 import { AgentModule } from './agent/agent.module';
 import { BrandsModule } from './brands/brands.module';
 import { TryOnModule } from './try-on/try-on.module';
+import { WishlistModule } from './wishlist/wishlist.module';
 import databaseConfig from './config/database.config';
 
 @Module({
@@ -52,6 +53,7 @@ import databaseConfig from './config/database.config';
     AgentModule,
     BrandsModule,
     TryOnModule,
+    WishlistModule,
   ],
   controllers: [AppController],
   providers: [AppService],

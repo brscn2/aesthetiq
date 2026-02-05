@@ -198,12 +198,6 @@ export function WardrobeControlBar({
               Create Outfit
             </TabsTrigger>
             <TabsTrigger
-              value="wishlist"
-              className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
-            >
-              Wishlist
-            </TabsTrigger>
-            <TabsTrigger
               value="disliked"
               className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-200"
             >
