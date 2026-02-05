@@ -3,7 +3,7 @@ name: Deploy Python Engine (Azure VM)
 on:
   push:
     branches:
-      - python_engine_workflow
+      - main
     paths:
       - "python_engine/**"
       - ".github/workflows/deploy_python_engine.yml"
