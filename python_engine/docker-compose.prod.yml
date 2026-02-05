@@ -1,0 +1,207 @@
+services:
+  gateway:
+    image: aesthetiqregistry.azurecr.io/gateway:latest
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/gateway:latest
+    container_name: aesthetiq-gateway
+    ports:
+      - "8000:8000"  # public
+    env_file:
+      - .env.prod
+    environment:
+      - FACE_ANALYSIS_URL=http://face_analysis:8001
+      - CLOTHING_RECOMMENDER_URL=http://conversational_agent:8002
+      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+    networks:
+      - aesthetiq-network
+    depends_on:
+      face_analysis:
+        condition: service_healthy
+      conversational_agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  face_analysis:
+    image: aesthetiqregistry.azurecr.io/face_analysis:latest
+    build:
+      context: ./face_analysis
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/face_analysis:latest
+    container_name: aesthetiq-face-analysis
+    expose:
+      - "8001"
+    env_file:
+      - .env.prod
+    environment:
+      - PORT=8001
+      - DEVICE=cpu
+    volumes:
+      - /srv/aesthetiq/face_analysis_weights:/app/weights:ro
+      - /srv/aesthetiq/uploads:/app/uploads:rw
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    restart: unless-stopped
+
+  conversational_agent:
+    image: aesthetiqregistry.azurecr.io/conversational_agent:latest
+    build:
+      context: ./conversational_agent
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/conversational_agent:latest
+    container_name: aesthetiq-conversational-agent
+    expose:
+      - "8002"
+    env_file:
+      - .env.prod
+    environment:
+      - PORT=8002
+      - BACKEND_URL=http://gateway:8000
+      - MCP_SERVERS_URL=http://mcp_servers:8010
+    volumes:
+      - /srv/aesthetiq/logs:/app/logs:rw
+    networks:
+      - aesthetiq-network
+    depends_on:
+      mcp_servers:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  embedding_service:
+    image: aesthetiqregistry.azurecr.io/embedding_service:latest
+    build:
+      context: ./embedding_service
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/embedding_service:latest
+    container_name: aesthetiq-embedding
+    expose:
+      - "8004"
+    env_file:
+      - .env.prod
+    environment:
+      - PORT=8004
+      - LOG_LEVEL=INFO
+    networks:
+      - aesthetiq-network
+    volumes:
+      - /srv/aesthetiq/weights:/app/weights:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8004/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  try_on_service:
+    image: aesthetiqregistry.azurecr.io/try_on_service:latest
+    build:
+      context: ./try_on_service
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/try_on_service:latest
+    container_name: aesthetiq-try-on
+    expose:
+      - "8005"
+    env_file:
+      - .env.prod
+    environment:
+      - PORT=8005
+      - OPENAI_MODEL=gpt-image-1
+      - OPENAI_INPUT_FIDELITY=high
+      - OPENAI_QUALITY=low
+      - OPENAI_RESPONSE_FORMAT=b64_json
+    volumes:
+      - /srv/aesthetiq/uploads:/app/uploads:rw
+    networks:
+      - aesthetiq-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  mcp_servers:
+    image: aesthetiqregistry.azurecr.io/mcp_servers:latest
+    build:
+      context: ./mcp_servers
+      dockerfile: Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/mcp_servers:latest
+    container_name: aesthetiq-mcp-servers
+    expose:
+      - "8010"
+    env_file:
+      - .env.prod
+    environment:
+      PORT: "8010"
+      EMBEDDING_SERVICE_URL: "http://embedding_service:8004"
+      BACKEND_URL: "https://aesthetiq-backend.onrender.com"
+    networks:
+      - aesthetiq-network
+    depends_on:
+      embedding_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  crawler_service:
+    image: aesthetiqregistry.azurecr.io/crawler_service:latest
+    build:
+      context: .
+      dockerfile: ./crawler_service/Dockerfile
+      tags:
+        - aesthetiqregistry.azurecr.io/crawler_service:latest
+    container_name: aesthetiq-crawler
+    expose:
+      - "8005"
+    env_file:
+      - .env.prod
+    environment:
+      - PORT=8005
+      - EMBEDDING_SERVICE_URL=http://embedding_service:8004
+      - CRAWLER_TARGET_URLS_PATH=/app/config/target_urls.yaml
+    volumes:
+      - /srv/aesthetiq/crawler_service/config:/app/config:ro
+    networks:
+      - aesthetiq-network
+    depends_on:
+      embedding_service:
+        condition: service_healthy
+      mcp_servers:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  aesthetiq-network:
+    driver: bridge
