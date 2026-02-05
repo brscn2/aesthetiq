@@ -361,7 +361,7 @@ export function ChatStylist({
   )
 
   const getOutfitAttachmentImages = useCallback((attachment: OutfitAttachment) => {
-    return [
+    const urls = [
       attachment.items.outerwear?.imageUrl,
       attachment.items.top?.imageUrl,
       attachment.items.bottom?.imageUrl,
@@ -369,7 +369,20 @@ export function ChatStylist({
       attachment.items.dress?.imageUrl,
       attachment.items.accessories[0]?.imageUrl,
     ]
+    return urls.filter((url): url is string => Boolean(url))
   }, [])
+
+  /** Grid class for outfit thumbnail by item count (1–6) */
+  const getOutfitGridClass = (count: number) =>
+    count <= 1
+      ? "grid-cols-1 grid-rows-1"
+      : count === 2
+        ? "grid-cols-2 grid-rows-1"
+        : count === 3
+          ? "grid-cols-3 grid-rows-1"
+          : count === 4
+            ? "grid-cols-2 grid-rows-2"
+            : "grid-cols-3 grid-rows-2"
 
   const buildAutoMessage = useCallback(
     (swapIntents: OutfitSwapIntent[], attachments: OutfitAttachment[]) => {
@@ -1090,34 +1103,104 @@ export function ChatStylist({
                 </Avatar>
               )}
 
-              <div
-                className={`flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
-              >
-                <div
-                  className={`rounded-2xl px-3 sm:px-4 py-2 sm:py-3 ${message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card text-card-foreground border border-border/50"
-                    }`}
-                >
-                  {message.role === "user" ? (
+              {/* Kullanıcı mesajı: tek sütun, sağa yapışık; balon + ekler hemen altında */}
+              {message.role === "user" ? (
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-auto max-w-full sm:max-w-[80%]">
+                  <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-primary text-primary-foreground">
                     <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
-                  ) : (
-                    <>
-                      {message.content ? (
-                        <>
-                          <Markdown content={message.content} className="text-xs sm:text-sm" />
-                          {message.isStreaming && (
-                            <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
-                          )}
-                        </>
-                      ) : null}
-                    </>
+                  </div>
+                  {message.images && message.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {message.images.map((imageUrl, index) => (
+                        <div key={index} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-border/50">
+                          <Image src={imageUrl} alt={`Attachment ${index + 1}`} fill className="object-cover" />
+                        </div>
+                      ))}
+                    </div>
                   )}
+                  {message.attachedOutfits && message.attachedOutfits.length > 0 && (
+                    <div className="flex flex-col items-end gap-2">
+                        {message.attachedOutfits.map((outfit) => {
+                          const images = getOutfitAttachmentImages(outfit)
+                          const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                          const primaryImage =
+                            images[0] ||
+                            images[1] ||
+                            images[2] ||
+                            images[3] ||
+                            images[4] ||
+                            images[5]
+                          const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
+
+                          return (
+                            <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                              <div className="flex items-center gap-2">
+                                {isWardrobeAttachment ? (
+                                  <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                                    {primaryImage ? (
+                                      <Image
+                                        src={primaryImage as string}
+                                        alt="Wardrobe item"
+                                        fill
+                                        className="object-contain"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                        No image
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                                  >
+                                    {images.length === 0 ? (
+                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                        No image
+                                      </div>
+                                    ) : (
+                                      images.map((img, index) => (
+                                        <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                          <Image
+                                            src={img}
+                                            alt="Outfit item"
+                                            fill
+                                            className="object-contain"
+                                          />
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                                  {swapIntent && (
+                                    <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 items-start">
+                <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-card text-card-foreground border border-border/50">
+                  {message.content ? (
+                    <>
+                      <Markdown content={message.content} className="text-xs sm:text-sm" />
+                      {message.isStreaming && (
+                        <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                      )}
+                    </>
+                  ) : null}
                 </div>
 
-                {/* Attached Images */}
+                {/* Attached Images - assistant only (user handled above) */}
                 {message.images && message.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {message.images.map((imageUrl, index) => (
@@ -1129,7 +1212,7 @@ export function ChatStylist({
                 )}
 
                 {message.attachedOutfits && message.attachedOutfits.length > 0 && (
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
                     {message.attachedOutfits.map((outfit) => {
                       const images = getOutfitAttachmentImages(outfit)
                       const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
@@ -1161,23 +1244,25 @@ export function ChatStylist({
                                 )}
                               </div>
                             ) : (
-                              <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                                {[0, 1, 2, 3].map((index) => (
-                                  <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                    {images[index] ? (
+                              <div
+                                className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                              >
+                                {images.length === 0 ? (
+                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                    No image
+                                  </div>
+                                ) : (
+                                  images.map((img, index) => (
+                                    <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                       <Image
-                                        src={images[index] as string}
+                                        src={img}
                                         alt="Outfit item"
                                         fill
                                         className="object-contain"
                                       />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                        --
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
+                                    </div>
+                                  ))
+                                )}
                               </div>
                             )}
                             <div>
@@ -1331,7 +1416,8 @@ export function ChatStylist({
                     </div>
                   )
                 })()}
-              </div>
+                  </div>
+                )}
 
               {message.role === "user" && (
                 <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">
@@ -1462,23 +1548,25 @@ export function ChatStylist({
                             )}
                           </div>
                         ) : (
-                          <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                            {[0, 1, 2, 3].map((index) => (
-                              <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                {images[index] ? (
+                          <div
+                            className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                          >
+                            {images.length === 0 ? (
+                              <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                No image
+                              </div>
+                            ) : (
+                              images.map((img, index) => (
+                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                   <Image
-                                    src={images[index] as string}
+                                    src={img}
                                     alt="Outfit item"
                                     fill
                                     className="object-contain"
                                   />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                    --
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                                </div>
+                              ))
+                            )}
                           </div>
                         )}
                         <div>
@@ -1640,23 +1728,25 @@ export function ChatStylist({
                               <Check className="h-3 w-3" />
                             </div>
                           )}
-                          <div className="grid h-16 w-16 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                            {[0, 1, 2, 3].map((index) => (
-                              <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                {images[index] ? (
+                          <div
+                            className={`grid h-16 w-16 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                          >
+                            {images.length === 0 ? (
+                              <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                No image
+                              </div>
+                            ) : (
+                              images.map((img, index) => (
+                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                   <Image
-                                    src={images[index] as string}
+                                    src={img}
                                     alt="Outfit item"
                                     fill
                                     className="object-contain"
                                   />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                    --
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
