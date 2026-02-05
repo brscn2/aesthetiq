@@ -200,12 +200,6 @@ services:
         condition: service_healthy
       mcp_servers:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     restart: unless-stopped
 
 networks:
