@@ -72,7 +72,6 @@ services:
       - .env.prod
     environment:
       - PORT=8002
-      - BACKEND_URL=http://gateway:8000
       - MCP_SERVERS_URL=http://mcp_servers:8010
     volumes:
       - /srv/aesthetiq/logs:/app/logs:rw
