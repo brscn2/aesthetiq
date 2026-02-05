@@ -92,9 +92,13 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
           eval "$(ssh-agent -s)"
-          echo "$SSH_KEY" | ssh-add -
-          scp -o StrictHostKeyChecking=no \
+          ssh-add ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
             python_engine/docker-compose.prod.yml \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/srv/aesthetiq/project/
 
@@ -102,9 +106,13 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
           eval "$(ssh-agent -s)"
-          echo "$SSH_KEY" | ssh-add -
-          ssh -o StrictHostKeyChecking=no \
+          ssh-add ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'DEPLOY'
           set -e
           cd /srv/aesthetiq/project
