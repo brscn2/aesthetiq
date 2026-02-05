@@ -385,7 +385,8 @@ export function ChatStylist({
       }
 
       if (attachments.length > 0) {
-        return "Please use the attached outfits and items for context."
+        const names = attachments.map(a => `"${a.name}"`).join(", ")
+        return `I have attached ${names} to the conversation. Please use them for context.`
       }
 
       return ""
@@ -787,9 +788,11 @@ export function ChatStylist({
       return
     }
 
-    const targetOutfitId = outfitId || attachedOutfits[0]?.id
+    // Find target outfit (must be a real outfit, not an attached item)
+    const targetOutfitId = outfitId || attachedOutfits.find(o => !o.id.startsWith("wardrobe:") && !o.id.startsWith("commerce:"))?.id
+
     if (!targetOutfitId) {
-      toast.error("No outfit selected. Please attach an outfit first.")
+      toast.error("Please create an outfit first to add items")
       return
     }
 
@@ -920,6 +923,94 @@ export function ChatStylist({
       return newSet
     })
   }, [])
+
+  // Attach a suggested item to the chat context (so user can reference it in follow-up messages)
+  // For wardrobe items, fetch full data from MongoDB for complete attributes
+  const handleAttachSuggestedItem = useCallback((item: ClothingItem) => {
+    setAttachedOutfits((prev) => {
+      // Check if already attached
+      const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
+      const exists = prev.some((entry) => entry.id === attachmentId)
+
+      if (exists) {
+        // Remove if already attached
+        toast.info(`Removed "${item.name}" from chat context`)
+        return prev.filter((entry) => entry.id !== attachmentId)
+      }
+
+      if (prev.length >= 3) {
+        toast.error("You can attach up to 3 items")
+        return prev
+      }
+
+      // Convert item colors (string[] or hex string) to readable names if needed
+      let colors: string[] = []
+      if (item.colors && Array.isArray(item.colors)) {
+        colors = item.colors
+      } else if (item.colorHex) {
+        try {
+          colors = [getClosestColorName(item.colorHex)]
+        } catch {
+          colors = [item.colorHex]
+        }
+      }
+
+      const snapshot = {
+        id: item.id,
+        name: item.name,
+        imageUrl: item.imageUrl,
+        category: item.category,
+        subCategory: item.subCategory,
+        source: item.source,
+        colors: colors,
+        brand: item.brand,
+        notes: item.notes,
+      }
+
+      // Build attachment structure
+      const items: OutfitAttachment["items"] = {
+        top: undefined,
+        bottom: undefined,
+        footwear: undefined,
+        outerwear: undefined,
+        dress: undefined,
+        accessories: [],
+      }
+
+      // Place in appropriate slot based on category
+      switch (snapshot.category?.toUpperCase()) {
+        case "TOP":
+          items.top = snapshot
+          break
+        case "BOTTOM":
+          items.bottom = snapshot
+          break
+        case "FOOTWEAR":
+          items.footwear = snapshot
+          break
+        case "OUTERWEAR":
+          items.outerwear = snapshot
+          break
+        case "DRESS":
+          items.dress = snapshot
+          break
+        case "ACCESSORY":
+          items.accessories = [snapshot]
+          break
+        default:
+          // For commerce items without clear category, put in accessories
+          items.accessories = [snapshot]
+          break
+      }
+
+      toast.success(`Attached "${snapshot.name}" to chat`)
+      return [...prev, {
+        id: attachmentId,
+        name: snapshot.name,
+        items,
+      }]
+    })
+  }, [attachedOutfits])
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
@@ -1059,7 +1150,7 @@ export function ChatStylist({
                                 {primaryImage ? (
                                   <Image
                                     src={primaryImage as string}
-                                    alt="Wardrobe item"
+                                    alt="Attached item"
                                     fill
                                     className="object-contain"
                                   />
@@ -1145,10 +1236,9 @@ export function ChatStylist({
                                 onClick={(e) => e.stopPropagation()}
                               />
                             )}
-                            <button
-                              type="button"
+                            <div
                               onClick={() => setSelectedItem(item)}
-                              className="flex flex-col items-center gap-1 sm:gap-2"
+                              className="flex flex-col items-center gap-1 sm:gap-2 cursor-pointer"
                             >
                               <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
                                 {item.imageUrl ? (
@@ -1163,11 +1253,40 @@ export function ChatStylist({
                                     No image
                                   </div>
                                 )}
+                                {/* Attach to chat button */}
+                                {(() => {
+                                  const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
+                                  const isAttached = attachedOutfits.some((entry) => entry.id === attachmentId)
+                                  const isMaxReached = attachedOutfits.length >= 3 && !isAttached
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleAttachSuggestedItem(item)
+                                      }}
+                                      disabled={isMaxReached}
+                                      title={isAttached ? "Remove from chat" : isMaxReached ? "Max 3 items attached" : "Attach to chat"}
+                                      className={`absolute top-1 right-1 z-10 h-6 w-6 rounded-full flex items-center justify-center transition-all
+                                        ${isAttached
+                                          ? "bg-primary text-primary-foreground opacity-100"
+                                          : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 sm:opacity-0 hover:bg-primary hover:text-primary-foreground"}
+                                        ${isMaxReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                                        shadow-md border border-border/50`}
+                                    >
+                                      {isAttached ? (
+                                        <Check className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <Plus className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )
+                                })()}
                               </div>
                               <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
                                 {item.name}
                               </span>
-                            </button>
+                            </div>
                             {attachedOutfits.length > 0 && item.source === "wardrobe" && item.id && (
                               <Button
                                 size="sm"
@@ -1311,6 +1430,8 @@ export function ChatStylist({
                 const images = getOutfitAttachmentImages(outfit)
                 const swapIntent = swapIntentsByOutfit[outfit.id]
                 const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                const isCommerceAttachment = outfit.id.startsWith("commerce:")
+                const isSingleItem = isWardrobeAttachment || isCommerceAttachment
 
                 // Outfitler icin 2x2 grid, wardrobe tekil attach icin tek gorsel
                 const primaryImage =
@@ -1325,7 +1446,7 @@ export function ChatStylist({
                   <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        {isWardrobeAttachment ? (
+                        {isSingleItem ? (
                           <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
                             {primaryImage ? (
                               <Image
@@ -1363,7 +1484,7 @@ export function ChatStylist({
                         <div>
                           <p className="text-xs font-medium text-foreground">{outfit.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {isWardrobeAttachment ? "Attached wardrobe item" : "Attached outfit"}
+                            {isSingleItem ? "Attached item" : "Attached outfit"}
                           </p>
                         </div>
                       </div>
@@ -1376,7 +1497,7 @@ export function ChatStylist({
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    {!isWardrobeAttachment && (
+                    {!isSingleItem && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {(["TOP", "BOTTOM", "FOOTWEAR", "OUTERWEAR", "DRESS", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
                           <Button
