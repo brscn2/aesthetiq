@@ -9,9 +9,11 @@ on:
       - ".github/workflows/deploy_python_engine.yml"
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest-xl
-
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.changes.outputs.services }}
+      has-changes: ${{ steps.changes.outputs.has-changes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,27 +32,27 @@ jobs:
               echo "Changes detected in $service"
             fi
           done
-          echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
-          echo "Changed services: $CHANGED_SERVICES"
+          
+          if [ -z "$CHANGED_SERVICES" ]; then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "services=[]" >> $GITHUB_OUTPUT
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            SERVICES_JSON=$(echo "$CHANGED_SERVICES" | jq -R 'split(" ") | map(select(length > 0))')
+            echo "services=$SERVICES_JSON" >> $GITHUB_OUTPUT
+            echo "Changed services: $CHANGED_SERVICES"
+          fi
 
-      - name: Create CI .env.prod
-        working-directory: python_engine
-        run: |
-          cat > .env.prod <<'EOF'
-          # CI placeholder file for docker compose
-          EOF
-
-      - name: Setup SSH Key
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.VM_SSH_KEY }}
-
-      - name: Free Disk Space
-        run: |
-          df -h
-          docker system prune -a --force
-          docker volume prune -f
-          df -h
+  build-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -62,29 +64,42 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build changed services (with cache)
+      - name: Create CI .env.prod
+        working-directory: python_engine
+        run: |
+          cat > .env.prod <<'EOF'
+          # CI placeholder file for docker compose
+          EOF
+
+      - name: Free Disk Space
+        run: |
+          df -h
+          docker system prune -a --force
+          docker volume prune -f
+          df -h
+
+      - name: Build and Push ${{ matrix.service }}
         working-directory: python_engine
         env:
           DOCKER_BUILDKIT: 1
         run: |
-          if [ -z "${{ steps.changes.outputs.services }}" ]; then
-            echo "No changes detected, skipping build"
-            exit 0
-          fi
-          for service in ${{ steps.changes.outputs.services }}; do
-            echo "Building $service..."
-            docker compose -f docker-compose.prod.yml build \
-              --build-arg BUILDKIT_INLINE_CACHE=1 $service
-          done
+          echo "Building ${{ matrix.service }}..."
+          docker compose -f docker-compose.prod.yml build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 ${{ matrix.service }}
+          docker compose -f docker-compose.prod.yml push ${{ matrix.service }}
 
-      - name: Push images
-        working-directory: python_engine
-        run: |
-          if [ -z "${{ steps.changes.outputs.services }}" ]; then
-            echo "No changes detected, skipping push"
-            exit 0
-          fi
-          docker compose -f docker-compose.prod.yml push
+  deploy:
+    needs: build-service
+    if: always() && !failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.VM_SSH_KEY }}
 
       - name: Copy docker-compose to VM
         run: |
