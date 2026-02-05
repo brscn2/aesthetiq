@@ -400,6 +400,7 @@ export function useChatApi(
       messageOptions?: {
         attachedOutfits?: OutfitAttachment[];
         swapIntents?: OutfitSwapIntent[];
+        images?: string[];
       },
     ): Promise<DoneEvent | null> => {
       // Cancel any existing request
