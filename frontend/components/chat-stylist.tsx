@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useQuery } from "@tanstack/react-query"
-import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2, Check, Upload } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2, Check, Upload, Heart } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,8 @@ import { useApi } from "@/lib/api"
 import { getClosestColorName } from "@/lib/colors"
 import { useWardrobeRecommendation } from "@/contexts/wardrobe-recommendation-context"
 import type { ClothingItem, DoneEvent, OutfitAttachment, OutfitSwapIntent } from "@/types/chat"
-import type { Outfit, WardrobeItem, UpdateOutfitDto } from "@/types/api"
+import type { Outfit, WardrobeItem, UpdateOutfitDto, WishlistItem } from "@/types/api"
+import { Category } from "@/types/api"
 
 // Speech Recognition types
 interface SpeechRecognition extends EventTarget {
@@ -116,7 +117,8 @@ export function ChatStylist({
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const router = useRouter()
-  const { outfitApi, wardrobeApi } = useApi()
+  const queryClient = useQueryClient()
+  const { outfitApi, wardrobeApi, wishlistApi } = useApi()
   const { recommendation, clearRecommendation } = useWardrobeRecommendation()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
@@ -132,6 +134,7 @@ export function ChatStylist({
   const [selectedItemsForAdd, setSelectedItemsForAdd] = useState<Set<string>>(new Set())
   const [isAddingToOutfit, setIsAddingToOutfit] = useState(false)
   const [addingItemIds, setAddingItemIds] = useState<Set<string>>(new Set())
+  const [addingToWishlistIds, setAddingToWishlistIds] = useState<Set<string>>(new Set())
   const [isDragging, setIsDragging] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -149,6 +152,25 @@ export function ChatStylist({
     queryFn: () => wardrobeApi.getAll(wardrobeUserId),
     enabled: isWardrobeDialogOpen,
   })
+
+  // Load wishlist items to track which items are already saved
+  const { data: wishlistItems } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => wishlistApi.getAll(),
+  })
+
+  // Create a map of externalId -> wishlistItem for quick lookup
+  const wishlistItemsMap = new Map<string, WishlistItem>()
+  wishlistItems?.forEach((item) => {
+    if (item.externalId) {
+      wishlistItemsMap.set(item.externalId, item)
+    }
+  })
+
+  // Check if an item is in the wishlist
+  const isInWishlist = useCallback((itemId: string) => {
+    return wishlistItemsMap.has(itemId)
+  }, [wishlistItemsMap])
 
   // Use the chat API hook (must be called before useEffect that uses setPendingClarification)
   const {
@@ -230,6 +252,83 @@ export function ChatStylist({
       }
     },
   })
+
+  const handleToggleWishlist = useCallback(async (item: ClothingItem) => {
+    if (!item.id) return
+
+    // Prevent duplicate operations
+    if (addingToWishlistIds.has(item.id)) return
+
+    setAddingToWishlistIds((prev) => new Set(prev).add(item.id))
+
+    const existingWishlistItem = wishlistItemsMap.get(item.id)
+
+    // Helper to determine category from item
+    const getCategory = (): Category => {
+      // Try item.category first (should be uppercase like "DRESS", "TOP", etc.)
+      if (item.category && Object.values(Category).includes(item.category as Category)) {
+        return item.category as Category
+      }
+      // Try to infer from subCategory
+      const subCat = item.subCategory?.toLowerCase() || ""
+      if (subCat.includes("dress")) return Category.DRESS
+      if (subCat.includes("shirt") || subCat.includes("blouse") || subCat.includes("top") || subCat.includes("sweater") || subCat.includes("hoodie")) return Category.TOP
+      if (subCat.includes("pants") || subCat.includes("jeans") || subCat.includes("shorts") || subCat.includes("skirt") || subCat.includes("trouser")) return Category.BOTTOM
+      if (subCat.includes("jacket") || subCat.includes("coat") || subCat.includes("blazer") || subCat.includes("cardigan")) return Category.OUTERWEAR
+      if (subCat.includes("shoe") || subCat.includes("sneaker") || subCat.includes("boot") || subCat.includes("sandal") || subCat.includes("heel") || subCat.includes("loafer")) return Category.FOOTWEAR
+      // Try to infer from name
+      const name = item.name?.toLowerCase() || ""
+      if (name.includes("dress")) return Category.DRESS
+      if (name.includes("shirt") || name.includes("blouse") || name.includes("top") || name.includes("sweater") || name.includes("hoodie")) return Category.TOP
+      if (name.includes("pants") || name.includes("jeans") || name.includes("shorts") || name.includes("skirt") || name.includes("trouser")) return Category.BOTTOM
+      if (name.includes("jacket") || name.includes("coat") || name.includes("blazer") || name.includes("cardigan")) return Category.OUTERWEAR
+      if (name.includes("shoe") || name.includes("sneaker") || name.includes("boot") || name.includes("sandal") || name.includes("heel") || name.includes("loafer")) return Category.FOOTWEAR
+      // Default fallback
+      return Category.ACCESSORY
+    }
+
+    try {
+      if (existingWishlistItem) {
+        // Remove from wishlist
+        await wishlistApi.remove(existingWishlistItem._id)
+        toast.success("Removed from wishlist")
+      } else {
+        // Add to wishlist - map ClothingItem to CommerceItem-like structure
+        await wishlistApi.create({
+          name: item.name,
+          description: item.metadata?.description,
+          imageUrl: item.imageUrl || "",
+          category: getCategory(),
+          subCategory: item.subCategory,
+          brand: item.brand,
+          brandId: item.metadata?.brandId,
+          retailerId: item.metadata?.retailerId,
+          retailerName: item.metadata?.retailerName || item.metadata?.retailer,
+          colors: item.colorHex ? [item.colorHex] : (item.metadata?.colors || []),
+          price: item.price,
+          currency: item.metadata?.currency || "USD",
+          productUrl: item.productUrl || "",
+          sku: item.metadata?.sku,
+          tags: item.metadata?.tags || [],
+          inStock: item.metadata?.inStock ?? true,
+          metadata: item.metadata,
+          externalId: item.id,
+        })
+        toast.success("Added to wishlist")
+      }
+      // Invalidate wishlist query to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] })
+    } catch (error) {
+      console.error("Failed to update wishlist:", error)
+      toast.error(existingWishlistItem ? "Failed to remove from wishlist" : "Failed to add to wishlist")
+    } finally {
+      setAddingToWishlistIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+    }
+  }, [wishlistApi, addingToWishlistIds, wishlistItemsMap, queryClient])
 
   const handleCreateOutfitFromItems = useCallback((items: ClothingItem[]) => {
     const wardrobeItems = items.filter((item) => item.id && item.source === "wardrobe")
@@ -361,7 +460,7 @@ export function ChatStylist({
   )
 
   const getOutfitAttachmentImages = useCallback((attachment: OutfitAttachment) => {
-    return [
+    const urls = [
       attachment.items.outerwear?.imageUrl,
       attachment.items.top?.imageUrl,
       attachment.items.bottom?.imageUrl,
@@ -369,7 +468,20 @@ export function ChatStylist({
       attachment.items.dress?.imageUrl,
       attachment.items.accessories[0]?.imageUrl,
     ]
+    return urls.filter((url): url is string => Boolean(url))
   }, [])
+
+  /** Grid class for outfit thumbnail by item count (1–6) */
+  const getOutfitGridClass = (count: number) =>
+    count <= 1
+      ? "grid-cols-1 grid-rows-1"
+      : count === 2
+        ? "grid-cols-2 grid-rows-1"
+        : count === 3
+          ? "grid-cols-3 grid-rows-1"
+          : count === 4
+            ? "grid-cols-2 grid-rows-2"
+            : "grid-cols-3 grid-rows-2"
 
   const buildAutoMessage = useCallback(
     (swapIntents: OutfitSwapIntent[], attachments: OutfitAttachment[]) => {
@@ -385,7 +497,8 @@ export function ChatStylist({
       }
 
       if (attachments.length > 0) {
-        return "Please use the attached outfits and items for context."
+        const names = attachments.map(a => `"${a.name}"`).join(", ")
+        return `I have attached ${names} to the conversation. Please use them for context.`
       }
 
       return ""
@@ -787,9 +900,11 @@ export function ChatStylist({
       return
     }
 
-    const targetOutfitId = outfitId || attachedOutfits[0]?.id
+    // Find target outfit (must be a real outfit, not an attached item)
+    const targetOutfitId = outfitId || attachedOutfits.find(o => !o.id.startsWith("wardrobe:") && !o.id.startsWith("commerce:"))?.id
+
     if (!targetOutfitId) {
-      toast.error("No outfit selected. Please attach an outfit first.")
+      toast.error("Please create an outfit first to add items")
       return
     }
 
@@ -921,6 +1036,94 @@ export function ChatStylist({
     })
   }, [])
 
+  // Attach a suggested item to the chat context (so user can reference it in follow-up messages)
+  // For wardrobe items, fetch full data from MongoDB for complete attributes
+  const handleAttachSuggestedItem = useCallback((item: ClothingItem) => {
+    setAttachedOutfits((prev) => {
+      // Check if already attached
+      const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
+      const exists = prev.some((entry) => entry.id === attachmentId)
+
+      if (exists) {
+        // Remove if already attached
+        toast.info(`Removed "${item.name}" from chat context`)
+        return prev.filter((entry) => entry.id !== attachmentId)
+      }
+
+      if (prev.length >= 3) {
+        toast.error("You can attach up to 3 items")
+        return prev
+      }
+
+      // Convert item colors (string[] or hex string) to readable names if needed
+      let colors: string[] = []
+      if (item.colors && Array.isArray(item.colors)) {
+        colors = item.colors
+      } else if (item.colorHex) {
+        try {
+          colors = [getClosestColorName(item.colorHex)]
+        } catch {
+          colors = [item.colorHex]
+        }
+      }
+
+      const snapshot = {
+        id: item.id,
+        name: item.name,
+        imageUrl: item.imageUrl,
+        category: item.category,
+        subCategory: item.subCategory,
+        source: item.source,
+        colors: colors,
+        brand: item.brand,
+        notes: item.notes,
+      }
+
+      // Build attachment structure
+      const items: OutfitAttachment["items"] = {
+        top: undefined,
+        bottom: undefined,
+        footwear: undefined,
+        outerwear: undefined,
+        dress: undefined,
+        accessories: [],
+      }
+
+      // Place in appropriate slot based on category
+      switch (snapshot.category?.toUpperCase()) {
+        case "TOP":
+          items.top = snapshot
+          break
+        case "BOTTOM":
+          items.bottom = snapshot
+          break
+        case "FOOTWEAR":
+          items.footwear = snapshot
+          break
+        case "OUTERWEAR":
+          items.outerwear = snapshot
+          break
+        case "DRESS":
+          items.dress = snapshot
+          break
+        case "ACCESSORY":
+          items.accessories = [snapshot]
+          break
+        default:
+          // For commerce items without clear category, put in accessories
+          items.accessories = [snapshot]
+          break
+      }
+
+      toast.success(`Attached "${snapshot.name}" to chat`)
+      return [...prev, {
+        id: attachmentId,
+        name: snapshot.name,
+        items,
+      }]
+    })
+  }, [attachedOutfits])
+
   const toggleRecording = () => {
     if (!recognitionRef.current) {
       toast.error("Speech recognition is not supported in your browser")
@@ -999,34 +1202,104 @@ export function ChatStylist({
                 </Avatar>
               )}
 
-              <div
-                className={`flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
-              >
-                <div
-                  className={`rounded-2xl px-3 sm:px-4 py-2 sm:py-3 ${message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card text-card-foreground border border-border/50"
-                    }`}
-                >
-                  {message.role === "user" ? (
+              {/* Kullanıcı mesajı: tek sütun, sağa yapışık; balon + ekler hemen altında */}
+              {message.role === "user" ? (
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-auto max-w-full sm:max-w-[80%]">
+                  <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-primary text-primary-foreground">
                     <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
-                  ) : (
-                    <>
-                      {message.content ? (
-                        <>
-                          <Markdown content={message.content} className="text-xs sm:text-sm" />
-                          {message.isStreaming && (
-                            <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
-                          )}
-                        </>
-                      ) : null}
-                    </>
+                  </div>
+                  {message.images && message.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {message.images.map((imageUrl, index) => (
+                        <div key={index} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-border/50">
+                          <Image src={imageUrl} alt={`Attachment ${index + 1}`} fill className="object-cover" />
+                        </div>
+                      ))}
+                    </div>
                   )}
+                  {message.attachedOutfits && message.attachedOutfits.length > 0 && (
+                    <div className="flex flex-col items-end gap-2">
+                        {message.attachedOutfits.map((outfit) => {
+                          const images = getOutfitAttachmentImages(outfit)
+                          const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                          const primaryImage =
+                            images[0] ||
+                            images[1] ||
+                            images[2] ||
+                            images[3] ||
+                            images[4] ||
+                            images[5]
+                          const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
+
+                          return (
+                            <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                              <div className="flex items-center gap-2">
+                                {isWardrobeAttachment ? (
+                                  <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                                    {primaryImage ? (
+                                      <Image
+                                        src={primaryImage as string}
+                                        alt="Wardrobe item"
+                                        fill
+                                        className="object-contain"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                        No image
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                                  >
+                                    {images.length === 0 ? (
+                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                        No image
+                                      </div>
+                                    ) : (
+                                      images.map((img, index) => (
+                                        <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                          <Image
+                                            src={img}
+                                            alt="Outfit item"
+                                            fill
+                                            className="object-contain"
+                                          />
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                                  {swapIntent && (
+                                    <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 items-start">
+                <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-card text-card-foreground border border-border/50">
+                  {message.content ? (
+                    <>
+                      <Markdown content={message.content} className="text-xs sm:text-sm" />
+                      {message.isStreaming && (
+                        <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                      )}
+                    </>
+                  ) : null}
                 </div>
 
-                {/* Attached Images */}
+                {/* Attached Images - assistant only (user handled above) */}
                 {message.images && message.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {message.images.map((imageUrl, index) => (
@@ -1038,7 +1311,7 @@ export function ChatStylist({
                 )}
 
                 {message.attachedOutfits && message.attachedOutfits.length > 0 && (
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
                     {message.attachedOutfits.map((outfit) => {
                       const images = getOutfitAttachmentImages(outfit)
                       const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
@@ -1059,7 +1332,7 @@ export function ChatStylist({
                                 {primaryImage ? (
                                   <Image
                                     src={primaryImage as string}
-                                    alt="Wardrobe item"
+                                    alt="Attached item"
                                     fill
                                     className="object-contain"
                                   />
@@ -1070,23 +1343,25 @@ export function ChatStylist({
                                 )}
                               </div>
                             ) : (
-                              <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                                {[0, 1, 2, 3].map((index) => (
-                                  <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                    {images[index] ? (
+                              <div
+                                className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                              >
+                                {images.length === 0 ? (
+                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                    No image
+                                  </div>
+                                ) : (
+                                  images.map((img, index) => (
+                                    <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                       <Image
-                                        src={images[index] as string}
+                                        src={img}
                                         alt="Outfit item"
                                         fill
                                         className="object-contain"
                                       />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                        --
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
+                                    </div>
+                                  ))
+                                )}
                               </div>
                             )}
                             <div>
@@ -1145,10 +1420,9 @@ export function ChatStylist({
                                 onClick={(e) => e.stopPropagation()}
                               />
                             )}
-                            <button
-                              type="button"
+                            <div
                               onClick={() => setSelectedItem(item)}
-                              className="flex flex-col items-center gap-1 sm:gap-2"
+                              className="flex flex-col items-center gap-1 sm:gap-2 cursor-pointer"
                             >
                               <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
                                 {item.imageUrl ? (
@@ -1163,11 +1437,40 @@ export function ChatStylist({
                                     No image
                                   </div>
                                 )}
+                                {/* Attach to chat button */}
+                                {(() => {
+                                  const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
+                                  const isAttached = attachedOutfits.some((entry) => entry.id === attachmentId)
+                                  const isMaxReached = attachedOutfits.length >= 3 && !isAttached
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleAttachSuggestedItem(item)
+                                      }}
+                                      disabled={isMaxReached}
+                                      title={isAttached ? "Remove from chat" : isMaxReached ? "Max 3 items attached" : "Attach to chat"}
+                                      className={`absolute top-1 right-1 z-10 h-6 w-6 rounded-full flex items-center justify-center transition-all
+                                        ${isAttached
+                                          ? "bg-primary text-primary-foreground opacity-100"
+                                          : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 sm:opacity-0 hover:bg-primary hover:text-primary-foreground"}
+                                        ${isMaxReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                                        shadow-md border border-border/50`}
+                                    >
+                                      {isAttached ? (
+                                        <Check className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <Plus className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )
+                                })()}
                               </div>
                               <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
                                 {item.name}
                               </span>
-                            </button>
+                            </div>
                             {attachedOutfits.length > 0 && item.source === "wardrobe" && item.id && (
                               <Button
                                 size="sm"
@@ -1187,6 +1490,29 @@ export function ChatStylist({
                                 Add
                               </Button>
                             )}
+                            {/* Wishlist button for non-wardrobe items */}
+                            {item.source !== "wardrobe" && item.id && (() => {
+                              const inWishlist = isInWishlist(item.id)
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={`h-6 text-[10px] px-2 w-full transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleWishlist(item)
+                                  }}
+                                  disabled={addingToWishlistIds.has(item.id)}
+                                >
+                                  {addingToWishlistIds.has(item.id) ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Heart className={`h-3 w-3 mr-1 ${inWishlist ? "fill-current" : ""}`} />
+                                  )}
+                                  {inWishlist ? "Saved" : "Wishlist"}
+                                </Button>
+                              )
+                            })()}
                           </div>
                         ))}
                       </div>
@@ -1212,7 +1538,8 @@ export function ChatStylist({
                     </div>
                   )
                 })()}
-              </div>
+                  </div>
+                )}
 
               {message.role === "user" && (
                 <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">
@@ -1311,6 +1638,8 @@ export function ChatStylist({
                 const images = getOutfitAttachmentImages(outfit)
                 const swapIntent = swapIntentsByOutfit[outfit.id]
                 const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                const isCommerceAttachment = outfit.id.startsWith("commerce:")
+                const isSingleItem = isWardrobeAttachment || isCommerceAttachment
 
                 // Outfitler icin 2x2 grid, wardrobe tekil attach icin tek gorsel
                 const primaryImage =
@@ -1325,7 +1654,7 @@ export function ChatStylist({
                   <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        {isWardrobeAttachment ? (
+                        {isSingleItem ? (
                           <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
                             {primaryImage ? (
                               <Image
@@ -1341,29 +1670,31 @@ export function ChatStylist({
                             )}
                           </div>
                         ) : (
-                          <div className="grid h-12 w-12 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                            {[0, 1, 2, 3].map((index) => (
-                              <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                {images[index] ? (
+                          <div
+                            className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                          >
+                            {images.length === 0 ? (
+                              <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                No image
+                              </div>
+                            ) : (
+                              images.map((img, index) => (
+                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                   <Image
-                                    src={images[index] as string}
+                                    src={img}
                                     alt="Outfit item"
                                     fill
                                     className="object-contain"
                                   />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                    --
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                                </div>
+                              ))
+                            )}
                           </div>
                         )}
                         <div>
                           <p className="text-xs font-medium text-foreground">{outfit.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {isWardrobeAttachment ? "Attached wardrobe item" : "Attached outfit"}
+                            {isSingleItem ? "Attached item" : "Attached outfit"}
                           </p>
                         </div>
                       </div>
@@ -1376,7 +1707,7 @@ export function ChatStylist({
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    {!isWardrobeAttachment && (
+                    {!isSingleItem && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {(["TOP", "BOTTOM", "FOOTWEAR", "OUTERWEAR", "DRESS", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
                           <Button
@@ -1519,23 +1850,25 @@ export function ChatStylist({
                               <Check className="h-3 w-3" />
                             </div>
                           )}
-                          <div className="grid h-16 w-16 grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-md bg-muted p-1">
-                            {[0, 1, 2, 3].map((index) => (
-                              <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                {images[index] ? (
+                          <div
+                            className={`grid h-16 w-16 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                          >
+                            {images.length === 0 ? (
+                              <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                No image
+                              </div>
+                            ) : (
+                              images.map((img, index) => (
+                                <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
                                   <Image
-                                    src={images[index] as string}
+                                    src={img}
                                     alt="Outfit item"
                                     fill
                                     className="object-contain"
                                   />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                    --
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1691,13 +2024,34 @@ export function ChatStylist({
                   </div>
                 )}
               </div>
-              {selectedItem.productUrl && (
-                <Button asChild className="w-full">
-                  <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
-                    View item
-                  </a>
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {selectedItem.source !== "wardrobe" && (() => {
+                  const inWishlist = isInWishlist(selectedItem.id)
+                  return (
+                    <Button
+                      variant="outline"
+                      className={`flex-1 transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
+                      onClick={() => handleToggleWishlist(selectedItem)}
+                      disabled={addingToWishlistIds.has(selectedItem.id)}
+                    >
+                      {addingToWishlistIds.has(selectedItem.id) ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Heart className={`h-4 w-4 mr-2 ${inWishlist ? "fill-current" : ""}`} />
+                      )}
+                      {inWishlist ? "Saved to Wishlist" : "Add to Wishlist"}
+                    </Button>
+                  )
+                })()}
+                {selectedItem.productUrl && (
+                  <Button asChild className={`gradient-ai text-white hover:opacity-90 ${selectedItem.source !== "wardrobe" ? "flex-1" : "w-full"}`}>
+                    <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Shop Now
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
           </DialogContent>
         )}

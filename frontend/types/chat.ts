@@ -181,6 +181,9 @@ export interface ClothingItem {
   imageUrl?: string;
   productUrl?: string;
   metadata?: Record<string, any>;
+  /** Wardrobe item specific fields */
+  colors?: string[];
+  notes?: string;
 }
 
 // =============================================================================
