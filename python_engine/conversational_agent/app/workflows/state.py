@@ -64,6 +64,7 @@ class AnalysisDecision(str, Enum):
     """Decision from the Clothing Analyzer Agent."""
 
     APPROVE = "approve"
+    APPROVE_WITH_FEEDBACK = "approve_with_feedback"
     REFINE = "refine"
     CLARIFY = "clarify"
 

@@ -176,8 +176,15 @@ export interface ClothingItem {
   subCategory?: string;
   colorHex?: string;
   brand?: string;
+  description?: string;
+  material?: string;
+  tags?: string[];
+  sizes?: string[];
+  gender?: string;
   size?: string;
   price?: number;
+  currency?: string;
+  inStock?: boolean;
   imageUrl?: string;
   productUrl?: string;
   metadata?: Record<string, any>;
@@ -201,8 +208,26 @@ export interface OutfitItemSnapshot {
   colors?: string[];
   /** User notes / description */
   notes?: string;
+  /** Product description */
+  description?: string;
   /** Brand */
   brand?: string;
+  /** Material / fabric */
+  material?: string;
+  /** Tags / style tags */
+  tags?: string[];
+  /** Available sizes */
+  sizes?: string[];
+  /** Price in currency units */
+  price?: number;
+  /** ISO currency code, e.g. USD */
+  currency?: string;
+  /** Preformatted price string */
+  priceFormatted?: string;
+  /** Stock status */
+  inStock?: boolean;
+  /** Product URL for commerce/web items */
+  productUrl?: string;
 }
 
 export interface OutfitAttachment {

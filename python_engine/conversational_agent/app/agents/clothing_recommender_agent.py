@@ -5,7 +5,6 @@ This agent handles the "clothing" intent path:
 - Fetches user context (profile, style DNA)
 - Searches commerce, wardrobe, or both based on scope
 - Uses web search as fallback when no items found
-- Integrates user feedback to soft-de-rank disliked items
 - Handles outfit decomposition for occasion-based requests
 """
 
@@ -139,6 +138,24 @@ def convert_filters_to_mcp_format(filters: Dict[str, Any]) -> Dict[str, Any]:
     return converted
 
 
+def _map_profile_gender_to_commerce(
+    user_profile: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    if not isinstance(user_profile, dict):
+        return None
+    raw_gender = user_profile.get("gender") or user_profile.get("Gender")
+    if not raw_gender:
+        return None
+    gender_value = str(raw_gender).strip().upper()
+    if gender_value in {"MEN", "WOMEN", "UNISEX"}:
+        return gender_value
+    if gender_value == "MALE":
+        return "MEN"
+    if gender_value == "FEMALE":
+        return "WOMEN"
+    return None
+
+
 RECOMMENDER_AGENT_PROMPT = """You are the Clothing Recommender for AesthetIQ, a fashion AI assistant.
 
 Your role is to find and recommend clothing items based on the user's request.
@@ -171,7 +188,7 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
 
 **Tool Usage Guidelines:**
 
-1. **When to fetch context (default: fetch for product requests):** For product requests (e.g. t-shirt, jacket, dress, shoes), **fetch user profile (and get_style_dna / get_disliked_items_for_search as needed) if not already provided** in the message—we need that data for recommendations in most cases. **Exception:** Skip fetching user data only when the request is clearly generic or non-personalized (e.g. "show me black jackets", "what's trending") with no indication the user wants personalized results.
+1. **When to fetch context (default: fetch for product requests):** For product requests (e.g. t-shirt, jacket, dress, shoes), **fetch user profile (and get_style_dna as needed) if not already provided** in the message—we need that data for recommendations in most cases. **Exception:** Skip fetching user data only when the request is clearly generic or non-personalized (e.g. "show me black jackets", "what's trending") with no indication the user wants personalized results.
 2. **When cached:** If the request message includes **cached** user profile or style DNA, do **not** call get_user_profile or get_style_dna again for this turn; use the cached context.
 
 3. **WARDROBE-FIRST APPROACH** (for "both" or "wardrobe" scope):
@@ -190,7 +207,7 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
    - Category must be EXACTLY one of: "TOP", "BOTTOM", "OUTERWEAR", "FOOTWEAR", "ACCESSORY", "DRESS" (all caps, as written)
    - SubCategory is the specific item type (use title case, e.g., "Bag", "Jacket", "Jeans")
    - **IMPORTANT: Only include filter fields that have actual values**
-   - DO NOT pass None or empty values for optional list fields (colors, disliked_item_ids)
+    - DO NOT pass None or empty values for optional list fields (colors)
     - Only include: category (required), subCategory (required) in the filters dict
    - Omit optional fields like colors, brand if not being used
     - If user profile or request indicates gender, include `gender` in filters (MEN/WOMEN/KIDS). UNISEX items should be included for any gender.
@@ -216,7 +233,7 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
    - NEVER return zero results - keep searching with broader terms if needed
    - If Style DNA search fails: Fall back to semantic search without color filtering
 
-7. Keep tool usage minimal: only call context tools (get_user_profile, get_style_dna, get_disliked_items_for_search) when needed; then search. Prefer fewer tool calls for follow-ups or simple queries. Return results immediately after finding items.
+7. Keep tool usage minimal: only call context tools (get_user_profile, get_style_dna) when needed; then search. Prefer fewer tool calls for follow-ups or simple queries. Return results immediately after finding items.
 """
 
 
@@ -545,7 +562,7 @@ def _normalize_item_to_clothing_item(
         normalized["brand"] = item["brand"]
 
     # Map name/description/material/gender/tags/sizes
-    if "name" in item:
+    if "name" in item and item.get("name"):
         normalized["name"] = item["name"]
     if "description" in item:
         normalized["description"] = item["description"]
@@ -553,6 +570,14 @@ def _normalize_item_to_clothing_item(
         normalized["material"] = item["material"]
     if "gender" in item:
         normalized["gender"] = item["gender"]
+    elif isinstance(item.get("raw"), dict) and item.get("raw", {}).get("gender"):
+        normalized["gender"] = item.get("raw", {}).get("gender")
+    elif (
+        isinstance(item.get("metadata"), dict)
+        and isinstance(item.get("metadata", {}).get("raw"), dict)
+        and item.get("metadata", {}).get("raw", {}).get("gender")
+    ):
+        normalized["gender"] = item.get("metadata", {}).get("raw", {}).get("gender")
     if "tags" in item:
         normalized["tags"] = item["tags"]
     if "sizes" in item:
@@ -1102,6 +1127,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     trace_id = state.get("langfuse_trace_id")
     attached_outfits = state.get("attached_outfits") or []
     swap_intents = state.get("swap_intents") or []
+    user_profile = state.get("user_profile")
 
     excluded_item_ids: set[str] = set()
     for outfit in attached_outfits:
@@ -1149,6 +1175,17 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
     try:
         # Get all MCP tools - agent decides which to use based on task
         tools = await get_mcp_tools()
+        tools = [
+            tool
+            for tool in tools
+            if getattr(tool, "name", "")
+            not in {
+                "get_disliked_items_for_search",
+                "save_item_feedback",
+                "list_disliked_wardrobe_items",
+                "delete_item_feedback",
+            }
+        ]
 
         if not tools:
             logger.warning("No MCP tools available, using fallback response")
@@ -1172,8 +1209,26 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
 
         logger.info(f"Clothing recommender has {len(tools)} tools available")
 
+        if not user_profile and user_id:
+            tools_by_name = {tool.name: tool for tool in tools if hasattr(tool, "name")}
+            profile_tool = tools_by_name.get("get_user_profile")
+            if profile_tool:
+                try:
+                    tool_result = await profile_tool.ainvoke({"user_id": user_id})
+                    extracted_profile = _extract_dict_value(tool_result, "profile")
+                    user_profile = extracted_profile or tool_result
+                    if trace_id:
+                        tracing_service.log_tool_call(
+                            trace_id=trace_id,
+                            tool_name="get_user_profile",
+                            input_params={"user_id": user_id},
+                            output=str(tool_result)[:500],
+                        )
+                except Exception as e:
+                    logger.warning(f"[RECOMMENDER] Failed to fetch user profile: {e}")
+
         # Cache = state; inject cached profile/style_dna into prompt; tell agent not to re-fetch for personalization (even if agent doesn’t call tools)
-        cached_user_profile = state.get("user_profile")
+        cached_user_profile = user_profile or state.get("user_profile")
         cached_style_dna = state.get("style_dna")
 
         # Create and invoke the ReAct agent
@@ -1288,7 +1343,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             )
             context_block = "".join(context_parts)
         else:
-            context_block = "\n\nBy default fetch user profile (and get_style_dna / get_disliked_items_for_search as needed) for product requests (e.g. t-shirt, jacket) when not cached; only skip for clearly generic requests (e.g. 'show me black jackets', 'what's trending')."
+            context_block = "\n\nBy default fetch user profile (and get_style_dna as needed) for product requests (e.g. t-shirt, jacket) when not cached; only skip for clearly generic requests (e.g. 'show me black jackets', 'what's trending')."
 
         search_request = f"""User request: {enhanced_message}
     User ID: {user_id}
@@ -1314,7 +1369,8 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             )
         else:
             retrieved_items = []
-        user_profile = state.get("user_profile")
+        if not user_profile:
+            user_profile = state.get("user_profile")
         style_dna = state.get("style_dna")
         tool_call_ids = {}
 
@@ -1529,6 +1585,185 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                         output=str(tool_result)[:500],
                     )
 
+        # Deterministic fallback: ensure commerce search for missing decomposed items
+        if search_scope in ("both", "commerce"):
+            decomposed_items = extracted_filters.get("sub_categories", []) or []
+            if decomposed_items:
+                commerce_gender = _map_profile_gender_to_commerce(user_profile)
+                normalized_present = set()
+                for item in retrieved_items:
+                    if not isinstance(item, dict):
+                        continue
+                    sub_category = item.get("subCategory") or item.get("sub_category")
+                    if sub_category:
+                        normalized_present.add(str(sub_category).strip().lower())
+
+                missing_subcategories = [
+                    sub
+                    for sub in decomposed_items
+                    if str(sub).strip().lower() not in normalized_present
+                ]
+
+                if missing_subcategories:
+                    tools_by_name = {
+                        tool.name: tool for tool in tools if hasattr(tool, "name")
+                    }
+                    retailer_tool = tools_by_name.get("search_retailer_items")
+                    if retailer_tool:
+                        category_map = {
+                            "t-shirt": "TOP",
+                            "tshirt": "TOP",
+                            "tee": "TOP",
+                            "shirt": "TOP",
+                            "blouse": "TOP",
+                            "sweater": "TOP",
+                            "hoodie": "TOP",
+                            "tank top": "TOP",
+                            "top": "TOP",
+                            "jeans": "BOTTOM",
+                            "pants": "BOTTOM",
+                            "trousers": "BOTTOM",
+                            "shorts": "BOTTOM",
+                            "skirt": "BOTTOM",
+                            "leggings": "BOTTOM",
+                            "sweatpants": "BOTTOM",
+                            "jacket": "OUTERWEAR",
+                            "coat": "OUTERWEAR",
+                            "blazer": "OUTERWEAR",
+                            "cardigan": "OUTERWEAR",
+                            "parka": "OUTERWEAR",
+                            "puffer": "OUTERWEAR",
+                            "sneakers": "FOOTWEAR",
+                            "boots": "FOOTWEAR",
+                            "sandals": "FOOTWEAR",
+                            "heels": "FOOTWEAR",
+                            "loafers": "FOOTWEAR",
+                            "flip-flops": "FOOTWEAR",
+                            "shoes": "FOOTWEAR",
+                            "bag": "ACCESSORY",
+                            "purse": "ACCESSORY",
+                            "backpack": "ACCESSORY",
+                            "jewelry": "ACCESSORY",
+                            "belt": "ACCESSORY",
+                            "scarf": "ACCESSORY",
+                            "hat": "ACCESSORY",
+                            "sunglasses": "ACCESSORY",
+                            "accessory": "ACCESSORY",
+                            "dress": "DRESS",
+                            "maxi": "DRESS",
+                            "midi": "DRESS",
+                            "mini": "DRESS",
+                            "cocktail": "DRESS",
+                            "wrap": "DRESS",
+                            "shirt dress": "DRESS",
+                        }
+                        for sub_category in missing_subcategories:
+                            sub_category_str = str(sub_category).strip()
+                            category_key = sub_category_str.lower()
+                            category = category_map.get(category_key)
+                            filters = {}
+                            if category:
+                                filters["category"] = category
+                            if sub_category_str:
+                                filters["subCategory"] = sub_category_str
+                            if commerce_gender:
+                                filters["gender"] = commerce_gender
+                            brand = extracted_filters.get("brand")
+                            if brand:
+                                filters["brand"] = brand
+                            color_hex = extracted_filters.get("colorHex")
+                            if color_hex:
+                                filters["colors"] = [color_hex]
+
+                            try:
+                                tool_result = await retailer_tool.ainvoke(
+                                    {
+                                        "query": sub_category_str or message,
+                                        "max_results": 5,
+                                        "filters": filters or None,
+                                    }
+                                )
+                                if trace_id:
+                                    tracing_service.log_tool_call(
+                                        trace_id=trace_id,
+                                        tool_name="search_retailer_items",
+                                        input_params={
+                                            "query": sub_category_str,
+                                            "filters": filters,
+                                        },
+                                        output=str(tool_result)[:500],
+                                    )
+                                items = _extract_items_from_result(
+                                    tool_result, "commerce"
+                                )
+                                if not items:
+                                    relaxed_filters = {
+                                        k: v
+                                        for k, v in filters.items()
+                                        if k != "subCategory"
+                                    }
+                                    tool_result = await retailer_tool.ainvoke(
+                                        {
+                                            "query": sub_category_str or message,
+                                            "max_results": 5,
+                                            "filters": relaxed_filters or None,
+                                        }
+                                    )
+                                    if trace_id:
+                                        tracing_service.log_tool_call(
+                                            trace_id=trace_id,
+                                            tool_name="search_retailer_items",
+                                            input_params={
+                                                "query": sub_category_str,
+                                                "filters": relaxed_filters,
+                                            },
+                                            output=str(tool_result)[:500],
+                                        )
+                                    items = _extract_items_from_result(
+                                        tool_result, "commerce"
+                                    )
+                                    if items:
+                                        logger.info(
+                                            f"[RECOMMENDER] Fallback commerce search relaxed subCategory for {sub_category_str}"
+                                        )
+                                if not items and filters:
+                                    tool_result = await retailer_tool.ainvoke(
+                                        {
+                                            "query": sub_category_str or message,
+                                            "max_results": 5,
+                                            "filters": None,
+                                        }
+                                    )
+                                    if trace_id:
+                                        tracing_service.log_tool_call(
+                                            trace_id=trace_id,
+                                            tool_name="search_retailer_items",
+                                            input_params={
+                                                "query": sub_category_str,
+                                                "filters": None,
+                                            },
+                                            output=str(tool_result)[:500],
+                                        )
+                                    items = _extract_items_from_result(
+                                        tool_result, "commerce"
+                                    )
+                                    if items:
+                                        logger.info(
+                                            f"[RECOMMENDER] Fallback commerce search relaxed all filters for {sub_category_str}"
+                                        )
+                                if items:
+                                    retrieved_items.extend(items)
+                                    if "commerce" not in search_sources_used:
+                                        search_sources_used.append("commerce")
+                                    tools_used.append("search_retailer_items")
+                                    logger.info(
+                                        f"[RECOMMENDER] Fallback commerce search added {len(items)} items for {sub_category_str}"
+                                    )
+                            except Exception as e:
+                                logger.warning(
+                                    f"[RECOMMENDER] Fallback commerce search failed for {sub_category_str}: {e}"
+                                )
+
         # Fallback: use agent's final response if no items extracted
         if not retrieved_items:
             logger.warning(
@@ -1552,12 +1787,45 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             )
             retrieved_items = []
 
+        commerce_gender = _map_profile_gender_to_commerce(user_profile)
+        if commerce_gender:
+            filtered_items = []
+            for item in retrieved_items:
+                if not isinstance(item, dict):
+                    filtered_items.append(item)
+                    continue
+                if item.get("source") != "commerce":
+                    filtered_items.append(item)
+                    continue
+                item_gender = (
+                    item.get("gender")
+                    or item.get("raw", {}).get("gender")
+                    or item.get("metadata", {}).get("raw", {}).get("gender")
+                )
+                if not item_gender:
+                    logger.debug(
+                        "[RECOMMENDER] Dropping commerce item with missing gender when profile gender is set"
+                    )
+                    continue
+                normalized_gender = str(item_gender).strip().upper()
+                if normalized_gender in {"UNISEX", commerce_gender}:
+                    filtered_items.append(item)
+            retrieved_items = filtered_items
+
         # Validate items are properly formatted
         validated_items = []
         for item in retrieved_items:
             if isinstance(item, dict):
-                # Ensure item has at least a name or content
-                if item.get("name") or item.get("content") or item.get("type"):
+                # Ensure item has at least a name or other identifying fields
+                if (
+                    item.get("name")
+                    or item.get("content")
+                    or item.get("type")
+                    or item.get("imageUrl")
+                    or item.get("productUrl")
+                    or item.get("category")
+                    or item.get("subCategory")
+                ):
                     validated_items.append(item)
                 else:
                     logger.warning(f"[RECOMMENDER] Skipping invalid item: {item}")
@@ -1656,7 +1924,7 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             "style_dna": style_dna,
             "search_sources_used": search_sources_used,
             "fallback_used": fallback_used,
-            "item_feedback_applied": "get_disliked_items_for_search" in tools_used,
+            "item_feedback_applied": False,
         }
 
     except Exception as e:

@@ -62,9 +62,9 @@ def _build_filter_query(
     if filters.get("material"):
         query["material"] = {"$regex": filters["material"], "$options": "i"}
 
-    # Gender filter (exact match)
-    if filters.get("gender"):
-        query["gender"] = filters["gender"]
+    # Gender filter is intentionally NOT applied for wardrobe items
+    # Rationale: If a user added an item to their wardrobe, they wear it regardless of gender label
+    # Gender filtering only makes sense for commerce/shopping items, not personal wardrobe
 
     # Sizes filter (match any)
     sizes = filters.get("sizes")

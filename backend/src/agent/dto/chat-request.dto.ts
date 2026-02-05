@@ -10,6 +10,8 @@ import {
   IsArray,
   ValidateNested,
   IsIn,
+  IsBoolean,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -90,10 +92,57 @@ class OutfitItemSnapshotDto {
   @IsString()
   notes?: string;
 
+  @ApiPropertyOptional({ description: 'Product description' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
   @ApiPropertyOptional({ description: 'Brand' })
   @IsOptional()
   @IsString()
   brand?: string;
+
+  @ApiPropertyOptional({ description: 'Material / fabric' })
+  @IsOptional()
+  @IsString()
+  material?: string;
+
+  @ApiPropertyOptional({ description: 'Tags / style tags' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ description: 'Available sizes' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sizes?: string[];
+
+  @ApiPropertyOptional({ description: 'Price amount' })
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+
+  @ApiPropertyOptional({ description: 'Currency code (e.g. USD)' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiPropertyOptional({ description: 'Preformatted price string' })
+  @IsOptional()
+  @IsString()
+  priceFormatted?: string;
+
+  @ApiPropertyOptional({ description: 'In-stock flag' })
+  @IsOptional()
+  @IsBoolean()
+  inStock?: boolean;
+
+  @ApiPropertyOptional({ description: 'Product URL' })
+  @IsOptional()
+  @IsString()
+  productUrl?: string;
 }
 
 class OutfitAttachmentDto {
@@ -184,7 +233,8 @@ export class ChatRequestDto {
   swapIntents?: OutfitSwapIntentDto[];
 
   @ApiPropertyOptional({
-    description: 'Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions)',
+    description:
+      'Base64 data URLs of user-uploaded images (e.g. for "what is this?" questions)',
     type: [String],
     maxItems: 5,
   })

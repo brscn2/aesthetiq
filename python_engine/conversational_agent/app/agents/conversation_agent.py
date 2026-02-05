@@ -16,12 +16,54 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Tool
 from langgraph.prebuilt import create_react_agent
 
 from app.workflows.state import ConversationState
+from app.agents.clothing_recommender_agent import _extract_items_from_result
 from app.services.llm_service import get_llm_service
 from app.services.tracing.langfuse_service import get_tracing_service
 from app.mcp import get_mcp_tools
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _extract_image_context_from_history(
+    conversation_history: List[Dict[str, Any]],
+) -> str:
+    """Extract image descriptions from previous messages to provide context for follow-ups.
+
+    When users ask follow-up questions about images they uploaded earlier,
+    this helps maintain context without re-describing the same images.
+
+    Args:
+        conversation_history: List of previous messages
+
+    Returns:
+        Formatted string with image context from previous messages, or empty string
+    """
+    if not conversation_history:
+        return ""
+
+    image_contexts = []
+    # Look at last few messages for image-related content
+    for msg in conversation_history[-3:]:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        metadata = msg.get("metadata", {})
+
+        # Check if this message had images attached
+        if role == "user" and metadata.get("has_images"):
+            image_contexts.append(
+                f"[Previous image from user: described in earlier response]"
+            )
+        # Or check if assistant described an image
+        elif role == "assistant" and "image" in content.lower() and len(content) > 100:
+            # Extract a brief snippet
+            snippet = content[:200]
+            if "describes" in snippet.lower() or "shown" in snippet.lower():
+                image_contexts.append(f"[Previously discussed image: {snippet}...]")
+
+    if image_contexts:
+        return "\n\n[Image history context: " + " | ".join(image_contexts) + "]"
+    return ""
 
 
 CONVERSATION_AGENT_PROMPT = """You are AesthetIQ, an expert AI fashion assistant with deep knowledge of:
@@ -70,20 +112,31 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
     swap_intents = state.get("swap_intents") or []
     attached_images = state.get("attached_images") or []
 
-    logger.info(f"Conversation agent processing: {message[:50]}... (images: {len(attached_images)})")
+    retrieved_items: List[Dict[str, Any]] = []
+    search_sources_used: List[str] = []
+
+    logger.info(
+        f"Conversation agent processing: {message[:50]}... (images: {len(attached_images)})"
+    )
     # [DEBUG] Log raw attached_outfits colors received from backend
     for idx, outfit in enumerate(attached_outfits):
         if not isinstance(outfit, dict):
-            logger.warning(f"[Chat DEBUG] attached_outfits[{idx}] is not a dict: {type(outfit)}")
+            logger.warning(
+                f"[Chat DEBUG] attached_outfits[{idx}] is not a dict: {type(outfit)}"
+            )
             continue
         items = outfit.get("items") if isinstance(outfit.get("items"), dict) else {}
         for slot in ("top", "bottom", "outerwear", "footwear", "dress"):
             item = items.get(slot)
             if isinstance(item, dict) and item.get("colors"):
-                logger.info(f"[Chat DEBUG] Python received outfit {idx + 1} {slot}: colors={item.get('colors')}")
+                logger.info(
+                    f"[Chat DEBUG] Python received outfit {idx + 1} {slot}: colors={item.get('colors')}"
+                )
         for acc_idx, acc in enumerate(items.get("accessories") or []):
             if isinstance(acc, dict) and acc.get("colors"):
-                logger.info(f"[Chat DEBUG] Python received outfit {idx + 1} accessory {acc_idx + 1}: colors={acc.get('colors')}")
+                logger.info(
+                    f"[Chat DEBUG] Python received outfit {idx + 1} accessory {acc_idx + 1}: colors={acc.get('colors')}"
+                )
 
     # Get services
     llm_service = get_llm_service()
@@ -113,110 +166,196 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         user_profile = state.get("user_profile")
 
         def _build_outfit_context() -> str:
-                if not attached_outfits and not swap_intents:
-                    return ""
+            if not attached_outfits and not swap_intents:
+                return ""
 
-                lines = [
-                    "\n\n--- Attached outfit context ---",
-                    "The colors listed below are from the user's wardrobe and are the source of truth. Use only these colors in your answer; do not say blue or #0000ff unless that exact color appears below.",
-                    ""
-                ]
-                for idx, outfit in enumerate(attached_outfits):
-                    if not isinstance(outfit, dict):
-                        continue
-                    name = outfit.get("name", "Outfit")
-                    # When multiple items are attached (e.g. 2 t-shirts), add index: "1. T-shirt (Red)"
-                    if len(attached_outfits) > 1:
-                        name = f"{idx + 1}. {name}"
-                    items = (
-                        outfit.get("items", {})
-                        if isinstance(outfit.get("items"), dict)
-                        else {}
-                    )
+            lines = [
+                "\n\n--- Attached outfit context ---",
+                "The colors listed below are from the user's wardrobe and are the source of truth. Use only these colors in your answer; do not say blue or #0000ff unless that exact color appears below.",
+                "",
+            ]
+            for idx, outfit in enumerate(attached_outfits):
+                if not isinstance(outfit, dict):
+                    continue
+                name = outfit.get("name", "Outfit")
+                # When multiple items are attached (e.g. 2 t-shirts), add index: "1. T-shirt (Red)"
+                if len(attached_outfits) > 1:
+                    name = f"{idx + 1}. {name}"
+                items = (
+                    outfit.get("items", {})
+                    if isinstance(outfit.get("items"), dict)
+                    else {}
+                )
 
-                    def _item_detail(label: str, key: str) -> Optional[str]:
-                        item = items.get(key)
-                        if not isinstance(item, dict):
-                            return None
-                        name_value = (
-                            item.get("name") or item.get("category") or label
+                def _item_detail(label: str, key: str) -> Optional[str]:
+                    item = items.get(key)
+                    if not isinstance(item, dict):
+                        return None
+                    name_value = item.get("name") or item.get("category") or label
+                    parts = [f"- {label}: {name_value}"]
+                    if item.get("subCategory"):
+                        parts.append(f"  type: {item.get('subCategory')}")
+                    # Always include color line so the model never invents one (e.g. "blue")
+                    c = item.get("colors")
+                    if c and isinstance(c, list) and len(c) > 0:
+                        colors_str = ", ".join(str(x) for x in c)
+                        parts.append(f"  color(s): {colors_str}")
+                    else:
+                        parts.append(
+                            "  color(s): not specified (do not guess or invent a color)"
                         )
-                        parts = [f"- {label}: {name_value}"]
-                        if item.get("subCategory"):
-                            parts.append(f"  type: {item.get('subCategory')}")
-                        # Always include color line so the model never invents one (e.g. "blue")
-                        c = item.get("colors")
-                        if c and isinstance(c, list) and len(c) > 0:
-                            colors_str = ", ".join(str(x) for x in c)
-                            parts.append(f"  color(s): {colors_str}")
-                        else:
-                            parts.append(
-                                "  color(s): not specified (do not guess or invent a color)"
+                    if item.get("brand"):
+                        parts.append(f"  brand: {item.get('brand')}")
+                    if item.get("notes"):
+                        parts.append(f"  notes: {item.get('notes')}")
+                    if item.get("description"):
+                        parts.append(f"  description: {item.get('description')}")
+                    if item.get("material"):
+                        parts.append(f"  material: {item.get('material')}")
+                    if item.get("tags"):
+                        tags = item.get("tags")
+                        tags_str = (
+                            ", ".join(tags) if isinstance(tags, list) else str(tags)
+                        )
+                        parts.append(f"  tags: {tags_str}")
+                    if item.get("sizes"):
+                        sizes = item.get("sizes")
+                        sizes_str = (
+                            ", ".join(sizes) if isinstance(sizes, list) else str(sizes)
+                        )
+                        parts.append(f"  sizes: {sizes_str}")
+                    price = item.get("price")
+                    price_formatted = item.get("priceFormatted")
+                    currency = item.get("currency")
+                    if isinstance(price, dict):
+                        price_formatted = price.get("formatted") or price_formatted
+                        currency = price.get("currency") or currency
+                        price = price.get("amount")
+                    if price_formatted:
+                        parts.append(f"  price: {price_formatted}")
+                    elif price is not None:
+                        parts.append(
+                            f"  price: {price} {currency}".strip()
+                            if currency
+                            else f"  price: {price}"
+                        )
+                    if item.get("inStock") is not None:
+                        parts.append(
+                            "  in stock: yes"
+                            if item.get("inStock")
+                            else "  in stock: no"
+                        )
+                    if item.get("productUrl"):
+                        parts.append(f"  productUrl: {item.get('productUrl')}")
+                    return "\n".join(parts)
+
+                lines.append(f"- {name}:")
+                for label, key in (
+                    ("Top", "top"),
+                    ("Bottom", "bottom"),
+                    ("Outerwear", "outerwear"),
+                    ("Footwear", "footwear"),
+                    ("Dress", "dress"),
+                ):
+                    entry = _item_detail(label, key)
+                    if entry:
+                        lines.append(f"  {entry}")
+
+                accessories = items.get("accessories") or []
+                if isinstance(accessories, list) and accessories:
+                    for acc in accessories:
+                        if isinstance(acc, dict):
+                            acc_name = (
+                                acc.get("name") or acc.get("category") or "Accessory"
                             )
-                        if item.get("brand"):
-                            parts.append(f"  brand: {item.get('brand')}")
-                        if item.get("notes"):
-                            parts.append(f"  notes: {item.get('notes')}")
-                        return "\n".join(parts)
-
-                    lines.append(f"- {name}:")
-                    for label, key in (
-                        ("Top", "top"),
-                        ("Bottom", "bottom"),
-                        ("Outerwear", "outerwear"),
-                        ("Footwear", "footwear"),
-                        ("Dress", "dress"),
-                    ):
-                        entry = _item_detail(label, key)
-                        if entry:
-                            lines.append(f"  {entry}")
-
-                    accessories = items.get("accessories") or []
-                    if isinstance(accessories, list) and accessories:
-                        for acc in accessories:
-                            if isinstance(acc, dict):
-                                acc_name = (
-                                    acc.get("name")
-                                    or acc.get("category")
-                                    or "Accessory"
+                            acc_parts = [f"  - Accessory: {acc_name}"]
+                            if acc.get("subCategory"):
+                                acc_parts.append(f"    type: {acc.get('subCategory')}")
+                            c_acc = acc.get("colors")
+                            if c_acc and isinstance(c_acc, list) and len(c_acc) > 0:
+                                acc_parts.append(
+                                    f"    color(s): {', '.join(str(x) for x in c_acc)}"
                                 )
-                                acc_parts = [f"  - Accessory: {acc_name}"]
-                                if acc.get("subCategory"):
-                                    acc_parts.append(f"    type: {acc.get('subCategory')}")
-                                c_acc = acc.get("colors")
-                                if c_acc and isinstance(c_acc, list) and len(c_acc) > 0:
-                                    acc_parts.append(
-                                        f"    color(s): {', '.join(str(x) for x in c_acc)}"
-                                    )
-                                else:
-                                    acc_parts.append(
-                                        "    color(s): not specified (do not guess)"
-                                    )
-                                if acc.get("brand"):
-                                    acc_parts.append(f"    brand: {acc.get('brand')}")
-                                if acc.get("notes"):
-                                    acc_parts.append(f"    notes: {acc.get('notes')}")
-                                lines.append("\n".join(acc_parts))
+                            else:
+                                acc_parts.append(
+                                    "    color(s): not specified (do not guess)"
+                                )
+                            if acc.get("brand"):
+                                acc_parts.append(f"    brand: {acc.get('brand')}")
+                            if acc.get("notes"):
+                                acc_parts.append(f"    notes: {acc.get('notes')}")
+                            if acc.get("description"):
+                                acc_parts.append(
+                                    f"    description: {acc.get('description')}"
+                                )
+                            if acc.get("material"):
+                                acc_parts.append(f"    material: {acc.get('material')}")
+                            if acc.get("tags"):
+                                tags = acc.get("tags")
+                                tags_str = (
+                                    ", ".join(tags)
+                                    if isinstance(tags, list)
+                                    else str(tags)
+                                )
+                                acc_parts.append(f"    tags: {tags_str}")
+                            if acc.get("sizes"):
+                                sizes = acc.get("sizes")
+                                sizes_str = (
+                                    ", ".join(sizes)
+                                    if isinstance(sizes, list)
+                                    else str(sizes)
+                                )
+                                acc_parts.append(f"    sizes: {sizes_str}")
+                            price = acc.get("price")
+                            price_formatted = acc.get("priceFormatted")
+                            currency = acc.get("currency")
+                            if isinstance(price, dict):
+                                price_formatted = (
+                                    price.get("formatted") or price_formatted
+                                )
+                                currency = price.get("currency") or currency
+                                price = price.get("amount")
+                            if price_formatted:
+                                acc_parts.append(f"    price: {price_formatted}")
+                            elif price is not None:
+                                acc_parts.append(
+                                    f"    price: {price} {currency}".strip()
+                                    if currency
+                                    else f"    price: {price}"
+                                )
+                            if acc.get("inStock") is not None:
+                                acc_parts.append(
+                                    "    in stock: yes"
+                                    if acc.get("inStock")
+                                    else "    in stock: no"
+                                )
+                            if acc.get("productUrl"):
+                                acc_parts.append(
+                                    f"    productUrl: {acc.get('productUrl')}"
+                                )
+                            lines.append("\n".join(acc_parts))
 
-                if swap_intents:
-                    swaps = []
-                    for intent in swap_intents:
-                        if not isinstance(intent, dict):
-                            continue
-                        category = intent.get("category")
-                        outfit_id = intent.get("outfitId")
-                        if category and outfit_id:
-                            swaps.append(f"{category} for outfit {outfit_id}")
-                    if swaps:
-                        lines.append(f"Swap intents: {', '.join(swaps)}")
+            if swap_intents:
+                swaps = []
+                for intent in swap_intents:
+                    if not isinstance(intent, dict):
+                        continue
+                    category = intent.get("category")
+                    outfit_id = intent.get("outfitId")
+                    if category and outfit_id:
+                        swaps.append(f"{category} for outfit {outfit_id}")
+                if swaps:
+                    lines.append(f"Swap intents: {', '.join(swaps)}")
 
-                return "\n".join(lines)
+            return "\n".join(lines)
 
         if tools:
             logger.info(f"Conversation agent has {len(tools)} tools available")
 
             # Use vision-capable model when user attached images (default model may not support images)
-            llm_for_agent = llm_service.vision_llm if attached_images else llm_service.llm
+            llm_for_agent = (
+                llm_service.vision_llm if attached_images else llm_service.llm
+            )
             if attached_images:
                 logger.info("Using vision LLM for message with attached images")
             agent = create_react_agent(
@@ -241,22 +380,38 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             if user_profile:
                 user_context += f"\nUser profile: {user_profile}"
             outfit_context = _build_outfit_context()
-            
+
             # Extract image descriptions from previous messages for multi-turn context
-            image_history_context = _extract_image_context_from_history(conversation_history)
+            image_history_context = _extract_image_context_from_history(
+                conversation_history
+            )
             if image_history_context:
-                logger.info(f"Including {image_history_context.count('Image')} previous image description(s) in context")
-            
+                logger.info(
+                    f"Including {image_history_context.count('Image')} previous image description(s) in context"
+                )
+
             # When user uploaded images: describe the image(s). Do not ask "which item?" or "please specify".
             image_note = (
-                "\n\n[IMPORTANT: The user attached image(s) below and is asking about them. "
-                "Describe what you see in the image(s) (if multiple, use only the LAST image). Do NOT ask 'which item?', 'please specify', or for style/color/occasion — just describe the garment in the image.]"
-            ) if attached_images else ""
-            text_content = message + image_note + user_context + outfit_context + image_history_context
+                (
+                    "\n\n[IMPORTANT: The user attached image(s) below and is asking about them. "
+                    "Describe what you see in the image(s) (if multiple, use only the LAST image). Do NOT ask 'which item?', 'please specify', or for style/color/occasion — just describe the garment in the image.]"
+                )
+                if attached_images
+                else ""
+            )
+            text_content = (
+                message
+                + image_note
+                + user_context
+                + outfit_context
+                + image_history_context
+            )
 
             # [DEBUG] Log the exact outfit context string sent to the LLM (to verify colors are present)
             if outfit_context:
-                logger.info(f"[Chat DEBUG] Outfit context sent to LLM:\n{outfit_context}")
+                logger.info(
+                    f"[Chat DEBUG] Outfit context sent to LLM:\n{outfit_context}"
+                )
 
             # When user attaches images, send multimodal content so the LLM can see the image (vision)
             if attached_images:
@@ -358,6 +513,13 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                             trends_data = tool_result
                         logger.info(f"Extracted {tool_name} results")
 
+                    elif "wardrobe" in tool_name:
+                        items = _extract_items_from_result(tool_result, "wardrobe")
+                        if items:
+                            retrieved_items.extend(items)
+                            if "wardrobe" not in search_sources_used:
+                                search_sources_used.append("wardrobe")
+
                     # Extract user profile
                     elif tool_name == "get_user_profile":
                         if isinstance(tool_result, dict):
@@ -386,15 +548,31 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             # Must include outfit context here too so the model sees colors (no-tools path was missing it)
             user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
             outfit_context = _build_outfit_context()
-            image_history_context_fb = _extract_image_context_from_history(conversation_history)
+            image_history_context_fb = _extract_image_context_from_history(
+                conversation_history
+            )
             image_note_fb = (
-                "\n\n[IMPORTANT: The user attached image(s) and wants you to describe them. Describe the garment(s) in the image(s) (if multiple, use the LAST image only). Do NOT ask which item or please specify — just describe what you see.]"
-            ) if attached_images else ""
-            fallback_text = message + image_note_fb + user_context + outfit_context + image_history_context_fb
+                (
+                    "\n\n[IMPORTANT: The user attached image(s) and wants you to describe them. Describe the garment(s) in the image(s) (if multiple, use the LAST image only). Do NOT ask which item or please specify — just describe what you see.]"
+                )
+                if attached_images
+                else ""
+            )
+            fallback_text = (
+                message
+                + image_note_fb
+                + user_context
+                + outfit_context
+                + image_history_context_fb
+            )
             if outfit_context:
-                logger.info(f"[Chat DEBUG] Fallback path: outfit context sent to LLM:\n{outfit_context}")
+                logger.info(
+                    f"[Chat DEBUG] Fallback path: outfit context sent to LLM:\n{outfit_context}"
+                )
 
-            fallback_messages: List[Any] = [SystemMessage(content=CONVERSATION_AGENT_PROMPT)]
+            fallback_messages: List[Any] = [
+                SystemMessage(content=CONVERSATION_AGENT_PROMPT)
+            ]
             if conversation_history:
                 for msg in conversation_history[-5:]:
                     role = msg.get("role", "user")
@@ -443,6 +621,24 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             "final_response": response,
             "metadata": metadata,
         }
+
+        if retrieved_items:
+            seen_ids: set[str] = set()
+            deduped_items: List[Dict[str, Any]] = []
+            for item in retrieved_items:
+                if not isinstance(item, dict):
+                    continue
+                item_id = item.get("id") or item.get("_id")
+                if item_id is None:
+                    deduped_items.append(item)
+                    continue
+                item_id_str = str(item_id)
+                if item_id_str not in seen_ids:
+                    seen_ids.add(item_id_str)
+                    deduped_items.append(item)
+
+            result["retrieved_items"] = deduped_items
+            result["search_sources_used"] = search_sources_used
 
         # Include style_dna if extracted (useful for downstream)
         if style_dna:

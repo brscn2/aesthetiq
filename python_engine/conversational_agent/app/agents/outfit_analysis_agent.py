@@ -44,6 +44,35 @@ def _item_detail_str(label: str, item: Dict[str, Any]) -> str:
         parts.append(f"  brand: {item.get('brand')}")
     if item.get("notes"):
         parts.append(f"  notes: {item.get('notes')}")
+    if item.get("description"):
+        parts.append(f"  description: {item.get('description')}")
+    if item.get("material"):
+        parts.append(f"  material: {item.get('material')}")
+    if item.get("tags"):
+        tags = item.get("tags")
+        tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
+        parts.append(f"  tags: {tags_str}")
+    if item.get("sizes"):
+        sizes = item.get("sizes")
+        sizes_str = ", ".join(sizes) if isinstance(sizes, list) else str(sizes)
+        parts.append(f"  sizes: {sizes_str}")
+    price = item.get("price")
+    price_formatted = item.get("priceFormatted")
+    currency = item.get("currency")
+    if isinstance(price, dict):
+        price_formatted = price.get("formatted") or price_formatted
+        currency = price.get("currency") or currency
+        price = price.get("amount")
+    if price_formatted:
+        parts.append(f"  price: {price_formatted}")
+    elif price is not None:
+        parts.append(
+            f"  price: {price} {currency}".strip() if currency else f"  price: {price}"
+        )
+    if item.get("inStock") is not None:
+        parts.append("  in stock: yes" if item.get("inStock") else "  in stock: no")
+    if item.get("productUrl"):
+        parts.append(f"  productUrl: {item.get('productUrl')}")
     return "\n".join(parts) if len(parts) > 1 else parts[0]
 
 
@@ -99,7 +128,9 @@ async def outfit_analysis_agent_node(state: ConversationState) -> Dict[str, Any]
     trace_id = state.get("langfuse_trace_id")
     conversation_history = state.get("conversation_history", [])
 
-    logger.info(f"Outfit analysis agent processing: {message[:80]}... (images: {len(attached_images)})")
+    logger.info(
+        f"Outfit analysis agent processing: {message[:80]}... (images: {len(attached_images)})"
+    )
 
     llm_service = get_llm_service()
     tracing_service = get_tracing_service()
@@ -252,7 +283,7 @@ Analyze the outfits based on the request and the user's style DNA. Provide a cle
         logger.info("Using vision LLM for outfit analysis with attached images")
         # Build messages with conversation history for context
         messages: List[Any] = [SystemMessage(content=OUTFIT_ANALYSIS_PROMPT)]
-        
+
         # Include conversation history for context
         if conversation_history:
             for msg in conversation_history[-5:]:
@@ -263,8 +294,9 @@ Analyze the outfits based on the request and the user's style DNA. Provide a cle
                         messages.append(HumanMessage(content=content))
                     elif role == "assistant":
                         from langchain_core.messages import AIMessage
+
                         messages.append(AIMessage(content=content))
-        
+
         # Build multimodal message with images
         image_note = (
             "\n\n[IMPORTANT: The user attached image(s). Analyze the clothing in the image(s). "
@@ -274,7 +306,7 @@ Analyze the outfits based on the request and the user's style DNA. Provide a cle
         for img_url in attached_images:
             content.append({"type": "image_url", "image_url": {"url": img_url}})
         messages.append(HumanMessage(content=content))
-        
+
         resp = await llm_service.vision_llm.ainvoke(messages)
         response = resp.content if hasattr(resp, "content") else str(resp)
     else:

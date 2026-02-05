@@ -65,7 +65,11 @@ class WardrobeItem(BaseModel):
 
 
 class WardrobeFilters(BaseModel):
-    """Filters for querying wardrobe items."""
+    """Filters for querying wardrobe items.
+
+    Note: gender is NOT used as a filter for wardrobe searches.
+    If a user added an item to their wardrobe, they wear it regardless of gender label.
+    """
 
     category: Optional[Category] = None
     subCategory: Optional[str] = None
@@ -77,7 +81,10 @@ class WardrobeFilters(BaseModel):
     colorVariants: Optional[List[str]] = None
     colors: Optional[List[str]] = None  # Filter by colors (any match)
     material: Optional[str] = None
-    gender: Optional[str] = None
+    gender: Optional[str] = Field(
+        None,
+        description="Gender label (stored but NOT used as filter for wardrobe items)",
+    )
     sizes: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     inStock: Optional[bool] = None

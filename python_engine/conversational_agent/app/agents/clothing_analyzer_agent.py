@@ -47,7 +47,8 @@ class RefinementFilters(BaseModel):
     """Structured filter updates for refinement."""
 
     category: Optional[str] = Field(
-        None, description="Category to filter: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY"
+        None,
+        description="Category to filter: TOP, BOTTOM, FOOTWEAR, OUTERWEAR, DRESS, ACCESSORY",
     )
     sub_category: Optional[str] = Field(
         None, description="Specific type: Jacket, Shirt, Dress, Pants, etc."
@@ -157,7 +158,9 @@ def _normalize_tool_result(result: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _extract_profile_field(user_profile: Optional[Dict[str, Any]], *keys: str) -> Optional[str]:
+def _extract_profile_field(
+    user_profile: Optional[Dict[str, Any]], *keys: str
+) -> Optional[str]:
     if not isinstance(user_profile, dict):
         return None
     for key in keys:
@@ -287,13 +290,17 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                         name = item.get("name", "Unknown")
                         brand = item.get("brand", "")
                         price = item.get("price")
-                        color = item.get("color") or item.get("raw", {}).get(
-                            "color", ""
+                        color = (
+                            item.get("color")
+                            or item.get("colorHex")
+                            or item.get("raw", {}).get("color", "")
                         )
                         category = item.get("category", "")
-                        sub_category = item.get("subCategory") or item.get(
-                            "raw", {}
-                        ).get("sub_category", "")
+                        sub_category = (
+                            item.get("subCategory")
+                            or item.get("sub_category")
+                            or item.get("raw", {}).get("sub_category", "")
+                        )
                         source = item.get("source", "unknown")
 
                         # Build detailed item description for analysis
@@ -306,7 +313,12 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                             item_details.append(f"Type: {sub_category}")
                         if color:
                             item_details.append(f"Color: {color}")
-                        if price:
+                        if isinstance(price, dict):
+                            amount = price.get("amount") or price.get("value")
+                            currency = price.get("currency") or "$"
+                            if amount is not None:
+                                item_details.append(f"Price: {currency}{amount}")
+                        elif price:
                             item_details.append(f"Price: ${price}")
                         item_details.append(f"Source: {source}")
 
@@ -458,6 +470,8 @@ Consider that this is iteration {iteration + 1} - be more lenient with approval 
                 )
 
         # Add structured filter updates if refining
+        if analysis.decision == "refine":
+            result["refinement_notes"] = [analysis.reasoning]
         if analysis.decision == "refine" and analysis.filter_updates:
             # Convert Pydantic model to dict, excluding None values
             filter_updates = {

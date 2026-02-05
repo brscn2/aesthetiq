@@ -12,6 +12,7 @@ class WebSearchResult(BaseModel):
     url: str
     content: Optional[str] = None
     score: Optional[float] = None
+    gender: Optional[str] = None
     raw: Dict[str, Any] = Field(default_factory=dict)
     # Open Graph metadata
     og_image: Optional[str] = None

@@ -162,6 +162,7 @@ def _to_result(
     og_image: Optional[str] = None,
     og_title: Optional[str] = None,
     og_description: Optional[str] = None,
+    gender: Optional[str] = None,
 ) -> WebSearchResult:
     # Clean raw dict to remove non-serializable objects
     cleaned_raw = _clean_for_json(raw)
@@ -170,6 +171,7 @@ def _to_result(
         url=raw.get("url") or raw.get("link") or "",
         content=raw.get("content") or raw.get("snippet"),
         score=raw.get("score"),
+        gender=gender,
         raw=cleaned_raw,
         og_image=og_image,
         og_title=og_title,
@@ -431,12 +433,14 @@ async def search_retailer_items(
             results = []
             for result in commerce_results:
                 item = result["item"]
+                item_gender = getattr(item, "gender", None)
                 results.append(
                     WebSearchResult(
                         title=item.name,
                         url=item.productUrl,
                         content=item.description or "",
                         score=result.get("score"),
+                        gender=item_gender,
                         raw={},
                         og_image=item.imageUrl,
                         og_title=item.name,
@@ -548,6 +552,9 @@ async def search_retailer_items(
                     og_image=image_url,
                     og_title=title,
                     og_description=description,
+                    gender=(
+                        filters.gender.upper() if filters and filters.gender else None
+                    ),
                 )
             )
 

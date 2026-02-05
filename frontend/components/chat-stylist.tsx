@@ -367,10 +367,19 @@ export function ChatStylist({
       category: item.category,
       subCategory: item.subCategory,
       source: "wardrobe" as const,
+      description: wardrobeItem.description,
       ...(isWardrobe && {
         colors: colorNames.length > 0 ? colorNames : [],
         notes: wardrobeItem.notes,
         brand: wardrobeItem.brand,
+        material: wardrobeItem.material,
+        tags: wardrobeItem.tags,
+        sizes: wardrobeItem.sizes,
+        price: wardrobeItem.price?.amount,
+        currency: wardrobeItem.price?.currency,
+        priceFormatted: wardrobeItem.price?.formatted,
+        inStock: wardrobeItem.inStock,
+        productUrl: wardrobeItem.productUrl,
       }),
     }
   }, [])
@@ -1077,6 +1086,14 @@ export function ChatStylist({
         colors: colors,
         brand: item.brand,
         notes: item.notes,
+        description: item.description,
+        material: item.material,
+        tags: item.tags,
+        sizes: item.sizes,
+        price: item.price,
+        currency: item.currency,
+        inStock: item.inStock,
+        productUrl: item.productUrl,
       }
 
       // Build attachment structure
