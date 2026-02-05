@@ -29,24 +29,51 @@ export function HealthScoreHeader({
   primaryOpportunity,
   lastCalculated,
 }: HealthScoreHeaderProps) {
-  // Determine visual appearance based on score
-  const scoreColor =
-    score >= 80
-      ? 'from-amber-500 to-orange-500'
-      : score >= 65
-        ? 'from-purple-500 to-pink-500'
-        : score >= 50
-          ? 'from-blue-500 to-cyan-500'
-          : 'from-gray-500 to-slate-500'
+  // Circular progress: red ring fills from 0 to score% (e.g. 50 = half, 75 = 3/4)
+  const size = 144
+  const strokeWidth = 8
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const progress = Math.min(100, Math.max(0, score))
+  const strokeDashoffset = circumference * (1 - progress / 100)
 
   return (
     <Card className='overflow-hidden border-0 bg-gradient-to-r from-slate-800 to-slate-900'>
       <CardContent className='p-7 lg:p-9'>
         <div className='grid grid-cols-1 gap-9 lg:grid-cols-[1fr_2fr]'>
-          {/* Score Circle */}
+          {/* Score Circle - ring fills red up to score % */}
           <div className='flex flex-col items-center justify-center gap-4'>
-            <div className={`relative h-36 w-36 rounded-full bg-gradient-to-br ${scoreColor} p-1` }>
-              <div className='h-full w-full rounded-full bg-slate-900 flex flex-col items-center justify-center'>
+            <div className='relative' style={{ width: size, height: size }}>
+              <svg
+                className='-rotate-90'
+                width={size}
+                height={size}
+                viewBox={`0 0 ${size} ${size}`}
+              >
+                {/* Background ring */}
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill='none'
+                  stroke='rgba(71, 85, 105, 0.5)'
+                  strokeWidth={strokeWidth}
+                />
+                {/* Red progress ring */}
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill='none'
+                  stroke='#ef4444'
+                  strokeWidth={strokeWidth}
+                  strokeLinecap='round'
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  className='transition-all duration-700 ease-out'
+                />
+              </svg>
+              <div className='absolute inset-0 flex flex-col items-center justify-center'>
                 <span className='text-5xl font-bold text-white'>{score}</span>
                 <span className='text-sm text-gray-400'>/ 100</span>
               </div>
