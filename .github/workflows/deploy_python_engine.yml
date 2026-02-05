@@ -1,0 +1,57 @@
+name: Deploy Python Engine (Azure VM)
+
+on:
+  push:
+    branches:
+      - azure_test
+    paths:
+      - "python_engine/**"
+      - ".github/workflows/deploy_python_engine.yml"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: aesthetiqregistry.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build images
+        working-directory: python_engine
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Push images
+        working-directory: python_engine
+        run: docker compose -f docker-compose.prod.yml push
+
+      - name: Copy docker-compose to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "python_engine/docker-compose.prod.yml"
+          target: "/srv/aesthetiq/project"
+
+      - name: Deploy on VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/aesthetiq/project
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --force-recreate
+            docker compose -f docker-compose.prod.yml ps
