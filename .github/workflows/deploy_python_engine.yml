@@ -15,6 +15,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Services
+        id: changes
+        run: |
+          CHANGED_SERVICES=""
+          for service in gateway conversational_agent embedding_service face_analysis try_on_service mcp_servers crawler_service; do
+            if git diff HEAD~1 --quiet -- python_engine/$service/ 2>/dev/null; then
+              echo "No changes in $service"
+            else
+              CHANGED_SERVICES="$CHANGED_SERVICES $service"
+              echo "Changes detected in $service"
+            fi
+          done
+          echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+          echo "Changed services: $CHANGED_SERVICES"
 
       - name: Create CI .env.prod
         working-directory: python_engine
@@ -47,32 +64,43 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build images
+      - name: Build changed services (with cache)
         working-directory: python_engine
-        run: docker compose -f docker-compose.prod.yml build
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          if [ -z "${{ steps.changes.outputs.services }}" ]; then
+            echo "No changes detected, skipping build"
+            exit 0
+          fi
+          for service in ${{ steps.changes.outputs.services }}; do
+            echo "Building $service..."
+            docker compose -f docker-compose.prod.yml build \
+              --build-arg BUILDKIT_INLINE_CACHE=1 $service
+          done
 
       - name: Push images
         working-directory: python_engine
-        run: docker compose -f docker-compose.prod.yml push
+        run: |
+          if [ -z "${{ steps.changes.outputs.services }}" ]; then
+            echo "No changes detected, skipping push"
+            exit 0
+          fi
+          docker compose -f docker-compose.prod.yml push
 
       - name: Copy docker-compose to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key_path: ~/.ssh/id_rsa
-          source: "python_engine/docker-compose.prod.yml"
-          target: "/srv/aesthetiq/project"
+        run: |
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+            python_engine/docker-compose.prod.yml \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/srv/aesthetiq/project/
 
       - name: Deploy on VM
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key_path: ~/.ssh/id_rsa
-          script: |
-            set -e
-            cd /srv/aesthetiq/project
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --force-recreate
-            docker compose -f docker-compose.prod.yml ps
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'DEPLOY'
+          set -e
+          cd /srv/aesthetiq/project
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --force-recreate
+          docker compose -f docker-compose.prod.yml ps
+          DEPLOY
