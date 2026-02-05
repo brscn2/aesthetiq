@@ -123,7 +123,7 @@ export default function WishlistPage() {
                 </p>
               </div>
               <Link href="/dashboard">
-                <Button className="bg-gradient-to-r from-purple-600 to-rose-600 text-white hover:from-purple-700 hover:to-rose-700">
+                <Button className="gradient-ai text-white hover:opacity-90 transition-opacity">
                   Get Style Recommendations
                 </Button>
               </Link>
@@ -181,7 +181,7 @@ export default function WishlistPage() {
                     {item.productUrl && (
                       <Button
                         asChild
-                        className="mt-3 w-full bg-gradient-to-r from-purple-600 to-rose-600 text-white hover:from-purple-700 hover:to-rose-700"
+                        className="mt-3 w-full gradient-ai text-white hover:opacity-90 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <a href={item.productUrl} target="_blank" rel="noopener noreferrer">
@@ -267,7 +267,7 @@ export default function WishlistPage() {
                   {selectedItem.productUrl && (
                     <Button
                       asChild
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-rose-600 text-white hover:from-purple-700 hover:to-rose-700"
+                      className="flex-1 gradient-ai text-white hover:opacity-90 transition-opacity"
                     >
                       <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="mr-2 h-4 w-4" />

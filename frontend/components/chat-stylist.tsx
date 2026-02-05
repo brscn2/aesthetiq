@@ -1268,8 +1268,8 @@ export function ChatStylist({
                               return (
                                 <Button
                                   size="sm"
-                                  variant={inWishlist ? "default" : "outline"}
-                                  className={`h-6 text-[10px] px-2 w-full ${inWishlist ? "bg-rose-500 hover:bg-rose-600 text-white" : ""}`}
+                                  variant="outline"
+                                  className={`h-6 text-[10px] px-2 w-full transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleToggleWishlist(item)
@@ -1792,8 +1792,8 @@ export function ChatStylist({
                   const inWishlist = isInWishlist(selectedItem.id)
                   return (
                     <Button
-                      variant={inWishlist ? "default" : "outline"}
-                      className={`flex-1 ${inWishlist ? "bg-rose-500 hover:bg-rose-600 text-white" : ""}`}
+                      variant="outline"
+                      className={`flex-1 transition-all ${inWishlist ? "gradient-ai text-white border-transparent hover:opacity-90" : "hover:border-primary/50"}`}
                       onClick={() => handleToggleWishlist(selectedItem)}
                       disabled={addingToWishlistIds.has(selectedItem.id)}
                     >
@@ -1807,10 +1807,10 @@ export function ChatStylist({
                   )
                 })()}
                 {selectedItem.productUrl && (
-                  <Button asChild className={selectedItem.source !== "wardrobe" ? "flex-1" : "w-full"}>
+                  <Button asChild className={`gradient-ai text-white hover:opacity-90 ${selectedItem.source !== "wardrobe" ? "flex-1" : "w-full"}`}>
                     <a href={selectedItem.productUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      Buy Now
+                      Shop Now
                     </a>
                   </Button>
                 )}
