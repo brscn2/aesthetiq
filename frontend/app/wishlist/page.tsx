@@ -133,10 +133,10 @@ export default function WishlistPage() {
               {wishlistItems.map((item) => (
                 <Card
                   key={item._id}
-                  className="group cursor-pointer transition-all hover:shadow-lg"
+                  className="group cursor-pointer transition-all hover:shadow-lg flex flex-col"
                   onClick={() => setSelectedItem(item)}
                 >
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 flex flex-col flex-1">
                     <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
                       {item.imageUrl ? (
                         <Image
@@ -159,7 +159,7 @@ export default function WishlistPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="mt-3 space-y-1">
+                    <div className="mt-3 space-y-1 flex-1">
                       <h3 className="font-medium text-foreground line-clamp-2">{item.name}</h3>
                       {item.brand && (
                         <p className="text-sm text-muted-foreground">{item.brand}</p>
@@ -178,18 +178,16 @@ export default function WishlistPage() {
                         )}
                       </div>
                     </div>
-                    {item.productUrl && (
-                      <Button
-                        asChild
-                        className="mt-3 w-full gradient-ai text-white hover:opacity-90 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <a href={item.productUrl} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Shop Now
-                        </a>
-                      </Button>
-                    )}
+                    <Button
+                      asChild
+                      className="mt-3 w-full gradient-ai text-white hover:opacity-90 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <a href={item.productUrl || "#"} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Shop Now
+                      </a>
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
