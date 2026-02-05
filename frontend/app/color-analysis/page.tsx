@@ -635,10 +635,12 @@ function AnalysisReport({
                   <h4 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">
                     Power Colors
                   </h4>
-                  <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                    {analysis.palette.slice(0, 8).map((color, index) => (
-                      <PaletteSwatch key={index} color={color.hex} name={color.name} />
-                    ))}
+                  <div className="rounded-3xl border border-border/50 p-8">
+                    <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                      {analysis.palette.slice(0, 8).map((color, index) => (
+                        <PaletteSwatch key={index} color={color.hex} name={color.name} />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -803,10 +805,13 @@ function PaletteSwatch({
       {/* Swatch */}
       <div
         className={cn(
-          "relative rounded-full shadow-lg ring-1 ring-border/50 transition-transform duration-300 group-hover:scale-110",
+          "relative rounded-full transition-transform duration-300 group-hover:scale-110",
           size === "md" ? "h-16 w-16 md:h-20 md:w-20" : "h-12 w-12",
         )}
-        style={{ backgroundColor: color }}
+        style={{
+          backgroundColor: color,
+          boxShadow: `0 0 0 1px rgba(255, 255, 255, 0.95), 0 0 8px rgba(255, 255, 255, 0.4), 0 0 12px rgba(255, 255, 255, 0.1), 0 8px 16px rgba(0, 0, 0, 0.15)`,
+        }}
       >
         {crossOut && (
           <div className="absolute inset-0 flex items-center justify-center text-white/80">
