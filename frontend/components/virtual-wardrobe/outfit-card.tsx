@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Heart, Pencil, Trash2, AlertCircle } from "lucide-react"
+import { Heart, Pencil, Trash2, AlertCircle, ShoppingBag } from "lucide-react"
 import { Outfit, WardrobeItem } from "@/types/api"
 
 interface OutfitCardProps {
@@ -35,22 +35,23 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
     .slice(0, 6)
 
   const gridItems = [
-    { label: "Top", image: topImage },
-    { label: "Bottom", image: bottomImage },
-    { label: "Outerwear", image: outerwearImage },
-    { label: "Footwear", image: footwearImage },
-    { label: "Dress", image: dressImage },
-    ...accessoryImages.map((image, index) => ({
+    { label: "Top", image: topImage, hasItem: !!outfit.items.top },
+    { label: "Bottom", image: bottomImage, hasItem: !!outfit.items.bottom },
+    { label: "Outerwear", image: outerwearImage, hasItem: !!outfit.items.outerwear },
+    { label: "Footwear", image: footwearImage, hasItem: !!outfit.items.footwear },
+    { label: "Dress", image: dressImage, hasItem: !!outfit.items.dress },
+    ...outfit.items.accessories.map((item, index) => ({
       label: `Acc ${index + 1}`,
-      image,
-    })),
-  ].filter((item) => item.image)
+      image: getItemImage(item),
+      hasItem: !!item,
+    })).slice(0, 5), // Limit total accessories to prevent layout break
+  ].filter((item) => item.hasItem)
 
   const totalItems = Math.max(gridItems.length, 1)
   const columns = totalItems <= 2 ? totalItems : totalItems <= 4 ? 2 : 3
   const rows = Math.ceil(totalItems / columns)
 
-  const hasDeletedItems = 
+  const hasDeletedItems =
     isItemDeleted(outfit.items.top) ||
     isItemDeleted(outfit.items.bottom) ||
     isItemDeleted(outfit.items.outerwear) ||
@@ -59,7 +60,7 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
     outfit.items.accessories.some(isItemDeleted)
 
   return (
-    <Card 
+    <Card
       className="group relative overflow-hidden border-border bg-card transition-all hover:border-purple-500/30 hover:bg-accent cursor-pointer"
       onClick={onView}
     >
@@ -74,7 +75,7 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
             }}
           >
             {gridItems.map((item, index) => (
-              <div key={`${item.label}-${index}`} className="flex items-center justify-center bg-background/50 rounded">
+              <div key={`${item.label}-${index}`} className="flex items-center justify-center bg-background/50 rounded overflow-hidden">
                 {item.image ? (
                   <Image
                     src={item.image}
@@ -84,12 +85,15 @@ export function OutfitCard({ outfit, onEdit, onDelete, onToggleFavorite, onView 
                     className="object-contain h-full w-full p-1"
                   />
                 ) : (
-                  <span className="text-xs text-muted-foreground">{item.label}</span>
+                  <div className="flex flex-col items-center justify-center h-full w-full p-1 text-muted-foreground/50">
+                    <ShoppingBag className="h-4 w-4 mb-1" />
+                    <span className="text-[9px] font-medium uppercase tracking-tighter truncate w-full text-center">{item.label}</span>
+                  </div>
                 )}
               </div>
             ))}
           </div>
-          
+
           {/* Deleted Items Warning */}
           {hasDeletedItems && (
             <div className="absolute top-2 left-2 bg-yellow-500/90 text-yellow-950 rounded-full p-1" title="Some items are no longer available">

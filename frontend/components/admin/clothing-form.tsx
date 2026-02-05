@@ -4,14 +4,14 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -58,10 +58,12 @@ const categoryOptions = [
   { value: "ACCESSORY", label: "Accessory" },
 ]
 
-const subCategoryOptions = {
+const subCategoryOptions: Record<string, string[]> = {
   TOP: ["T-Shirt", "Shirt", "Blouse", "Sweater", "Hoodie", "Jacket", "Coat", "Blazer"],
   BOTTOM: ["Jeans", "Trousers", "Shorts", "Skirt", "Dress", "Leggings", "Sweatpants"],
-  SHOE: ["Sneakers", "Boots", "Sandals", "Heels", "Flats", "Loafers"],
+  FOOTWEAR: ["Sneakers", "Boots", "Sandals", "Heels", "Flats", "Loafers"],
+  OUTERWEAR: ["Jacket", "Coat", "Blazer", "Cardigan", "Puffer", "Trench Coat"],
+  DRESS: ["Maxi", "Midi", "Mini", "Cocktail", "Evening", "Casual"],
   ACCESSORY: ["Hat", "Bag", "Belt", "Jewelry", "Scarf", "Sunglasses", "Watch"],
 }
 
@@ -72,7 +74,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   const [retailers, setRetailers] = useState<Retailer[]>([])
   const [errors, setErrors] = useState<Partial<FormData>>({})
   const [isDragging, setIsDragging] = useState(false)
-  
+
   const api = useAdminApi()
   const { isLoading, execute } = useAdminLoading()
   const { isLoading: uploadLoading, execute: executeUpload } = useAdminLoading()
@@ -97,10 +99,10 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
   useEffect(() => {
     if (item && retailers.length > 0) {
       // Get retailerId from the item
-      const retailerId = typeof item.retailerId === 'object' 
-        ? (item.retailerId as Retailer)?._id 
+      const retailerId = typeof item.retailerId === 'object'
+        ? (item.retailerId as Retailer)?._id
         : item.retailerId
-      
+
       setFormData({
         userId: item.userId,
         category: item.category,
@@ -161,7 +163,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     }
 
     setImageFile(file)
-    
+
     // Create preview
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -200,7 +202,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     e.preventDefault()
     e.stopPropagation()
     setIsDragging(false)
-    
+
     const files = e.dataTransfer.files
     if (files && files.length > 0) {
       handleImageUpload(files[0])
@@ -209,7 +211,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       return
     }
@@ -222,11 +224,11 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
         () => api.upload.uploadImage(imageFile),
         "Uploading image"
       )
-      
+
       if (!uploadResult) {
         return // Error already handled by executeUpload
       }
-      
+
       imageUrl = uploadResult.url
     }
 
@@ -241,13 +243,13 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
     }
 
     // For create, include userId. For update, don't include userId
-    const itemData = isEditing 
-      ? baseData 
+    const itemData = isEditing
+      ? baseData
       : { ...baseData, userId: formData.userId.trim() }
 
     // Create or update item
     const result = await execute(
-      () => isEditing 
+      () => isEditing
         ? api.wardrobe.update(item!._id, itemData as UpdateWardrobeItemDto)
         : api.wardrobe.create(itemData as CreateWardrobeItemDto & { userId: string }),
       isEditing ? "Updating clothing item" : "Creating clothing item"
@@ -275,8 +277,8 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             {isEditing ? "Edit Clothing Item" : "Add New Clothing Item"}
           </DialogTitle>
           <DialogDescription>
-            {isEditing 
-              ? "Update the clothing item information below" 
+            {isEditing
+              ? "Update the clothing item information below"
               : "Fill in the details to add a new clothing item to the database"
             }
           </DialogDescription>
@@ -288,10 +290,9 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             <Label>Item Image *</Label>
             <div className="flex items-center gap-4">
               {imagePreview ? (
-                <div 
-                  className={`relative cursor-pointer transition-all ${
-                    isDragging ? "ring-2 ring-primary ring-offset-2 rounded-lg" : ""
-                  }`}
+                <div
+                  className={`relative cursor-pointer transition-all ${isDragging ? "ring-2 ring-primary ring-offset-2 rounded-lg" : ""
+                    }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -317,12 +318,11 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   </Button>
                 </div>
               ) : (
-                <div 
-                  className={`h-24 w-24 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors ${
-                    isDragging 
-                      ? "border-primary bg-primary/10" 
+                <div
+                  className={`h-24 w-24 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors ${isDragging
+                      ? "border-primary bg-primary/10"
                       : "border-muted-foreground/25 hover:border-muted-foreground/50"
-                  }`}
+                    }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -331,7 +331,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
                   <Shirt className={`h-8 w-8 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
                 </div>
               )}
-              
+
               <div className="flex-1">
                 <Input
                   type="file"
@@ -381,8 +381,8 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Category *</Label>
-              <Select 
-                value={formData.category} 
+              <Select
+                value={formData.category}
                 onValueChange={(value) => handleInputChange("category", value)}
               >
                 <SelectTrigger className={errors.category ? "border-destructive" : ""}>
@@ -403,8 +403,8 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
 
             <div className="space-y-2">
               <Label>Subcategory</Label>
-              <Select 
-                value={formData.subCategory} 
+              <Select
+                value={formData.subCategory}
                 onValueChange={(value) => handleInputChange("subCategory", value)}
                 disabled={!formData.category}
               >
@@ -460,7 +460,7 @@ export function ClothingForm({ item, open, onOpenChange, onSuccess }: ClothingFo
             <Label htmlFor="colorHex">Color (Hex Code)</Label>
             <div className="flex items-center gap-2">
               {formData.colorHex && (
-                <div 
+                <div
                   className="w-8 h-8 rounded border"
                   style={{ backgroundColor: formData.colorHex }}
                 />

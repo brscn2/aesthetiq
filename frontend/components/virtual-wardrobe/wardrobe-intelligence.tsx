@@ -1,9 +1,11 @@
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { CloudSun, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
 export function WardrobeIntelligence() {
+  const router = useRouter()
   return (
     <div className="space-y-8">
       <div>
@@ -80,6 +82,7 @@ export function WardrobeIntelligence() {
                 variant="ghost"
                 size="sm"
                 className="h-6 w-full text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                onClick={() => router.push("/dashboard?initialMessage=Find a white tee")}
               >
                 Find <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
@@ -109,6 +112,7 @@ export function WardrobeIntelligence() {
                 variant="ghost"
                 size="sm"
                 className="h-6 w-full text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                onClick={() => router.push("/dashboard?initialMessage=Find a black blazer")}
               >
                 Find <ArrowRight className="ml-1 h-3 w-3" />
               </Button>

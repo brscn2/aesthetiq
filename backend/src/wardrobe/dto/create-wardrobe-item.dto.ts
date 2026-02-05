@@ -8,6 +8,7 @@ import {
   IsDateString,
   IsMongoId,
   IsArray,
+  IsNumber,
 } from 'class-validator';
 import { Category } from '../schemas/wardrobe-item.schema';
 
@@ -55,6 +56,21 @@ export class CreateWardrobeItemDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiProperty({ required: false, example: 49.99 })
+  @IsNumber()
+  @IsOptional()
+  price?: number;
+
+  @ApiProperty({ required: false, example: 'USD', default: 'USD' })
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
+  @ApiProperty({ required: false, example: 'MALE' })
+  @IsString()
+  @IsOptional()
+  gender?: string;
 
   @ApiProperty({ default: false, required: false })
   @IsBoolean()

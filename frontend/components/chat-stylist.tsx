@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Send, Mic, ImageIcon, Sparkles, X, ExternalLink, ShoppingBag, Plus, Loader2, Check, Upload } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -116,10 +116,23 @@ export function ChatStylist({
   resetTrigger = 0,
 }: ChatStylistProps = {}) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { outfitApi, wardrobeApi } = useApi()
   const { recommendation, clearRecommendation } = useWardrobeRecommendation()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
+
+  // Auto-fill input from URL query param
+  useEffect(() => {
+    const initialMessage = searchParams?.get("initialMessage")
+    if (initialMessage) {
+      setInput(initialMessage)
+      // Clean up the URL
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.delete("initialMessage")
+      window.history.replaceState({}, "", newUrl.toString())
+    }
+  }, [searchParams])
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedOutfits, setAttachedOutfits] = useState<OutfitAttachment[]>([])
   const [swapIntentsByOutfit, setSwapIntentsByOutfit] = useState<Record<string, OutfitSwapIntent["category"] | null>>({})
@@ -1122,302 +1135,302 @@ export function ChatStylist({
                   )}
                   {message.attachedOutfits && message.attachedOutfits.length > 0 && (
                     <div className="flex flex-col items-end gap-2">
-                        {message.attachedOutfits.map((outfit) => {
-                          const images = getOutfitAttachmentImages(outfit)
-                          const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
-                          const primaryImage =
-                            images[0] ||
-                            images[1] ||
-                            images[2] ||
-                            images[3] ||
-                            images[4] ||
-                            images[5]
-                          const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
+                      {message.attachedOutfits.map((outfit) => {
+                        const images = getOutfitAttachmentImages(outfit)
+                        const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                        const primaryImage =
+                          images[0] ||
+                          images[1] ||
+                          images[2] ||
+                          images[3] ||
+                          images[4] ||
+                          images[5]
+                        const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
 
-                          return (
-                            <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
-                              <div className="flex items-center gap-2">
-                                {isWardrobeAttachment ? (
-                                  <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
-                                    {primaryImage ? (
-                                      <Image
-                                        src={primaryImage as string}
-                                        alt="Wardrobe item"
-                                        fill
-                                        className="object-contain"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                        No image
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div
-                                    className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
-                                  >
-                                    {images.length === 0 ? (
-                                      <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
-                                        No image
-                                      </div>
-                                    ) : (
-                                      images.map((img, index) => (
-                                        <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                          <Image
-                                            src={img}
-                                            alt="Outfit item"
-                                            fill
-                                            className="object-contain"
-                                          />
-                                        </div>
-                                      ))
-                                    )}
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="text-xs font-medium text-foreground">{outfit.name}</p>
-                                  {swapIntent && (
-                                    <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                        return (
+                          <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                            <div className="flex items-center gap-2">
+                              {isWardrobeAttachment ? (
+                                <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                                  {primaryImage ? (
+                                    <Image
+                                      src={primaryImage as string}
+                                      alt="Wardrobe item"
+                                      fill
+                                      className="object-contain"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                      No image
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 items-start">
-                <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-card text-card-foreground border border-border/50">
-                  {message.content ? (
-                    <>
-                      <Markdown content={message.content} className="text-xs sm:text-sm" />
-                      {message.isStreaming && (
-                        <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
-                      )}
-                    </>
-                  ) : null}
-                </div>
-
-                {/* Attached Images - assistant only (user handled above) */}
-                {message.images && message.images.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {message.images.map((imageUrl, index) => (
-                      <div key={index} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-border/50">
-                        <Image src={imageUrl} alt={`Attachment ${index + 1}`} fill className="object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {message.attachedOutfits && message.attachedOutfits.length > 0 && (
-                  <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
-                    {message.attachedOutfits.map((outfit) => {
-                      const images = getOutfitAttachmentImages(outfit)
-                      const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
-                      const primaryImage =
-                        images[0] ||
-                        images[1] ||
-                        images[2] ||
-                        images[3] ||
-                        images[4] ||
-                        images[5]
-                      const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
-
-                      return (
-                        <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
-                          <div className="flex items-center gap-2">
-                            {isWardrobeAttachment ? (
-                              <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
-                                {primaryImage ? (
-                                  <Image
-                                    src={primaryImage as string}
-                                    alt="Attached item"
-                                    fill
-                                    className="object-contain"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
-                                    No image
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div
-                                className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
-                              >
-                                {images.length === 0 ? (
-                                  <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
-                                    No image
-                                  </div>
-                                ) : (
-                                  images.map((img, index) => (
-                                    <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
-                                      <Image
-                                        src={img}
-                                        alt="Outfit item"
-                                        fill
-                                        className="object-contain"
-                                      />
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-xs font-medium text-foreground">{outfit.name}</p>
-                              {swapIntent && (
-                                <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Clothing Items Display */}
-                {message.items && message.items.length > 0 && (() => {
-                  // Filter out items without an id - don't display incomplete items
-                  const validItems = message.items.filter(item => item.id)
-                  if (validItems.length === 0) return null
-                  const gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3"
-
-                  return (
-                    <div className="w-full mt-2 sm:mt-3">
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-2">
-                        <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
-                        <span className="text-xs sm:text-sm font-medium text-foreground">
-                          {validItems.length} item{validItems.length !== 1 ? "s" : ""}
-                        </span>
-                        {message.metadata?.sources && message.metadata.sources.length > 0 && (
-                          <span className="text-[11px] sm:text-xs text-muted-foreground">
-                            from {message.metadata.sources.join(", ")}
-                          </span>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-[10px] sm:text-xs"
-                          onClick={() => handleCreateOutfitFromItems(validItems)}
-                        >
-                          Create Outfit
-                        </Button>
-                      </div>
-                      <div className={gridClass}>
-                        {validItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className="group flex flex-col gap-1 sm:gap-2 rounded-lg border border-border/50 bg-card/60 p-1.5 sm:p-2 hover:bg-accent/40 transition-colors relative"
-                          >
-                            {attachedOutfits.length > 0 && (
-                              <input
-                                type="checkbox"
-                                checked={selectedItemsForAdd.has(item.id)}
-                                onChange={() => toggleItemSelection(item.id)}
-                                className="absolute top-2 left-2 z-10 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            )}
-                            <div
-                              onClick={() => setSelectedItem(item)}
-                              className="flex flex-col items-center gap-1 sm:gap-2 cursor-pointer"
-                            >
-                              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
-                                {item.imageUrl ? (
-                                  <Image
-                                    src={item.imageUrl}
-                                    alt={item.name}
-                                    fill
-                                    className="object-contain"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[9px] sm:text-[10px] text-muted-foreground">
-                                    No image
-                                  </div>
-                                )}
-                                {/* Attach to chat button */}
-                                {(() => {
-                                  const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
-                                  const isAttached = attachedOutfits.some((entry) => entry.id === attachmentId)
-                                  const isMaxReached = attachedOutfits.length >= 3 && !isAttached
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleAttachSuggestedItem(item)
-                                      }}
-                                      disabled={isMaxReached}
-                                      title={isAttached ? "Remove from chat" : isMaxReached ? "Max 3 items attached" : "Attach to chat"}
-                                      className={`absolute top-1 right-1 z-10 h-6 w-6 rounded-full flex items-center justify-center transition-all
-                                        ${isAttached
-                                          ? "bg-primary text-primary-foreground opacity-100"
-                                          : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 sm:opacity-0 hover:bg-primary hover:text-primary-foreground"}
-                                        ${isMaxReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                                        shadow-md border border-border/50`}
-                                    >
-                                      {isAttached ? (
-                                        <Check className="h-3.5 w-3.5" />
-                                      ) : (
-                                        <Plus className="h-3.5 w-3.5" />
-                                      )}
-                                    </button>
-                                  )
-                                })()}
-                              </div>
-                              <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
-                                {item.name}
-                              </span>
-                            </div>
-                            {attachedOutfits.length > 0 && item.source === "wardrobe" && item.id && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-6 text-[10px] px-2 w-full"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleAddToOutfit(item)
-                                }}
-                                disabled={isAddingToOutfit || addingItemIds.has(item.id)}
-                              >
-                                {addingItemIds.has(item.id) ? (
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                ) : (
-                                  <Plus className="h-3 w-3 mr-1" />
-                                )}
-                                Add
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      {attachedOutfits.length > 0 && selectedItemsForAdd.size > 0 && (() => {
-                        const selectedItems = validItems.filter((item) => selectedItemsForAdd.has(item.id))
-                        return (
-                          <div className="mt-3 flex justify-center">
-                            <Button
-                              size="sm"
-                              onClick={() => handleBulkAddToOutfit(selectedItems)}
-                              disabled={isAddingToOutfit}
-                            >
-                              {isAddingToOutfit ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                               ) : (
-                                <Plus className="h-4 w-4 mr-2" />
+                                <div
+                                  className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                                >
+                                  {images.length === 0 ? (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                      No image
+                                    </div>
+                                  ) : (
+                                    images.map((img, index) => (
+                                      <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                        <Image
+                                          src={img}
+                                          alt="Outfit item"
+                                          fill
+                                          className="object-contain"
+                                        />
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
                               )}
-                              Add {selectedItemsForAdd.size} item(s) to outfit
-                            </Button>
+                              <div>
+                                <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                                {swapIntent && (
+                                  <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         )
-                      })()}
+                      })}
                     </div>
-                  )
-                })()}
+                  )}
+                </div>
+              ) : (
+                <div className="flex w-full sm:max-w-[80%] md:max-w-[75%] flex-col gap-2 items-start">
+                  <div className="rounded-2xl px-3 sm:px-4 py-2 sm:py-3 bg-card text-card-foreground border border-border/50">
+                    {message.content ? (
+                      <>
+                        <Markdown content={message.content} className="text-xs sm:text-sm" />
+                        {message.isStreaming && (
+                          <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-1" />
+                        )}
+                      </>
+                    ) : null}
                   </div>
-                )}
+
+                  {/* Attached Images - assistant only (user handled above) */}
+                  {message.images && message.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {message.images.map((imageUrl, index) => (
+                        <div key={index} className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border border-border/50">
+                          <Image src={imageUrl} alt={`Attachment ${index + 1}`} fill className="object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {message.attachedOutfits && message.attachedOutfits.length > 0 && (
+                    <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
+                      {message.attachedOutfits.map((outfit) => {
+                        const images = getOutfitAttachmentImages(outfit)
+                        const isWardrobeAttachment = outfit.id.startsWith("wardrobe:")
+                        const primaryImage =
+                          images[0] ||
+                          images[1] ||
+                          images[2] ||
+                          images[3] ||
+                          images[4] ||
+                          images[5]
+                        const swapIntent = message.swapIntents?.find((intent) => intent.outfitId === outfit.id)
+
+                        return (
+                          <div key={outfit.id} className="rounded-lg border border-border/50 bg-card p-2">
+                            <div className="flex items-center gap-2">
+                              {isWardrobeAttachment ? (
+                                <div className="relative h-12 w-12 overflow-hidden rounded-md bg-muted">
+                                  {primaryImage ? (
+                                    <Image
+                                      src={primaryImage as string}
+                                      alt="Attached item"
+                                      fill
+                                      className="object-contain"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground">
+                                      No image
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div
+                                  className={`grid h-12 w-12 gap-1 overflow-hidden rounded-md bg-muted p-1 ${getOutfitGridClass(images.length)}`}
+                                >
+                                  {images.length === 0 ? (
+                                    <div className="flex h-full w-full items-center justify-center text-[8px] text-muted-foreground col-span-full row-span-full">
+                                      No image
+                                    </div>
+                                  ) : (
+                                    images.map((img, index) => (
+                                      <div key={index} className="relative h-full w-full rounded-sm bg-background/60">
+                                        <Image
+                                          src={img}
+                                          alt="Outfit item"
+                                          fill
+                                          className="object-contain"
+                                        />
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-xs font-medium text-foreground">{outfit.name}</p>
+                                {swapIntent && (
+                                  <p className="text-[10px] text-muted-foreground">Swap {swapIntent.category.toLowerCase()}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Clothing Items Display */}
+                  {message.items && message.items.length > 0 && (() => {
+                    // Filter out items without an id - don't display incomplete items
+                    const validItems = message.items.filter(item => item.id)
+                    if (validItems.length === 0) return null
+                    const gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3"
+
+                    return (
+                      <div className="w-full mt-2 sm:mt-3">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-2">
+                          <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary flex-shrink-0" />
+                          <span className="text-xs sm:text-sm font-medium text-foreground">
+                            {validItems.length} item{validItems.length !== 1 ? "s" : ""}
+                          </span>
+                          {message.metadata?.sources && message.metadata.sources.length > 0 && (
+                            <span className="text-[11px] sm:text-xs text-muted-foreground">
+                              from {message.metadata.sources.join(", ")}
+                            </span>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] sm:text-xs"
+                            onClick={() => handleCreateOutfitFromItems(validItems)}
+                          >
+                            Create Outfit
+                          </Button>
+                        </div>
+                        <div className={gridClass}>
+                          {validItems.map((item) => (
+                            <div
+                              key={item.id}
+                              className="group flex flex-col gap-1 sm:gap-2 rounded-lg border border-border/50 bg-card/60 p-1.5 sm:p-2 hover:bg-accent/40 transition-colors relative"
+                            >
+                              {attachedOutfits.length > 0 && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedItemsForAdd.has(item.id)}
+                                  onChange={() => toggleItemSelection(item.id)}
+                                  className="absolute top-2 left-2 z-10 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              )}
+                              <div
+                                onClick={() => setSelectedItem(item)}
+                                className="flex flex-col items-center gap-1 sm:gap-2 cursor-pointer"
+                              >
+                                <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted">
+                                  {item.imageUrl ? (
+                                    <Image
+                                      src={item.imageUrl}
+                                      alt={item.name}
+                                      fill
+                                      className="object-contain"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[9px] sm:text-[10px] text-muted-foreground">
+                                      No image
+                                    </div>
+                                  )}
+                                  {/* Attach to chat button */}
+                                  {(() => {
+                                    const attachmentId = item.source === "wardrobe" ? `wardrobe:${item.id}` : `commerce:${item.id}`
+                                    const isAttached = attachedOutfits.some((entry) => entry.id === attachmentId)
+                                    const isMaxReached = attachedOutfits.length >= 3 && !isAttached
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleAttachSuggestedItem(item)
+                                        }}
+                                        disabled={isMaxReached}
+                                        title={isAttached ? "Remove from chat" : isMaxReached ? "Max 3 items attached" : "Attach to chat"}
+                                        className={`absolute top-1 right-1 z-10 h-6 w-6 rounded-full flex items-center justify-center transition-all
+                                        ${isAttached
+                                            ? "bg-primary text-primary-foreground opacity-100"
+                                            : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 sm:opacity-0 hover:bg-primary hover:text-primary-foreground"}
+                                        ${isMaxReached ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                                        shadow-md border border-border/50`}
+                                      >
+                                        {isAttached ? (
+                                          <Check className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <Plus className="h-3.5 w-3.5" />
+                                        )}
+                                      </button>
+                                    )
+                                  })()}
+                                </div>
+                                <span className="w-full truncate text-[9px] sm:text-[11px] text-foreground">
+                                  {item.name}
+                                </span>
+                              </div>
+                              {attachedOutfits.length > 0 && item.source === "wardrobe" && item.id && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2 w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleAddToOutfit(item)
+                                  }}
+                                  disabled={isAddingToOutfit || addingItemIds.has(item.id)}
+                                >
+                                  {addingItemIds.has(item.id) ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Plus className="h-3 w-3 mr-1" />
+                                  )}
+                                  Add
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {attachedOutfits.length > 0 && selectedItemsForAdd.size > 0 && (() => {
+                          const selectedItems = validItems.filter((item) => selectedItemsForAdd.has(item.id))
+                          return (
+                            <div className="mt-3 flex justify-center">
+                              <Button
+                                size="sm"
+                                onClick={() => handleBulkAddToOutfit(selectedItems)}
+                                disabled={isAddingToOutfit}
+                              >
+                                {isAddingToOutfit ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Plus className="h-4 w-4 mr-2" />
+                                )}
+                                Add {selectedItemsForAdd.size} item(s) to outfit
+                              </Button>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
 
               {message.role === "user" && (
                 <Avatar className="h-8 w-8 flex-shrink-0 hidden sm:flex">

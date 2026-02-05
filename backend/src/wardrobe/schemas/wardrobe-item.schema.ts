@@ -45,6 +45,15 @@ export class WardrobeItem {
   @Prop()
   notes?: string;
 
+  @Prop()
+  price?: number;
+
+  @Prop({ default: 'USD' })
+  currency?: string;
+
+  @Prop()
+  gender?: string;
+
   @Prop({ default: false })
   isFavorite: boolean;
 

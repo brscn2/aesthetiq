@@ -35,6 +35,9 @@ interface FormData {
   subCategory?: string
   colors: string[]
   notes?: string
+  // Price removed
+  currency?: string
+  gender?: string
   removeBackground: boolean
 }
 
@@ -44,32 +47,32 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number>(0)
-  
+
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingProgress, setProcessingProgress] = useState(0)
   const [smoothProgress, setSmoothProgress] = useState(0)
   const [processedImageBlob, setProcessedImageBlob] = useState<Blob | null>(null)
-  
+
   // Track uploaded file for on-demand processing
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null)
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null)
-  
+
   // Track object URLs for cleanup
   const [objectUrls, setObjectUrls] = useState<string[]>([])
-  
+
   // Color picker state
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [pendingColor, setPendingColor] = useState("#808080")
-  
+
   // AI Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisComplete, setAnalysisComplete] = useState(false)
-  
+
   const queryClient = useQueryClient()
   const { getToken, userId } = useAuth()
   const { wardrobeApi, uploadApi, brandsApi, aiApi } = useApi()
-  
+
   // Brands state for autocomplete
   const [availableBrands, setAvailableBrands] = useState<string[]>([])
   const [brandSearch, setBrandSearch] = useState("")
@@ -180,7 +183,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         if (processingProgress > prev) {
           return Math.min(prev + 2, processingProgress)
         }
-        
+
         // Fake progress curve that slows down over time
         // Fast at start (0-20%), medium (20-60%), slow (60-90%), very slow (90-95%)
         if (prev < 20) {
@@ -220,20 +223,20 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         60000, // 60 second timeout for server-side processing
         getToken // Pass the auth token getter
       )
-      
+
       // Ensure progress shows 100% on completion
       setProcessingProgress(100)
       setSmoothProgress(100)
 
       // Cache the processed blob (will upload on submit)
       setProcessedImageBlob(processedBlob)
-      
+
       // Update preview with processed image
       const processedPreview = URL.createObjectURL(processedBlob)
       setObjectUrls(prev => [...prev, processedPreview])
       setProcessedPreviewUrl(processedPreview)
       setImagePreview(processedPreview)
-      
+
       toast.success('✨ Background removed!', {
         description: 'You can now switch between original and processed.',
         duration: 3000,
@@ -241,7 +244,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     } catch (error: any) {
       // Fallback to original image on error
       const errorMessage = error.message || 'Unknown error'
-      
+
       // Provide specific error messages for different failure types
       if (errorMessage.includes('timed out')) {
         toast.warning('Background removal timed out', {
@@ -269,7 +272,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           duration: 5000,
         })
       }
-      
+
       // Keep original image in preview
       if (originalImageUrl) {
         setImagePreview(originalImageUrl)
@@ -295,7 +298,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         img.onload = () => {
           const canvas = document.createElement('canvas')
           const ctx = canvas.getContext('2d')
-          
+
           if (!ctx) {
             reject(new Error('Failed to get canvas context'))
             return
@@ -319,7 +322,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           canvas.width = width
           canvas.height = height
           ctx.drawImage(img, 0, 0, width, height)
-          
+
           // Convert to base64 with 80% quality JPEG
           const base64 = canvas.toDataURL('image/jpeg', 0.8)
           resolve(base64)
@@ -339,7 +342,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     setIsAnalyzing(true)
     try {
       let response
-      
+
       if (uploadedFile) {
         // Compress and convert file to base64 for API (reduces ~5MB to ~200KB)
         toast.info('Preparing image for AI analysis...', { duration: 1500 })
@@ -351,7 +354,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
       if (response?.success && response.data) {
         const { category, subCategory, brand, colors, styleNotes } = response.data
-        
+
         // Update form with AI results
         setValue("category", category, { shouldValidate: true })
         if (subCategory) {
@@ -369,7 +372,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         if (styleNotes) {
           setValue("notes", styleNotes)
         }
-        
+
         setAnalysisComplete(true)
         toast.success('AI analysis complete!', { duration: 2000 })
       } else {
@@ -399,6 +402,11 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       subCategory: "",
       colors: [],
       notes: "",
+      colors: [],
+      notes: "",
+      // Price removed
+      currency: "USD",
+      gender: "",
       removeBackground: false,
     },
   })
@@ -441,12 +449,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Invalidate wardrobe lists so they refresh (wardrobe page + chat "Attach from wardrobe" dialog)
       queryClient.invalidateQueries({ queryKey: ["wardrobe"] })
       queryClient.invalidateQueries({ queryKey: ["chat-wardrobe"] })
-      
+
       toast.success("Item added to wardrobe successfully!", { duration: 2000 })
-      
+
       // Clean up object URLs
       cleanupObjectUrls()
-      
+
       // Reset form and close modal
       reset()
       setImagePreview(null)
@@ -464,7 +472,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       setSubCategorySearch("") // Reset subcategory search input
       setIsAnalyzing(false)
       setAnalysisComplete(false)
-      
+
       onClose()
     },
     onError: (error: any, _newItem, context) => {
@@ -476,9 +484,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       }
 
       // Extract detailed error message
-      const errorMessage = 
-        error.response?.data?.message || 
-        error.message || 
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
         'Failed to save item. Please try again.'
 
       toast.error(`Failed to add item: ${errorMessage}`)
@@ -546,6 +554,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           subCategory: data.subCategory || undefined,
           colors: data.colors,
           notes: data.notes || undefined,
+          // Price removed
+          currency: data.currency,
+          gender: data.gender || undefined,
           isFavorite: false,
         }
 
@@ -565,6 +576,9 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         subCategory: data.subCategory || undefined,
         colors: data.colors,
         notes: data.notes || undefined,
+        // Price removed
+        currency: data.currency,
+        gender: data.gender || undefined,
         isFavorite: false,
       }
 
@@ -580,7 +594,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       img.onload = () => {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')
-        
+
         if (!ctx) {
           reject(new Error('Failed to get canvas context'))
           return
@@ -593,7 +607,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         // Get pixel from center of image
         const centerX = Math.floor(img.width / 2)
         const centerY = Math.floor(img.height / 2)
-        
+
         try {
           const pixelData = ctx.getImageData(centerX, centerY, 1, 1).data
           const r = pixelData[0]
@@ -621,11 +635,11 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const handleImageUrlChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value
     setValue("imageUrl", url)
-    
+
     if (url) {
       setImagePreview(url)
       setAnalysisComplete(false)
-      
+
       // Try to extract color - first try direct canvas approach
       try {
         const centerColor = await extractColorFromUrl(url)
@@ -659,7 +673,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         img.onload = () => {
           const canvas = document.createElement('canvas')
           const ctx = canvas.getContext('2d')
-          
+
           if (!ctx) {
             reject(new Error('Failed to get canvas context'))
             return
@@ -679,7 +693,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           const g = pixelData[1]
           const b = pixelData[2]
           const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-          
+
           resolve(hex.toUpperCase())
         }
         img.onerror = () => reject(new Error('Failed to load image'))
@@ -698,7 +712,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         img.onload = () => {
           const canvas = document.createElement('canvas')
           const ctx = canvas.getContext('2d')
-          
+
           if (!ctx) {
             reject(new Error('Failed to get canvas context'))
             return
@@ -724,19 +738,19 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
 
           // Draw and compress
           ctx.drawImage(img, 0, 0, width, height)
-          
+
           canvas.toBlob(
             (blob) => {
               if (!blob) {
                 reject(new Error('Failed to compress image'))
                 return
               }
-              
+
               const compressedFile = new File([blob], file.name, {
                 type: 'image/jpeg',
                 lastModified: Date.now(),
               })
-              
+
               resolve(compressedFile)
             },
             'image/jpeg',
@@ -778,7 +792,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     // Compress if file is larger than 2MB
     const compressionThreshold = 2 * 1024 * 1024
     let fileToUpload = file
-    
+
     if (file.size > compressionThreshold && file.type !== 'image/gif') {
       try {
         toast.info('Compressing image...', { duration: 2000 })
@@ -804,20 +818,20 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       // Store the file locally - will upload on submit
       setUploadedFile(fileToUpload)
       setOriginalImageUrl(localPreview)
-      
+
       // Clear any previously cached processed image since we have a new upload
       setProcessedImageBlob(null)
       setProcessedPreviewUrl(null)
       setValue("processedImageUrl", undefined)
-      
+
       // Mark that we have a local file (not uploaded yet)
       setValue("imageUrl", "", { shouldValidate: false })
-      
+
       // Trigger background removal if enabled
       if (removeBackground && !isProcessing) {
         handleBackgroundRemoval(fileToUpload)
       }
-      
+
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error'
       toast.error(`Failed to process image: ${errorMessage}`)
@@ -882,7 +896,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
     if (!open) {
       // Clean up object URLs
       cleanupObjectUrls()
-      
+
       reset()
       setImagePreview(null)
       setIsUploading(false)
@@ -918,12 +932,11 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           <div className="mt-4 grid gap-6 sm:gap-8 md:grid-cols-2">
             {/* Left Column: Image Preview */}
             <div className="space-y-3 sm:space-y-4">
-              <div 
-                className={`relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed transition-colors cursor-pointer ${
-                  isDragging 
-                    ? 'border-purple-500 bg-purple-500/10' 
-                    : 'border-border bg-muted/20 hover:border-purple-400/30'
-                }`}
+              <div
+                className={`relative aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-dashed transition-colors cursor-pointer ${isDragging
+                  ? 'border-purple-500 bg-purple-500/10'
+                  : 'border-border bg-muted/20 hover:border-purple-400/30'
+                  }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -933,7 +946,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                   <>
                     {/* Checkerboard pattern for transparent backgrounds */}
                     {processedImageBlob && (
-                      <div 
+                      <div
                         className="absolute inset-0"
                         style={{
                           backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
@@ -957,7 +970,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                           <Loader2 className="mx-auto h-12 w-12 animate-spin text-purple-400" />
                           <p className="mt-2 text-sm text-white">Uploading... {uploadProgress}%</p>
                           <div className="mt-2 h-1 w-32 overflow-hidden rounded-full bg-white/20">
-                            <div 
+                            <div
                               className="h-full bg-purple-500 transition-all duration-300"
                               style={{ width: `${uploadProgress}%` }}
                             />
@@ -971,7 +984,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                           <Loader2 className="mx-auto h-10 w-10 animate-spin text-purple-500 dark:text-purple-400" />
                           <p className="mt-2 text-sm font-medium text-foreground">AI removing background</p>
                           <div className="mt-3 h-1.5 w-40 overflow-hidden rounded-full bg-muted">
-                            <div 
+                            <div
                               className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 ease-out"
                               style={{ width: `${Math.min(smoothProgress, 100)}%` }}
                             />
@@ -997,7 +1010,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     )}
                   </div>
                 )}
-                <div 
+                <div
                   className="absolute bottom-3 right-3 flex items-center gap-2 rounded-full bg-background/80 border border-border px-3 py-1.5 backdrop-blur-md"
                   onClick={(e) => e.stopPropagation()}
                   title={isProcessing ? "AI is processing..." : "Toggle between original and background removed"}
@@ -1010,7 +1023,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                       checked={removeBackground}
                       onCheckedChange={(checked) => {
                         setRemoveBackground(checked)
-                        
+
                         if (checked) {
                           // Toggle ON
                           if (processedPreviewUrl) {
@@ -1034,8 +1047,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                       disabled={false}
                     />
                   )}
-                  <Label 
-                    htmlFor="bg-remove" 
+                  <Label
+                    htmlFor="bg-remove"
                     className="text-xs cursor-pointer text-foreground"
                   >
                     {isProcessing ? 'Processing...' : 'Remove BG'}
@@ -1096,7 +1109,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     type="url"
                     placeholder="https://example.com/image.jpg"
                     className="border-border bg-card text-foreground"
-                    {...register("imageUrl", { 
+                    {...register("imageUrl", {
                       required: false, // Not required anymore - we handle file uploads separately
                     })}
                     onChange={handleImageUrlChange}
@@ -1114,8 +1127,8 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
               <Button
                 type="button"
                 variant={analysisComplete ? "outline" : "default"}
-                className={`w-full ${analysisComplete 
-                  ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30' 
+                className={`w-full ${analysisComplete
+                  ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30'
                   : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                 onClick={handleAiAnalysis}
                 disabled={isAnalyzing || (!imagePreview && !uploadedFile)}
@@ -1222,12 +1235,12 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     }}
                     onFocus={() => setShowBrandDropdown(true)}
                   />
-                  <ChevronDown 
+                  <ChevronDown
                     className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer"
                     onClick={() => setShowBrandDropdown(!showBrandDropdown)}
                   />
                   {showBrandDropdown && filteredBrands.length > 0 && (
-                    <div 
+                    <div
                       ref={brandDropdownRef}
                       className="absolute z-50 w-full mt-1 max-h-48 overflow-auto rounded-md border border-border bg-card shadow-lg"
                     >
@@ -1250,6 +1263,31 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 {errors.brand && (
                   <p className="text-xs text-red-400">{errors.brand.message}</p>
                 )}
+              </div>
+
+              {/* Price Row removed as per request */}
+
+              <div className="space-y-2">
+                {/* Gender moved here or standalone */}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gender" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Gender
+                </Label>
+                <Select
+                  value={watch("gender") || ""}
+                  onValueChange={(value) => setValue("gender", value)}
+                >
+                  <SelectTrigger className="border-border bg-card text-foreground">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-background text-foreground">
+                    <SelectItem value="MALE">Male</SelectItem>
+                    <SelectItem value="FEMALE">Female</SelectItem>
+                    <SelectItem value="UNISEX">Unisex</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -1280,7 +1318,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                       </button>
                     </div>
                   ))}
-                  
+
                   {/* Add Color Button */}
                   {(!colors || colors.length < 5) && (
                     <div className="relative color-picker-container">
@@ -1309,7 +1347,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                             onChange={setPendingColor}
                           />
                           <div className="mt-3 flex items-center gap-2">
-                            <div 
+                            <div
                               className="h-8 w-8 rounded border border-border"
                               style={{ backgroundColor: pendingColor }}
                             />
@@ -1354,11 +1392,11 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                     {(() => {
                       const scores = calculateSeasonalPaletteScores(colors)
                       const bestPalettes = getBestMatchingPalettes(scores, 0.6).slice(0, 4)
-                      
+
                       if (bestPalettes.length === 0) {
                         return <span className="text-xs text-muted-foreground">No strong matches</span>
                       }
-                      
+
                       return bestPalettes.map(({ palette, score }) => (
                         <div
                           key={palette}

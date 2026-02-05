@@ -53,18 +53,21 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   const [isDeleting, setIsDeleting] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  
+
   // Editable fields
   const [editBrand, setEditBrand] = useState("")
   const [editCategory, setEditCategory] = useState<Category>(Category.TOP)
   const [editSubCategory, setEditSubCategory] = useState("")
   const [editColors, setEditColors] = useState<string[]>([])
   const [editNotes, setEditNotes] = useState("")
-  
+  // Price removed
+  const [editCurrency, setEditCurrency] = useState<string>("USD")
+  const [editGender, setEditGender] = useState<string>("")
+
   // Color picker state
   const [showColorPicker, setShowColorPicker] = useState(false)
   const colorPickerRef = useRef<HTMLDivElement>(null)
-  
+
   // Track last saved values for cancel functionality
   const savedValuesRef = useRef({
     brand: "",
@@ -72,6 +75,9 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
     subCategory: "",
     colors: [] as string[],
     notes: "",
+    // price removed
+    currency: "USD",
+    gender: "",
   })
 
   // Initialize edit fields when item changes
@@ -89,7 +95,15 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
       setEditSubCategory(values.subCategory)
       setEditColors(values.colors)
       setEditNotes(values.notes)
-      savedValuesRef.current = values
+      // price removed
+      setEditCurrency(item.currency || "USD")
+      setEditGender(item.gender || "")
+      savedValuesRef.current = {
+        ...values,
+        // price removed
+        currency: item.currency || "USD",
+        gender: item.gender || "",
+      }
     }
   }, [item])
 
@@ -129,7 +143,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateWardrobeItemDto }) => 
+    mutationFn: ({ id, data }: { id: string; data: UpdateWardrobeItemDto }) =>
       wardrobeApi.update(id, data),
     onSuccess: (updatedItem) => {
       // Update the cache immediately with the new data
@@ -145,6 +159,9 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
         subCategory: editSubCategory,
         colors: editColors,
         notes: editNotes,
+        // price removed
+        currency: editCurrency,
+        gender: editGender,
       }
       toast.success("Item updated successfully")
       setIsEditing(false)
@@ -157,7 +174,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
 
   const handleDelete = async () => {
     if (!item) return
-    
+
     setIsDeleting(true)
     try {
       await deleteMutation.mutateAsync(item._id)
@@ -179,6 +196,9 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
           subCategory: editSubCategory || undefined,
           colors: editColors.length > 0 ? editColors : undefined,
           notes: editNotes || undefined,
+          // price removed
+          currency: editCurrency,
+          gender: editGender || undefined,
         },
       })
     } finally {
@@ -193,6 +213,9 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
     setEditSubCategory(savedValuesRef.current.subCategory)
     setEditColors(savedValuesRef.current.colors)
     setEditNotes(savedValuesRef.current.notes)
+    // price removed
+    setEditCurrency(savedValuesRef.current.currency)
+    setEditGender(savedValuesRef.current.gender)
     setIsEditing(false)
     setShowColorPicker(false)
   }
@@ -239,7 +262,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
           {/* Image */}
           <div className="relative aspect-square w-full max-h-[50vh] overflow-hidden rounded-lg bg-muted">
             {item.processedImageUrl && (
-              <div 
+              <div
                 className="absolute inset-0"
                 style={{
                   backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
@@ -260,6 +283,39 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
 
           {/* Details */}
           <div className="space-y-4">
+            {/* Price & Gender Row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Price Row removed as per request */}
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Gender:</span>
+                </div>
+                {isEditing ? (
+                  <Select value={editGender} onValueChange={setEditGender}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MALE">Male</SelectItem>
+                      <SelectItem value="FEMALE">Female</SelectItem>
+                      <SelectItem value="UNISEX">Unisex</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="text-sm">
+                    {item.gender ? (item.gender.charAt(0) + item.gender.slice(1).toLowerCase()) : "Not set"}
+                  </div>
+                )}
+              </div>
+
+              {/* Currency (kept in case they want to set it for the record, but hidden if desired? User said "remove price field". Without price, currency is just a setting. I'll keep it as a secondary field or just remove it from UI if it looks cluttery. 
+                   Actually, if price is hidden, currency typically goes with it.
+                   But let's assume they only explicitly hated the Price input.
+                   I will hide the Price input block.
+               */}
+            </div>
+
             {/* Category */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
@@ -310,7 +366,7 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
               </div>
               <div className="flex items-center gap-1 flex-wrap">
                 {displayColors.map((color, index) => (
-                  <div 
+                  <div
                     key={index}
                     className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-border bg-card group"
                   >

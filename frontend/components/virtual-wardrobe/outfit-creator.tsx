@@ -447,11 +447,10 @@ export function OutfitCreator({
                     <button
                       key={template}
                       onClick={() => setCardTemplate(template)}
-                      className={`p-3 rounded-md border text-sm capitalize transition-all ${
-                        cardTemplate === template
-                          ? "border-purple-500 bg-purple-500/10"
-                          : "border-border hover:border-muted-foreground"
-                      }`}
+                      className={`p-3 rounded-md border text-sm capitalize transition-all ${cardTemplate === template
+                        ? "border-purple-500 bg-purple-500/10"
+                        : "border-border hover:border-muted-foreground"
+                        }`}
                       style={{
                         backgroundColor:
                           CARD_TEMPLATES[template].background + "20",
@@ -491,26 +490,52 @@ export function OutfitCreator({
                   item={getSelectedItem(selectedItems.top)}
                   label="Top"
                   template={cardTemplate}
+                  onRemove={
+                    selectedItems.top
+                      ? () => toggleItem(Category.TOP, selectedItems.top!)
+                      : undefined
+                  }
                 />
                 <PreviewSlot
                   item={getSelectedItem(selectedItems.bottom)}
                   label="Bottom"
                   template={cardTemplate}
+                  onRemove={
+                    selectedItems.bottom
+                      ? () => toggleItem(Category.BOTTOM, selectedItems.bottom!)
+                      : undefined
+                  }
                 />
                 <PreviewSlot
                   item={getSelectedItem(selectedItems.outerwear)}
                   label="Outerwear"
                   template={cardTemplate}
+                  onRemove={
+                    selectedItems.outerwear
+                      ? () =>
+                        toggleItem(Category.OUTERWEAR, selectedItems.outerwear!)
+                      : undefined
+                  }
                 />
                 <PreviewSlot
                   item={getSelectedItem(selectedItems.footwear)}
                   label="Footwear"
                   template={cardTemplate}
+                  onRemove={
+                    selectedItems.footwear
+                      ? () => toggleItem(Category.FOOTWEAR, selectedItems.footwear!)
+                      : undefined
+                  }
                 />
                 <PreviewSlot
                   item={getSelectedItem(selectedItems.dress)}
                   label="Dress"
                   template={cardTemplate}
+                  onRemove={
+                    selectedItems.dress
+                      ? () => toggleItem(Category.DRESS, selectedItems.dress!)
+                      : undefined
+                  }
                 />
 
                 <PreviewSlot
@@ -518,6 +543,15 @@ export function OutfitCreator({
                   label="Acc"
                   template={cardTemplate}
                   count={selectedItems.accessories.length}
+                  onRemove={
+                    selectedItems.accessories.length > 0
+                      ? () =>
+                        toggleItem(
+                          Category.ACCESSORY,
+                          selectedItems.accessories[0],
+                        )
+                      : undefined
+                  }
                 />
               </div>
             </div>
@@ -541,11 +575,10 @@ function ItemSelectCard({
   return (
     <div
       onClick={onClick}
-      className={`relative aspect-square rounded-md border-2 cursor-pointer transition-all overflow-hidden ${
-        selected
-          ? "border-purple-500 ring-2 ring-purple-500/30"
-          : "border-border hover:border-muted-foreground"
-      }`}
+      className={`relative aspect-square rounded-md border-2 cursor-pointer transition-all overflow-hidden ${selected
+        ? "border-purple-500 ring-2 ring-purple-500/30"
+        : "border-border hover:border-muted-foreground"
+        }`}
     >
       <Image
         src={item.processedImageUrl || item.imageUrl}
@@ -568,17 +601,19 @@ function PreviewSlot({
   label,
   template,
   count,
+  onRemove,
 }: {
   item?: WardrobeItem;
   label: string;
   template: CardTemplate;
   count?: number;
+  onRemove?: () => void;
 }) {
   const config = CARD_TEMPLATES[template];
 
   return (
     <div
-      className="relative flex items-center justify-center rounded overflow-hidden"
+      className="relative flex items-center justify-center rounded overflow-hidden group"
       style={{ backgroundColor: config.textColor + "10" }}
     >
       {item ? (
@@ -599,6 +634,19 @@ function PreviewSlot({
             >
               +{count - 1}
             </div>
+          )}
+          {onRemove && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRemove();
+              }}
+              className="absolute top-1 right-1 bg-black/50 hover:bg-destructive text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all"
+              title="Remove item"
+            >
+              <X className="h-3 w-3" />
+            </button>
           )}
         </>
       ) : (

@@ -129,6 +129,9 @@ export interface WardrobeItem {
   retailerId?: string | Retailer;
   colors?: string[];
   notes?: string;
+  price?: number;
+  currency?: string;
+  gender?: string;
   isFavorite: boolean;
   lastWorn?: string;
   seasonalPaletteScores?: SeasonalPaletteScores;
@@ -145,6 +148,9 @@ export interface CreateWardrobeItemDto {
   retailerId?: string;
   colors?: string[];
   notes?: string;
+  price?: number;
+  currency?: string;
+  gender?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
@@ -158,6 +164,9 @@ export interface UpdateWardrobeItemDto {
   retailerId?: string;
   colors?: string[];
   notes?: string;
+  price?: number;
+  currency?: string;
+  gender?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
