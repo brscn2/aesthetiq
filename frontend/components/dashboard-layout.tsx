@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type React from "react"
+import Link from "next/link"
 import { DashboardSidebar } from "./dashboard-sidebar"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
@@ -46,9 +47,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
-          <h1 className="font-serif text-xl font-bold tracking-tight text-foreground">
+          <Link href="/" className="font-serif text-xl font-bold tracking-tight text-foreground hover:opacity-90 transition-opacity">
             Aesthet<span className="text-gradient-ai">IQ</span>
-          </h1>
+          </Link>
         </div>
         <main className="flex-1 overflow-y-auto p-6">
           <GenderOnboardingBanner />
