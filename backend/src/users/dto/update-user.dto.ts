@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsInt,
+  IsDateString,
   Min,
   Max,
   ValidateNested,
@@ -17,6 +18,7 @@ import {
   Currency,
   ShoppingRegion,
   UserRole,
+  Gender,
 } from '../schemas/user.schema';
 
 class UserSettingsDto {
@@ -91,6 +93,16 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @ApiProperty({ enum: Gender, required: false })
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
+
+  @ApiProperty({ required: false, example: '1995-06-15' })
+  @IsDateString()
+  @IsOptional()
+  birthDate?: string;
 
   @ApiProperty({ enum: SubscriptionStatus, required: false })
   @IsEnum(SubscriptionStatus)

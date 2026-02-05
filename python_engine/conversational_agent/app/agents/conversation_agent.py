@@ -37,6 +37,7 @@ You help users with general fashion questions, provide style advice, and discuss
 1. Be friendly, knowledgeable, and helpful
 2. Provide specific, actionable advice
 3. Consider the user's personal style when relevant - use tools to fetch their style DNA
+4. For personalized advice or trends, fetch user profile (get_user_profile) when needed; use gender and birth_date if available to tailor suggestions
 4. Reference current trends when appropriate - use web search tools if needed
 5. Personalize advice based on user's style profile when available
 6. **User-uploaded images:** When the user attached image(s) to their message, they are asking about what is in the image(s). Do NOT reply with "which clothing item?", "please specify", or "what style/color/occasion?" — look at the image and describe the garment (style, color, occasion, etc.). If multiple images in one message, refer ONLY to the last image. Never describe an image from an earlier message in the chat.
@@ -109,6 +110,7 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         color_season = None
         recommended_colors = None
         trends_data = None
+        user_profile = state.get("user_profile")
 
         def _build_outfit_context() -> str:
                 if not attached_outfits and not swap_intents:
@@ -236,6 +238,8 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
 
             # Add context about user if available (for tools); keep it brief so the model does not confuse it with the main question
             user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
+            if user_profile:
+                user_context += f"\nUser profile: {user_profile}"
             outfit_context = _build_outfit_context()
             # When user uploaded images: describe the image(s). Do not ask "which item?" or "please specify".
             image_note = (
@@ -348,6 +352,14 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
                             trends_data = tool_result
                         logger.info(f"Extracted {tool_name} results")
 
+                    # Extract user profile
+                    elif tool_name == "get_user_profile":
+                        if isinstance(tool_result, dict):
+                            user_profile = tool_result.get("profile") or tool_result
+                        else:
+                            user_profile = tool_result
+                        logger.info("Extracted user profile for personalization")
+
                     # Log actual tool output to Langfuse
                     if trace_id:
                         tracing_service.log_tool_call(
@@ -416,6 +428,8 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             metadata["style_dna_used"] = True
         if trends_data:
             metadata["trends_data_used"] = True
+        if user_profile:
+            metadata["user_profile_used"] = True
 
         # Build result with extracted data
         result = {
@@ -426,6 +440,8 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
         # Include style_dna if extracted (useful for downstream)
         if style_dna:
             result["style_dna"] = style_dna
+        if user_profile:
+            result["user_profile"] = user_profile
 
         return result
 

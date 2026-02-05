@@ -28,6 +28,11 @@ export enum ShoppingRegion {
   APAC = "APAC",
 }
 
+export enum Gender {
+  MALE = "MALE",
+  FEMALE = "FEMALE",
+}
+
 export interface UserSettings {
   // Measurement & Regional
   units: Units;
@@ -54,6 +59,8 @@ export interface User {
   passwordHash?: string;
   name: string;
   avatarUrl?: string;
+  gender?: Gender;
+  birthDate?: string;
   subscriptionStatus: SubscriptionStatus;
   role?: "USER" | "ADMIN";
   settings: UserSettings;
@@ -66,6 +73,8 @@ export interface CreateUserDto {
   passwordHash: string;
   name: string;
   avatarUrl?: string;
+  gender?: Gender;
+  birthDate?: string;
   subscriptionStatus?: SubscriptionStatus;
   settings?: UserSettings;
 }
@@ -75,6 +84,8 @@ export interface UpdateUserDto {
   passwordHash?: string;
   name?: string;
   avatarUrl?: string;
+  gender?: Gender;
+  birthDate?: string;
   subscriptionStatus?: SubscriptionStatus;
   settings?: UserSettings;
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -10,7 +10,7 @@ import { AlertTriangle, Sparkles, Eye, History, Share2, CheckCircle2, Circle, Lo
 import { useSettings } from "@/contexts/settings-context"
 import { useUser } from "@/contexts/user-context"
 import { useApi } from "@/lib/api"
-import { Currency, ShoppingRegion, Units } from "@/types/api"
+import { Currency, ShoppingRegion, Units, Gender } from "@/types/api"
 import { useToast } from "@/hooks/use-toast"
 import { AvatarCropper } from "./avatar-cropper"
 
@@ -23,11 +23,82 @@ export function SettingsPanel() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null)
   const [cropperImage, setCropperImage] = useState<string | null>(null)
+  const [genderValue, setGenderValue] = useState<Gender | "">("")
+  const [isUpdatingGender, setIsUpdatingGender] = useState(false)
+  const [birthYear, setBirthYear] = useState("")
+  const [birthMonth, setBirthMonth] = useState("")
+  const [birthDay, setBirthDay] = useState("")
+  const [isUpdatingBirthDate, setIsUpdatingBirthDate] = useState(false)
 
   const isLoading = userLoading || settingsLoading
   
   // Use local avatar if set, otherwise use user's avatar
   const displayAvatarUrl = localAvatarUrl ?? user?.avatarUrl
+
+  useEffect(() => {
+    if (user?.gender) {
+      setGenderValue(user.gender)
+    } else {
+      setGenderValue("")
+    }
+  }, [user?.gender])
+
+  useEffect(() => {
+    if (user?.birthDate) {
+      const datePart = user.birthDate.slice(0, 10)
+      const [year, month, day] = datePart.split("-")
+      setBirthYear(year || "")
+      setBirthMonth(month || "")
+      setBirthDay(day || "")
+    } else {
+      setBirthYear("")
+      setBirthMonth("")
+      setBirthDay("")
+    }
+  }, [user?.birthDate])
+
+  const birthDateValue =
+    birthYear && birthMonth && birthDay
+      ? `${birthYear}-${birthMonth}-${birthDay}`
+      : ""
+
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 100 }, (_, index) =>
+    String(currentYear - index)
+  )
+
+  const months = [
+    { value: "01", label: "January" },
+    { value: "02", label: "February" },
+    { value: "03", label: "March" },
+    { value: "04", label: "April" },
+    { value: "05", label: "May" },
+    { value: "06", label: "June" },
+    { value: "07", label: "July" },
+    { value: "08", label: "August" },
+    { value: "09", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ]
+
+  const daysInMonth =
+    birthYear && birthMonth
+      ? new Date(Number(birthYear), Number(birthMonth), 0).getDate()
+      : 31
+  const days = Array.from({ length: daysInMonth }, (_, index) =>
+    String(index + 1).padStart(2, "0")
+  )
+
+  useEffect(() => {
+    if (!birthDay) {
+      return
+    }
+    const numericDay = Number(birthDay)
+    if (numericDay > daysInMonth) {
+      setBirthDay("")
+    }
+  }, [birthDay, daysInMonth])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -102,6 +173,56 @@ export function SettingsPanel() {
       toast({ title: "Failed to remove profile picture", variant: "destructive" })
     }
   }
+
+  const handleGenderChange = async (value: string) => {
+    const gender = value as Gender
+    setGenderValue(gender)
+    setIsUpdatingGender(true)
+    try {
+      await userApi.updateCurrentUser({ gender })
+      await refetchUser()
+      toast({ title: "Gender updated" })
+    } catch (error) {
+      console.error("Failed to update gender:", error)
+      setGenderValue(user?.gender ?? "")
+      toast({ title: "Failed to update gender", variant: "destructive" })
+    } finally {
+      setIsUpdatingGender(false)
+    }
+  }
+
+  useEffect(() => {
+    const previousBirthDate = user?.birthDate ? user.birthDate.slice(0, 10) : ""
+    if (!birthDateValue || birthDateValue === previousBirthDate) {
+      return
+    }
+
+    const updateBirthDate = async () => {
+      setIsUpdatingBirthDate(true)
+      try {
+        await userApi.updateCurrentUser({ birthDate: birthDateValue })
+        await refetchUser()
+        toast({ title: "Birth date updated" })
+      } catch (error) {
+        console.error("Failed to update birth date:", error)
+        const [year, month, day] = previousBirthDate.split("-")
+        setBirthYear(year || "")
+        setBirthMonth(month || "")
+        setBirthDay(day || "")
+        toast({ title: "Failed to update birth date", variant: "destructive" })
+      } finally {
+        setIsUpdatingBirthDate(false)
+      }
+    }
+
+    updateBirthDate()
+  }, [
+    birthDateValue,
+    refetchUser,
+    toast,
+    user?.birthDate,
+    userApi,
+  ])
 
   if (isLoading) {
     return (
@@ -190,6 +311,91 @@ export function SettingsPanel() {
                     Remove
                   </Button>
                 )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Profile Basics */}
+      <Card className="border-border" id="profile-basics">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <h3 className="font-medium text-lg">Profile Basics</h3>
+              <p className="text-sm text-muted-foreground">
+                Used to personalize recommendations and sizing.
+              </p>
+            </div>
+            <div className="w-full sm:w-96 space-y-4">
+              <div className="space-y-2">
+                <Label>Gender</Label>
+                <Select
+                  value={genderValue || undefined}
+                  onValueChange={handleGenderChange}
+                  disabled={isUpdatingGender}
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={Gender.MALE}>Male</SelectItem>
+                    <SelectItem value={Gender.FEMALE}>Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Birth Date</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Select
+                    value={birthMonth || undefined}
+                    onValueChange={setBirthMonth}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={birthDay || undefined}
+                    onValueChange={setBirthDay}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {days.map((day) => (
+                        <SelectItem key={day} value={day}>
+                          {day}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={birthYear || undefined}
+                    onValueChange={setBirthYear}
+                    disabled={isUpdatingBirthDate}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>

@@ -4,11 +4,12 @@ import {
   IsEnum,
   IsNotEmpty,
   IsOptional,
+  IsDateString,
   IsString,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole } from '../schemas/user.schema';
+import { SubscriptionStatus, Units, Theme, Currency, ShoppingRegion, UserRole, Gender } from '../schemas/user.schema';
 
 class UserSettingsDto {
   // Measurement & Regional
@@ -71,6 +72,16 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   avatarUrl?: string;
+
+  @ApiProperty({ enum: Gender, required: false })
+  @IsEnum(Gender)
+  @IsOptional()
+  gender?: Gender;
+
+  @ApiProperty({ required: false, example: '1995-06-15' })
+  @IsDateString()
+  @IsOptional()
+  birthDate?: string;
 
   @ApiProperty({ enum: SubscriptionStatus, default: SubscriptionStatus.FREE })
   @IsEnum(SubscriptionStatus)
