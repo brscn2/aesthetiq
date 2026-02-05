@@ -1497,7 +1497,11 @@ export function ChatStylist({
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+<<<<<<< HEAD
                     {!isSingleItem && (
+=======
+                    {!isWardrobeAttachment && (
+>>>>>>> bbe3841a5a30fe31c665ae17e3fcd668c04e2c33
                       <div className="mt-2 flex flex-wrap gap-1">
                         {(["TOP", "BOTTOM", "FOOTWEAR", "OUTERWEAR", "DRESS", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
                           <Button
