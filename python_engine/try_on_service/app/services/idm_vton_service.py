@@ -1,7 +1,6 @@
 """IDM-VTON Service for Virtual Try-On via Replicate API."""
 import os
 import base64
-import tempfile
 from typing import List
 import aiohttp
 import replicate
@@ -24,62 +23,12 @@ class IDMVTONService:
         else:
             logger.warning("No REPLICATE_API_TOKEN provided")
     
-    def _get_mime_type(self, file_path: str) -> str:
-        """Get MIME type from file extension."""
-        from pathlib import Path
-        ext = Path(file_path).suffix.lower()
-        mime_types = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.webp': 'image/webp',
-        }
-        return mime_types.get(ext, 'image/jpeg')
-    
-    async def _download_image(
-        self,
-        image_url: str,
-        temp_dir: str,
-        index: int
-    ) -> str:
-        """Download image from URL to temporary file."""
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': image_url.split('?')[0],
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url, headers=headers) as response:
-                    if response.status != 200:
-                        raise Exception(f"Failed to download image: HTTP {response.status}")
-                    
-                    # Determine file extension
-                    extension = '.jpg'
-                    if '.png' in image_url.lower():
-                        extension = '.png'
-                    elif '.webp' in image_url.lower():
-                        extension = '.webp'
-                    
-                    temp_file_path = os.path.join(temp_dir, f"temp_image_{index}{extension}")
-                    
-                    with open(temp_file_path, 'wb') as f:
-                        f.write(await response.read())
-                    
-                    logger.debug(f"Downloaded image {index} to {temp_file_path}")
-                    return temp_file_path
-        
-        except Exception as e:
-            logger.error(f"Failed to download image from {image_url}: {e}")
-            raise
-    
     async def generate_try_on(
         self,
         user_photo_url: str,
         clothing_image_urls: List[str],
-        prompt: str
+        prompt: str,
+        category: str = "upper_body"
     ) -> str:
         """
         Generate virtual try-on image using IDM-VTON via Replicate.
@@ -91,37 +40,39 @@ class IDMVTONService:
             user_photo_url: URL of the user's photo
             clothing_image_urls: List of clothing item image URLs (uses first one)
             prompt: Description of the garment (optional, can be empty)
+            category: Clothing category - upper_body, lower_body, or dresses
         
         Returns:
             Base64 encoded image string
         """
-        temp_dir = None
-        
         try:
-            # Create temporary directory
-            temp_dir = tempfile.mkdtemp(prefix="idm_vton_")
-            logger.info(f"Created temp directory: {temp_dir}")
+            logger.info(f"User photo URL: {user_photo_url[:50]}...")
+            logger.info(f"Clothing image URL: {clothing_image_urls[0][:50]}...")
+            logger.info(f"Category: {category}, Prompt: {prompt}")
             
-            # Download user photo
-            logger.info(f"Downloading user photo from: {user_photo_url[:50]}...")
-            user_photo_path = await self._download_image(user_photo_url, temp_dir, 0)
+            logger.info("Calling IDM-VTON via Replicate API with direct URLs...")
             
-            # Download first clothing image (IDM-VTON works with one garment at a time)
-            logger.info(f"Downloading clothing image from: {clothing_image_urls[0][:50]}...")
-            clothing_path = await self._download_image(clothing_image_urls[0], temp_dir, 1)
+            # Call IDM-VTON via Replicate using URLs directly
+            # This is the production-ready approach - no local file downloads needed
+            input_dict = {
+                "human_img": user_photo_url,
+                "garm_img": clothing_image_urls[0],
+                "category": category,  # REQUIRED: upper_body, lower_body, dresses
+                "garment_des": prompt,  # Garment description
+                "steps": 30,  # Number of inference steps (1-40, default 30)
+            }
             
-            logger.info("Calling IDM-VTON via Replicate API...")
+            logger.info(f"Calling replicate with model: {settings.IDM_VTON_MODEL}")
+            logger.debug(f"Input params: category={category}, steps=30, has_prompt={bool(prompt)}")
             
-            # Call IDM-VTON via Replicate
-            output = replicate.run(
-                settings.IDM_VTON_MODEL,
-                input={
-                    "human_img": human_img,
-                    "garm_img": garm_img,
-                    "denoise_steps": 30,  # Quality vs speed (20-50)
-                    "seed": 42  # For reproducibility
-                }
-            )
+            try:
+                output = replicate.run(
+                    settings.IDM_VTON_MODEL,
+                    input=input_dict
+                )
+            except Exception as replicate_error:
+                logger.error(f"Replicate API error details: {type(replicate_error).__name__}: {str(replicate_error)}")
+                raise
             
             logger.info("IDM-VTON API response received")
             
@@ -173,10 +124,3 @@ class IDMVTONService:
                 raise Exception("Replicate API token not configured. Please set REPLICATE_API_TOKEN in .env")
             
             raise Exception(f"Failed to generate try-on image with IDM-VTON: {str(e)}")
-        
-        finally:
-            # Clean up temporary files
-            if temp_dir and os.path.exists(temp_dir):
-                import shutil
-                shutil.rmtree(temp_dir)
-                logger.debug(f"Cleaned up temp directory: {temp_dir}")

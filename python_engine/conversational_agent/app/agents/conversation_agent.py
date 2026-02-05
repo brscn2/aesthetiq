@@ -241,12 +241,18 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             if user_profile:
                 user_context += f"\nUser profile: {user_profile}"
             outfit_context = _build_outfit_context()
+            
+            # Extract image descriptions from previous messages for multi-turn context
+            image_history_context = _extract_image_context_from_history(conversation_history)
+            if image_history_context:
+                logger.info(f"Including {image_history_context.count('Image')} previous image description(s) in context")
+            
             # When user uploaded images: describe the image(s). Do not ask "which item?" or "please specify".
             image_note = (
                 "\n\n[IMPORTANT: The user attached image(s) below and is asking about them. "
                 "Describe what you see in the image(s) (if multiple, use only the LAST image). Do NOT ask 'which item?', 'please specify', or for style/color/occasion — just describe the garment in the image.]"
             ) if attached_images else ""
-            text_content = message + image_note + user_context + outfit_context
+            text_content = message + image_note + user_context + outfit_context + image_history_context
 
             # [DEBUG] Log the exact outfit context string sent to the LLM (to verify colors are present)
             if outfit_context:
@@ -380,10 +386,11 @@ async def conversation_agent_node(state: ConversationState) -> Dict[str, Any]:
             # Must include outfit context here too so the model sees colors (no-tools path was missing it)
             user_context = f"\n\n[User ID: {user_id}]" if user_id else ""
             outfit_context = _build_outfit_context()
+            image_history_context_fb = _extract_image_context_from_history(conversation_history)
             image_note_fb = (
                 "\n\n[IMPORTANT: The user attached image(s) and wants you to describe them. Describe the garment(s) in the image(s) (if multiple, use the LAST image only). Do NOT ask which item or please specify — just describe what you see.]"
             ) if attached_images else ""
-            fallback_text = message + image_note_fb + user_context + outfit_context
+            fallback_text = message + image_note_fb + user_context + outfit_context + image_history_context_fb
             if outfit_context:
                 logger.info(f"[Chat DEBUG] Fallback path: outfit context sent to LLM:\n{outfit_context}")
 

@@ -21,7 +21,7 @@ import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
 @UseGuards(ClerkAuthGuard)
 @ApiBearerAuth()
 export class TryOnController {
-  constructor(private readonly tryOnService: TryOnService) {}
+  constructor(private readonly tryOnService: TryOnService) { }
 
   @Post('generate')
   @HttpCode(HttpStatus.OK)
