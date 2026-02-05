@@ -263,6 +263,30 @@ export function ChatStylist({
 
     const existingWishlistItem = wishlistItemsMap.get(item.id)
 
+    // Helper to determine category from item
+    const getCategory = (): Category => {
+      // Try item.category first (should be uppercase like "DRESS", "TOP", etc.)
+      if (item.category && Object.values(Category).includes(item.category as Category)) {
+        return item.category as Category
+      }
+      // Try to infer from subCategory
+      const subCat = item.subCategory?.toLowerCase() || ""
+      if (subCat.includes("dress")) return Category.DRESS
+      if (subCat.includes("shirt") || subCat.includes("blouse") || subCat.includes("top") || subCat.includes("sweater") || subCat.includes("hoodie")) return Category.TOP
+      if (subCat.includes("pants") || subCat.includes("jeans") || subCat.includes("shorts") || subCat.includes("skirt") || subCat.includes("trouser")) return Category.BOTTOM
+      if (subCat.includes("jacket") || subCat.includes("coat") || subCat.includes("blazer") || subCat.includes("cardigan")) return Category.OUTERWEAR
+      if (subCat.includes("shoe") || subCat.includes("sneaker") || subCat.includes("boot") || subCat.includes("sandal") || subCat.includes("heel") || subCat.includes("loafer")) return Category.FOOTWEAR
+      // Try to infer from name
+      const name = item.name?.toLowerCase() || ""
+      if (name.includes("dress")) return Category.DRESS
+      if (name.includes("shirt") || name.includes("blouse") || name.includes("top") || name.includes("sweater") || name.includes("hoodie")) return Category.TOP
+      if (name.includes("pants") || name.includes("jeans") || name.includes("shorts") || name.includes("skirt") || name.includes("trouser")) return Category.BOTTOM
+      if (name.includes("jacket") || name.includes("coat") || name.includes("blazer") || name.includes("cardigan")) return Category.OUTERWEAR
+      if (name.includes("shoe") || name.includes("sneaker") || name.includes("boot") || name.includes("sandal") || name.includes("heel") || name.includes("loafer")) return Category.FOOTWEAR
+      // Default fallback
+      return Category.ACCESSORY
+    }
+
     try {
       if (existingWishlistItem) {
         // Remove from wishlist
@@ -274,7 +298,7 @@ export function ChatStylist({
           name: item.name,
           description: item.metadata?.description,
           imageUrl: item.imageUrl || "",
-          category: (item.category as Category) || Category.ACCESSORY,
+          category: getCategory(),
           subCategory: item.subCategory,
           brand: item.brand,
           brandId: item.metadata?.brandId,
