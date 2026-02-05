@@ -1376,19 +1376,21 @@ export function ChatStylist({
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {(["TOP", "BOTTOM", "FOOTWEAR", "OUTERWEAR", "DRESS", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
-                        <Button
-                          key={category}
-                          variant={swapIntent === category ? "default" : "outline"}
-                          size="sm"
-                          className="h-6 px-2 text-[10px]"
-                          onClick={() => toggleSwapIntent(outfit.id, category)}
-                        >
-                          Swap {category.toLowerCase()}
-                        </Button>
-                      ))}
-                    </div>
+                    {!isWardrobeAttachment && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(["TOP", "BOTTOM", "FOOTWEAR", "OUTERWEAR", "DRESS", "ACCESSORY"] as OutfitSwapIntent["category"][]).map((category) => (
+                          <Button
+                            key={category}
+                            variant={swapIntent === category ? "default" : "outline"}
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => toggleSwapIntent(outfit.id, category)}
+                          >
+                            Swap {category.toLowerCase()}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               })}
