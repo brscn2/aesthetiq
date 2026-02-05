@@ -121,42 +121,106 @@ export enum Category {
 export interface WardrobeItem {
   _id: string;
   userId: string;
+  name?: string;
+  description?: string;
   imageUrl: string;
   processedImageUrl?: string;
   category: Category;
   subCategory?: string;
   brand?: string;
+  brandId?: string | Brand;
+  color?: string;
+  colorHex?: string;
+  colorVariants?: string[];
   retailerId?: string | Retailer;
   colors?: string[];
+  price?: {
+    amount: number;
+    currency: string;
+    formatted?: string;
+  };
+  productUrl?: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  imageUrls?: string[];
+  primaryImageUrl?: string;
+  material?: string;
+  gender?: string;
+  sizes?: string[];
   notes?: string;
   isFavorite: boolean;
   lastWorn?: string;
   seasonalPaletteScores?: SeasonalPaletteScores;
+  embedding?: number[];
+  metadata?: Record<string, any>;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateWardrobeItemDto {
+  name?: string;
+  description?: string;
   imageUrl: string;
   processedImageUrl?: string;
   category: Category;
   subCategory?: string;
   brand?: string;
+  brandId?: string;
+  color?: string;
+  colorHex?: string;
+  colorVariants?: string[];
   retailerId?: string;
   colors?: string[];
+  price?: {
+    amount: number;
+    currency: string;
+    formatted?: string;
+  };
+  productUrl?: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  imageUrls?: string[];
+  primaryImageUrl?: string;
+  material?: string;
+  gender?: string;
+  sizes?: string[];
+  metadata?: Record<string, any>;
   notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
 }
 
 export interface UpdateWardrobeItemDto {
+  name?: string;
+  description?: string;
   imageUrl?: string;
   processedImageUrl?: string;
   category?: Category;
   subCategory?: string;
   brand?: string;
+  brandId?: string;
+  color?: string;
+  colorHex?: string;
+  colorVariants?: string[];
   retailerId?: string;
   colors?: string[];
+  price?: {
+    amount: number;
+    currency: string;
+    formatted?: string;
+  };
+  productUrl?: string;
+  sku?: string;
+  tags?: string[];
+  inStock?: boolean;
+  imageUrls?: string[];
+  primaryImageUrl?: string;
+  material?: string;
+  gender?: string;
+  sizes?: string[];
+  metadata?: Record<string, any>;
   notes?: string;
   isFavorite?: boolean;
   lastWorn?: string;
@@ -372,9 +436,18 @@ export interface UpdateOutfitDto {
 // AI Analysis Types
 export interface ClothingAnalysisResult {
   category: Category;
+  name?: string;
+  description?: string;
   subCategory?: string;
   brand?: string;
+  color?: string;
+  colorHex?: string;
+  colorVariants?: string[];
   colors: string[];
+  material?: string;
+  gender?: string;
+  sizes?: string[];
+  tags?: string[];
   styleNotes?: string;
   confidence: number;
 }

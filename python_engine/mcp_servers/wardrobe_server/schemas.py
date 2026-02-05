@@ -21,20 +21,37 @@ class WardrobeItem(BaseModel):
 
     id: str = Field(..., description="Wardrobe item id (stringified ObjectId)")
     userId: str
+    name: Optional[str] = None
+    description: Optional[str] = None
     imageUrl: str
     processedImageUrl: Optional[str] = None
     category: Category
     subCategory: Optional[str] = None
     brand: Optional[str] = None
+    brandId: Optional[str] = None
+    color: Optional[str] = None
+    colorHex: Optional[str] = None
+    colorVariants: List[str] = Field(default_factory=list)
     retailerId: Optional[str] = (
         None  # References Retailer collection (matches backend schema)
     )
     colors: List[str] = Field(default_factory=list, description="Hex color codes")
+    price: Optional[Dict[str, Any]] = None
+    productUrl: Optional[str] = None
+    sku: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    inStock: Optional[bool] = None
+    imageUrls: List[str] = Field(default_factory=list)
+    primaryImageUrl: Optional[str] = None
+    material: Optional[str] = None
+    gender: Optional[str] = None
+    sizes: List[str] = Field(default_factory=list)
     notes: Optional[str] = None
     isFavorite: bool = False
     lastWorn: Optional[datetime] = None
     seasonalPaletteScores: Optional[SeasonalPaletteScores] = None
     embedding: Optional[List[float]] = Field(None, description="512-dim CLIP embedding")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     # Raw document for advanced use
     raw: Dict[str, Any] = Field(default_factory=dict)
 
@@ -53,7 +70,17 @@ class WardrobeFilters(BaseModel):
     category: Optional[Category] = None
     subCategory: Optional[str] = None
     brand: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    colorHex: Optional[str] = None
+    colorVariants: Optional[List[str]] = None
     colors: Optional[List[str]] = None  # Filter by colors (any match)
+    material: Optional[str] = None
+    gender: Optional[str] = None
+    sizes: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    inStock: Optional[bool] = None
     isFavorite: Optional[bool] = None
     # Generic escape hatch for additional filters
     extra: Dict[str, Any] = Field(default_factory=dict)

@@ -56,6 +56,7 @@ class RetailerFilters(BaseModel):
     category: Optional[Category] = None
     subCategory: Optional[str] = None
     brand: Optional[str] = None
+    gender: Optional[str] = None
     colors: Optional[List[str]] = None  # Filter by colors (any match)
     # Generic escape hatch for additional filters
     extra: Dict[str, Any] = Field(default_factory=dict)
@@ -314,6 +315,9 @@ async def search_retailer_items(
             if filters.brand:
                 # Case-insensitive partial match
                 db_query["brand"] = {"$regex": filters.brand, "$options": "i"}
+            if filters.gender:
+                gender_value = filters.gender.upper()
+                db_query["gender"] = {"$in": [gender_value, "UNISEX"]}
             if filters.colors:
                 # Match any of the specified colors
                 db_query["colors"] = {"$in": filters.colors}
@@ -381,6 +385,9 @@ async def search_retailer_items(
                             "$regex": filters.brand,
                             "$options": "i",
                         }
+                    if filters.gender:
+                        gender_value = filters.gender.upper()
+                        retail_query["gender"] = {"$in": [gender_value, "UNISEX"]}
                     if filters.colors:
                         retail_query["colors"] = {"$in": filters.colors}
 
@@ -503,6 +510,9 @@ async def search_retailer_items(
                 "inStock": True,
                 "currency": "USD",
                 "colors": [],  # Could extract from image later
+                "gender": (
+                    filters.gender.upper() if filters and filters.gender else None
+                ),
                 "tags": [],
                 "metadata": {
                     "source": "google_search",

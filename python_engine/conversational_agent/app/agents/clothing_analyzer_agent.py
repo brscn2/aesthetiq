@@ -8,6 +8,7 @@ This agent evaluates the retrieved clothing items and decides:
 """
 
 from typing import Any, Dict, List, Literal, Optional
+import json
 
 from pydantic import BaseModel, Field
 
@@ -131,7 +132,39 @@ Your task is to evaluate the retrieved clothing items and decide what to do next
 **For REFINE decisions, provide filter_updates with specific values:**
 
 **Guidelines:**
+If user profile data is available (e.g., gender or birth_date), use it when relevant to fit or age-appropriate recommendations without stereotyping.
 """
+
+
+def _normalize_tool_result(result: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, list) and result:
+        first = result[0]
+        if isinstance(first, dict):
+            return first
+    if isinstance(result, str):
+        try:
+            parsed = json.loads(result)
+            if isinstance(parsed, dict):
+                return parsed
+            if isinstance(parsed, list) and parsed:
+                first = parsed[0]
+                if isinstance(first, dict):
+                    return first
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _extract_profile_field(user_profile: Optional[Dict[str, Any]], *keys: str) -> Optional[str]:
+    if not isinstance(user_profile, dict):
+        return None
+    for key in keys:
+        value = user_profile.get(key)
+        if value:
+            return str(value)
+    return None
 
 
 async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
@@ -210,6 +243,40 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 "needs_clarification": False,
             }
 
+        # Fetch user profile if missing (for gender/birth_date personalization)
+        if not user_profile:
+            user_id = state.get("user_id", "")
+            if user_id:
+                try:
+                    tools = await get_mcp_tools()
+                    tools_by_name = {
+                        tool.name: tool for tool in tools if hasattr(tool, "name")
+                    }
+                    tool = tools_by_name.get("get_user_profile")
+                    if tool:
+                        tool_result = await tool.ainvoke({"user_id": user_id})
+                        extracted = _normalize_tool_result(tool_result)
+                        if isinstance(extracted, dict) and "profile" in extracted:
+                            user_profile = extracted.get("profile")
+                        elif isinstance(extracted, dict):
+                            nested = extracted.get("data") or extracted.get("result")
+                            if isinstance(nested, dict) and "profile" in nested:
+                                user_profile = nested.get("profile")
+                            else:
+                                user_profile = extracted
+                        if trace_id:
+                            tracing_service.log_tool_call(
+                                trace_id=trace_id,
+                                tool_name="get_user_profile",
+                                input_data={"user_id": user_id},
+                                output_data={
+                                    "has_profile": bool(user_profile),
+                                    "source": "clothing_analyzer",
+                                },
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to fetch user profile in analyzer: {e}")
+
         # Build analysis context - handle structured items from MCP tools
         items_summary = ""
         if retrieved_items:
@@ -263,6 +330,15 @@ async def clothing_analyzer_node(state: ConversationState) -> Dict[str, Any]:
         if style_dna:
             style_summary = f"\nUser's Style DNA: {style_dna}"
         if user_profile:
+            gender = _extract_profile_field(user_profile, "gender", "Gender")
+            birth_date = _extract_profile_field(
+                user_profile, "birth_date", "birthDate", "birth_date_iso"
+            )
+            if gender or birth_date:
+                style_summary += (
+                    f"\nUser demographics: gender={gender or 'unknown'}, "
+                    f"birth_date={birth_date or 'unknown'}"
+                )
             style_summary += f"\nUser Profile: {user_profile}"
 
         filter_summary = (

@@ -21,6 +21,12 @@ export class WardrobeItem {
   @Prop({ type: String, required: true })
   userId: string;
 
+  @Prop()
+  name?: string;
+
+  @Prop()
+  description?: string;
+
   @Prop({ required: true })
   imageUrl: string;
 
@@ -36,11 +42,59 @@ export class WardrobeItem {
   @Prop()
   brand?: string;
 
+  @Prop({ type: Types.ObjectId, ref: 'Brand' })
+  brandId?: Types.ObjectId;
+
+  @Prop()
+  color?: string;
+
+  @Prop()
+  colorHex?: string;
+
+  @Prop({ type: [String], default: [] })
+  colorVariants: string[];
+
   @Prop({ type: Types.ObjectId, ref: 'Retailer' })
   retailerId?: Types.ObjectId;
 
   @Prop({ type: [String], default: [] })
   colors: string[];
+
+  @Prop({
+    type: Object,
+  })
+  price?: {
+    amount: number;
+    currency: string;
+    formatted?: string;
+  };
+
+  @Prop()
+  productUrl?: string;
+
+  @Prop()
+  sku?: string;
+
+  @Prop({ type: [String], default: [] })
+  tags: string[];
+
+  @Prop({ default: true })
+  inStock: boolean;
+
+  @Prop({ type: [String], default: [] })
+  imageUrls: string[];
+
+  @Prop()
+  primaryImageUrl?: string;
+
+  @Prop()
+  material?: string;
+
+  @Prop()
+  gender?: string;
+
+  @Prop({ type: [String], default: [] })
+  sizes: string[];
 
   @Prop()
   notes?: string;
@@ -70,6 +124,15 @@ export class WardrobeItem {
     default: null,
   })
   embedding?: number[];
+
+  /**
+   * Flexible metadata field for custom user data
+   */
+  @Prop({
+    type: Object,
+    default: {},
+  })
+  metadata: Record<string, any>;
 }
 
 export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
@@ -78,6 +141,13 @@ export const WardrobeItemSchema = SchemaFactory.createForClass(WardrobeItem);
 WardrobeItemSchema.index({ userId: 1, category: 1 });
 WardrobeItemSchema.index({ userId: 1, colors: 1 });
 WardrobeItemSchema.index({ retailerId: 1 });
+WardrobeItemSchema.index({ brandId: 1 });
+WardrobeItemSchema.index({ tags: 1 });
+WardrobeItemSchema.index({ inStock: 1 });
+WardrobeItemSchema.index({ 'price.amount': 1 });
+
+// Text index for search
+WardrobeItemSchema.index({ name: 'text', description: 'text', tags: 'text' });
 // Index for seasonal palette queries
 WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_AUTUMN': 1 });
 WardrobeItemSchema.index({ 'seasonalPaletteScores.WARM_SPRING': 1 });

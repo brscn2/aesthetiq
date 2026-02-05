@@ -55,10 +55,16 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   const [isSaving, setIsSaving] = useState(false)
   
   // Editable fields
+  const [editName, setEditName] = useState("")
   const [editBrand, setEditBrand] = useState("")
+  const [editDescription, setEditDescription] = useState("")
   const [editCategory, setEditCategory] = useState<Category>(Category.TOP)
   const [editSubCategory, setEditSubCategory] = useState("")
   const [editColors, setEditColors] = useState<string[]>([])
+  const [editMaterial, setEditMaterial] = useState("")
+  const [editGender, setEditGender] = useState("")
+  const [editSizes, setEditSizes] = useState("")
+  const [editTags, setEditTags] = useState("")
   const [editNotes, setEditNotes] = useState("")
   
   // Color picker state
@@ -67,10 +73,16 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   
   // Track last saved values for cancel functionality
   const savedValuesRef = useRef({
+    name: "",
     brand: "",
+    description: "",
     category: Category.TOP as Category,
     subCategory: "",
     colors: [] as string[],
+    material: "",
+    gender: "",
+    sizes: "",
+    tags: "",
     notes: "",
   })
 
@@ -78,16 +90,28 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   useEffect(() => {
     if (item) {
       const values = {
+        name: item.name || "",
         brand: item.brand || "",
+        description: item.description || "",
         category: item.category,
         subCategory: item.subCategory || "",
         colors: item.colors || [],
+        material: item.material || "",
+        gender: item.gender || "",
+        sizes: item.sizes?.join(", ") || "",
+        tags: item.tags?.join(", ") || "",
         notes: item.notes || "",
       }
+      setEditName(values.name)
       setEditBrand(values.brand)
+      setEditDescription(values.description)
       setEditCategory(values.category)
       setEditSubCategory(values.subCategory)
       setEditColors(values.colors)
+      setEditMaterial(values.material)
+      setEditGender(values.gender)
+      setEditSizes(values.sizes)
+      setEditTags(values.tags)
       setEditNotes(values.notes)
       savedValuesRef.current = values
     }
@@ -140,10 +164,16 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
       queryClient.invalidateQueries({ queryKey: ["wardrobe"] })
       // Save current values as the new baseline for cancel
       savedValuesRef.current = {
+        name: editName,
         brand: editBrand,
+        description: editDescription,
         category: editCategory,
         subCategory: editSubCategory,
         colors: editColors,
+        material: editMaterial,
+        gender: editGender,
+        sizes: editSizes,
+        tags: editTags,
         notes: editNotes,
       }
       toast.success("Item updated successfully")
@@ -174,10 +204,19 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
       await updateMutation.mutateAsync({
         id: item._id,
         data: {
+          name: editName || undefined,
+          description: editDescription || undefined,
           brand: editBrand || undefined,
           category: editCategory,
           subCategory: editSubCategory || undefined,
           colors: editColors.length > 0 ? editColors : undefined,
+          colorHex: editColors[0] || undefined,
+          color: editColors[0] ? getClosestColorName(editColors[0]) : undefined,
+          colorVariants: editColors.length > 0 ? editColors : undefined,
+          material: editMaterial || undefined,
+          gender: editGender || undefined,
+          sizes: editSizes ? editSizes.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+          tags: editTags ? editTags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
           notes: editNotes || undefined,
         },
       })
@@ -189,9 +228,15 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
   const handleCancelEdit = () => {
     // Reset to last saved values (not item prop which may be stale)
     setEditBrand(savedValuesRef.current.brand)
+    setEditName(savedValuesRef.current.name)
+    setEditDescription(savedValuesRef.current.description)
     setEditCategory(savedValuesRef.current.category)
     setEditSubCategory(savedValuesRef.current.subCategory)
     setEditColors(savedValuesRef.current.colors)
+    setEditMaterial(savedValuesRef.current.material)
+    setEditGender(savedValuesRef.current.gender)
+    setEditSizes(savedValuesRef.current.sizes)
+    setEditTags(savedValuesRef.current.tags)
     setEditNotes(savedValuesRef.current.notes)
     setIsEditing(false)
     setShowColorPicker(false)
@@ -223,14 +268,14 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
         <DialogHeader>
           {isEditing ? (
             <Input
-              value={editBrand}
-              onChange={(e) => setEditBrand(e.target.value)}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
               placeholder="Name your item"
               className="font-serif text-xl h-auto py-1 px-2 placeholder:text-xl"
             />
           ) : (
             <DialogTitle className="font-serif text-xl">
-              {editBrand || "Unknown Brand"}
+              {editName || editBrand || "Unnamed Item"}
             </DialogTitle>
           )}
         </DialogHeader>
@@ -260,6 +305,42 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
 
           {/* Details */}
           <div className="space-y-4">
+            {/* Brand */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Brand:</span>
+              </div>
+              {isEditing ? (
+                <Input
+                  value={editBrand}
+                  onChange={(e) => setEditBrand(e.target.value)}
+                  placeholder="Brand"
+                />
+              ) : (
+                <span className="text-sm">{editBrand || "Unknown"}</span>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Description:</span>
+              </div>
+              {isEditing ? (
+                <Textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Short description"
+                  className="min-h-[60px] text-sm"
+                />
+              ) : (
+                editDescription ? (
+                  <p className="text-sm text-foreground">{editDescription}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No description</p>
+                )
+              )}
+            </div>
             {/* Category */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
@@ -394,6 +475,66 @@ export function ItemDetailModal({ item, open, onOpenChange }: ItemDetailModalPro
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Added:</span>
               <span>{createdDate}</span>
+            </div>
+
+            {/* Material / Gender / Sizes / Tags */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Material</span>
+                  {isEditing ? (
+                    <Input
+                      value={editMaterial}
+                      onChange={(e) => setEditMaterial(e.target.value)}
+                      placeholder="e.g., Denim"
+                    />
+                  ) : (
+                    <p className="text-sm">{editMaterial || "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Gender</span>
+                  {isEditing ? (
+                    <Select value={editGender} onValueChange={setEditGender}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="WOMEN">Women</SelectItem>
+                        <SelectItem value="MEN">Men</SelectItem>
+                        <SelectItem value="UNISEX">Unisex</SelectItem>
+                        <SelectItem value="KIDS">Kids</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm">{editGender || "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Sizes</span>
+                  {isEditing ? (
+                    <Input
+                      value={editSizes}
+                      onChange={(e) => setEditSizes(e.target.value)}
+                      placeholder="e.g., S, M, L"
+                    />
+                  ) : (
+                    <p className="text-sm">{editSizes || "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Tags</span>
+                  {isEditing ? (
+                    <Input
+                      value={editTags}
+                      onChange={(e) => setEditTags(e.target.value)}
+                      placeholder="e.g., casual, summer"
+                    />
+                  ) : (
+                    <p className="text-sm">{editTags || "—"}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Style Notes */}

@@ -55,6 +55,10 @@ class RetailerFilters(BaseModel):
     brand: Optional[str] = Field(
         None, description="Brand name filter (optional, case-insensitive)"
     )
+    gender: Optional[str] = Field(
+        None,
+        description="Gender filter (MEN, WOMEN, UNISEX, KIDS). UNISEX should be allowed for all.",
+    )
     colors: Optional[List[str]] = Field(
         default=None, description="List of hex color codes to filter by (optional)"
     )

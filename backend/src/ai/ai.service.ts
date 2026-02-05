@@ -162,6 +162,16 @@ const COLOR_MAP: Record<string, string> = {
   yellowgreen: '#9acd32',
 };
 
+const HEX_TO_COLOR_NAME: Record<string, string> = Object.entries(
+  COLOR_MAP,
+).reduce(
+  (acc, [name, hex]) => {
+    acc[hex.toLowerCase()] = name;
+    return acc;
+  },
+  {} as Record<string, string>,
+);
+
 // Cache entry with TTL
 interface CacheEntry {
   result: AnalyzeClothingResponse;
@@ -343,15 +353,25 @@ export class AiService {
                 type: 'text',
                 text: `Analyze this clothing image and return a JSON object with:
 - category: one of "TOP", "BOTTOM", "OUTERWEAR", "FOOTWEAR", "ACCESSORY", "DRESS" (TOP includes shirts, sweaters, tanks; BOTTOM includes pants, shorts, skirts; OUTERWEAR includes coats, jackets, blazers, cardigans; FOOTWEAR includes all shoes; ACCESSORY includes bags, hats, jewelry, watches, belts; DRESS includes casual and formal dresses)
+- name: short, product-like name without brand (e.g., "Ribbed Knit Sweater")
+- description: 1-2 sentence concise description (material/fit/season if obvious)
 - subCategory: specific type (e.g., "T-Shirt", "Jeans", "Sneakers", "Coat","Watch", "Backpack")
 - brand: brand name if visible on the item, otherwise null
-- colors: array of 1-3 DISTINCT dominant colors. Choose from: black, white, gray, darkgray, silver, navy, blue, royalblue, cornflowerblue, skyblue, lightblue, steelblue, slateblue, darkslateblue, teal, turquoise, green, olive, khaki, yellow, gold, orange, coral, red, crimson, pink, hotpink, purple, violet, indigo, brown, chocolate, tan, beige, ivory, cream, maroon, burgundy, salmon, lavender, plum, magenta, cyan, lime, forestgreen, darkgreen, darkblue, midnightblue, slategray, dimgray, charcoal, offwhite, camel
+- color: primary color name
+- colorHex: primary color hex code (e.g., "#000000")
+- colorVariants: array of 1-3 DISTINCT hex codes for dominant colors
+- colors: array of 1-3 DISTINCT dominant colors as hex codes (preferred) or names from: black, white, gray, darkgray, silver, navy, blue, royalblue, cornflowerblue, skyblue, lightblue, steelblue, slateblue, darkslateblue, teal, turquoise, green, olive, khaki, yellow, gold, orange, coral, red, crimson, pink, hotpink, purple, violet, indigo, brown, chocolate, tan, beige, ivory, cream, maroon, burgundy, salmon, lavender, plum, magenta, cyan, lime, forestgreen, darkgreen, darkblue, midnightblue, slategray, dimgray, charcoal, offwhite, camel
+- material: if clearly visible (e.g., "Denim", "Leather", "Cotton"), else null
+- gender: one of "WOMEN", "MEN", "UNISEX", "KIDS" if inferable, else null
+- sizes: array of sizes ONLY if explicitly visible on the item (e.g., ["S", "M"]), else empty array
+- tags: 2-6 short tags (e.g., ["casual", "summer", "minimalist"]) if helpful, else empty array
 - styleNotes: A brief 1-2 sentence styling tip including: suitable occasions (casual, business, formal, sport, date night, etc.), what to pair it with, and optionally the season. Keep it concise and helpful.
 
 IMPORTANT: Only include truly distinct colors. Do NOT repeat similar shades.
+If unsure about a field, use null (or empty array for list fields).
 
 Return ONLY valid JSON. Example:
-{"category":"TOP","subCategory":"T-Shirt","brand":"Nike","colors":["black","white"],"styleNotes":"Perfect for casual outings and gym sessions. Pairs well with joggers or dark jeans."}`,
+{"category":"TOP","name":"Ribbed Knit Sweater","description":"A cozy ribbed knit sweater with a relaxed fit.","subCategory":"Sweater","brand":null,"color":"black","colorHex":"#000000","colorVariants":["#000000","#333333"],"colors":["#000000","#333333"],"material":"Wool","gender":"UNISEX","sizes":[],"tags":["cozy","winter","casual"],"styleNotes":"Great for casual outings; pair with jeans or tailored trousers."}`,
               },
               imageContent,
             ],
@@ -482,20 +502,68 @@ Return ONLY valid JSON. Example:
           ? inferredCategory
           : 'ACCESSORY';
 
+      const normalizeColorToHex = (input: unknown): string | null => {
+        if (typeof input !== 'string') return null;
+        const trimmed = input.trim();
+        if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+          return trimmed.toUpperCase();
+        }
+        const colorName = trimmed.toLowerCase();
+        const hex = COLOR_MAP[colorName];
+        return hex ? hex.toUpperCase() : null;
+      };
+
+      const normalizeStringArray = (value: unknown): string[] => {
+        if (Array.isArray(value)) {
+          return value
+            .filter((v) => typeof v === 'string')
+            .map((v) => v.trim());
+        }
+        if (typeof value === 'string' && value.trim()) {
+          return [value.trim()];
+        }
+        return [];
+      };
+
       // Convert color names to hex codes
-      const colors = (parsed.colors || [])
-        .map((c: string) => {
-          if (typeof c !== 'string') return null;
-          const colorName = c.toLowerCase().trim();
-          // If it's already a hex code, validate and return it
-          if (/^#[0-9A-Fa-f]{6}$/.test(c)) {
-            return c.toUpperCase();
+      const rawColors = normalizeStringArray(parsed.colors);
+      const colors = rawColors
+        .map((c) => normalizeColorToHex(c))
+        .filter((c): c is string => Boolean(c));
+
+      const rawColorVariants = normalizeStringArray(parsed.colorVariants);
+      const colorVariants = rawColorVariants
+        .map((c) => normalizeColorToHex(c))
+        .filter((c): c is string => Boolean(c));
+
+      const colorHex =
+        normalizeColorToHex(parsed.colorHex) ||
+        (colors.length > 0 ? colors[0] : null) ||
+        normalizeColorToHex(parsed.color);
+
+      const colorName =
+        typeof parsed.color === 'string' && parsed.color.trim().length > 0
+          ? parsed.color.trim()
+          : colorHex
+            ? HEX_TO_COLOR_NAME[colorHex.toLowerCase()]
+            : undefined;
+
+      const uniqueHexes = (hexes: string[]): string[] => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const hex of hexes) {
+          if (!seen.has(hex)) {
+            seen.add(hex);
+            out.push(hex);
           }
-          // Convert color name to hex
-          return COLOR_MAP[colorName] || null;
-        })
-        .filter((c: string | null): c is string => c !== null)
-        .slice(0, 5);
+        }
+        return out;
+      };
+
+      const normalizedColors = uniqueHexes(colors).slice(0, 5);
+      const normalizedColorVariants = uniqueHexes(
+        (colorVariants.length > 0 ? colorVariants : normalizedColors) || [],
+      ).slice(0, 5);
 
       // Extract and validate styleNotes
       const styleNotes =
@@ -504,11 +572,53 @@ Return ONLY valid JSON. Example:
           ? parsed.styleNotes.trim()
           : undefined;
 
+      const genderRaw =
+        typeof parsed.gender === 'string'
+          ? parsed.gender.trim().toUpperCase()
+          : '';
+      const gender = ['WOMEN', 'MEN', 'UNISEX', 'KIDS'].includes(genderRaw)
+        ? genderRaw
+        : undefined;
+
+      const sizes = normalizeStringArray(parsed.sizes).slice(0, 10);
+      const tags = normalizeStringArray(parsed.tags)
+        .map((t) => t.toLowerCase())
+        .filter((t) => t.length > 0)
+        .slice(0, 10);
+
+      const name =
+        typeof parsed.name === 'string' && parsed.name.trim().length > 0
+          ? parsed.name.trim()
+          : undefined;
+
+      const description =
+        typeof parsed.description === 'string' &&
+        parsed.description.trim().length > 0
+          ? parsed.description.trim()
+          : undefined;
+
+      const material =
+        typeof parsed.material === 'string' && parsed.material.trim().length > 0
+          ? parsed.material.trim()
+          : undefined;
+
       return {
         category: category as ClothingAnalysisResult['category'],
+        name,
+        description,
         subCategory: parsed.subCategory || undefined,
         brand: parsed.brand || undefined,
-        colors: colors.length > 0 ? colors : ['#808080'], // Default grey if no colors detected
+        color: colorName,
+        colorHex: colorHex || undefined,
+        colorVariants:
+          normalizedColorVariants.length > 0
+            ? normalizedColorVariants
+            : undefined,
+        colors: normalizedColors.length > 0 ? normalizedColors : ['#808080'], // Default grey if no colors detected
+        material,
+        gender,
+        sizes: sizes.length > 0 ? sizes : undefined,
+        tags: tags.length > 0 ? tags : undefined,
         styleNotes,
         confidence: 0.85, // OpenAI doesn't provide confidence, use default
       };

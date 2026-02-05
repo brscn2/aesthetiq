@@ -75,6 +75,8 @@ async def search_retailer_items(req: RetailerSearchRequest):
             filter_kwargs["subCategory"] = req.filters.subCategory
         if req.filters.brand is not None:
             filter_kwargs["brand"] = req.filters.brand
+        if req.filters.gender is not None:
+            filter_kwargs["gender"] = req.filters.gender
         if req.filters.colors is not None:
             filter_kwargs["colors"] = req.filters.colors
         if req.filters.extra:

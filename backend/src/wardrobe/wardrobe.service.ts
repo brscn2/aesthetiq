@@ -6,7 +6,10 @@ import {
   WardrobeItemDocument,
   Category,
 } from './schemas/wardrobe-item.schema';
-import { ItemFeedback, ItemFeedbackDocument } from './schemas/item-feedback.schema';
+import {
+  ItemFeedback,
+  ItemFeedbackDocument,
+} from './schemas/item-feedback.schema';
 import { CreateWardrobeItemDto } from './dto/create-wardrobe-item.dto';
 import { UpdateWardrobeItemDto } from './dto/update-wardrobe-item.dto';
 import { AzureStorageService } from '../upload/azure-storage.service';
@@ -26,16 +29,19 @@ export class WardrobeService {
     private embeddingService: EmbeddingService,
   ) {}
 
-  async create(createWardrobeItemDto: CreateWardrobeItemDto & { userId: string }): Promise<WardrobeItem> {
+  async create(
+    createWardrobeItemDto: CreateWardrobeItemDto & { userId: string },
+  ): Promise<WardrobeItem> {
     // Calculate seasonal palette scores based on item colors
     const seasonalPaletteScores = createWardrobeItemDto.colors?.length
       ? calculateSeasonalPaletteScores(createWardrobeItemDto.colors)
       : null;
 
     // Get image embedding from Python service (non-blocking, fails gracefully)
-    const imageUrl = createWardrobeItemDto.processedImageUrl || createWardrobeItemDto.imageUrl;
+    const imageUrl =
+      createWardrobeItemDto.processedImageUrl || createWardrobeItemDto.imageUrl;
     let embedding: number[] | null = null;
-    
+
     try {
       this.logger.log(`Fetching CLIP embedding for image: ${imageUrl}`);
       embedding = await this.embeddingService.getImageEmbedding(imageUrl);
@@ -43,18 +49,27 @@ export class WardrobeService {
         this.logger.log(`Embedding generated (${embedding.length} dimensions)`);
       }
     } catch (error) {
-      this.logger.warn(`Failed to get embedding, continuing without: ${error.message}`);
+      this.logger.warn(
+        `Failed to get embedding, continuing without: ${error.message}`,
+      );
     }
 
     // Convert retailerId string to ObjectId if provided
     const itemData = {
       ...createWardrobeItemDto,
-      retailerId: createWardrobeItemDto.retailerId ? new Types.ObjectId(createWardrobeItemDto.retailerId) : undefined,
+      retailerId: createWardrobeItemDto.retailerId
+        ? new Types.ObjectId(createWardrobeItemDto.retailerId)
+        : undefined,
+      brandId: createWardrobeItemDto.brandId
+        ? new Types.ObjectId(createWardrobeItemDto.brandId)
+        : undefined,
       seasonalPaletteScores,
       embedding,
     };
-    
-    this.logger.log(`Creating wardrobe item with seasonal palette scores${embedding ? ' and embedding' : ''}`);
+
+    this.logger.log(
+      `Creating wardrobe item with seasonal palette scores${embedding ? ' and embedding' : ''}`,
+    );
     const createdItem = new this.wardrobeItemModel(itemData);
     return createdItem.save();
   }
@@ -81,19 +96,22 @@ export class WardrobeService {
     if (search && search.trim()) {
       const searchRegex = { $regex: search.trim(), $options: 'i' };
       filter.$or = [
+        { name: searchRegex },
+        { description: searchRegex },
         { brand: searchRegex },
         { subCategory: searchRegex },
         { notes: searchRegex },
+        { tags: searchRegex },
       ];
     }
-    
+
     // Filter by seasonal palette score
     if (seasonalPalette) {
       const threshold = minPaletteScore ?? 0.6;
       const paletteKey = `seasonalPaletteScores.${seasonalPalette}`;
       filter[paletteKey] = { $gte: threshold };
     }
-    
+
     return this.wardrobeItemModel.find(filter).populate('retailerId').exec();
   }
 
@@ -121,7 +139,10 @@ export class WardrobeService {
   }
 
   async findOne(id: string): Promise<WardrobeItem> {
-    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
+    const item = await this.wardrobeItemModel
+      .findById(id)
+      .populate('retailerId')
+      .exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -129,7 +150,10 @@ export class WardrobeService {
   }
 
   async findByRetailerId(retailerId: string): Promise<WardrobeItem[]> {
-    return this.wardrobeItemModel.find({ retailerId: new Types.ObjectId(retailerId) }).populate('retailerId').exec();
+    return this.wardrobeItemModel
+      .find({ retailerId: new Types.ObjectId(retailerId) })
+      .populate('retailerId')
+      .exec();
   }
 
   async update(
@@ -137,7 +161,10 @@ export class WardrobeService {
     updateWardrobeItemDto: UpdateWardrobeItemDto,
   ): Promise<{ updated: WardrobeItem; oldData: WardrobeItem }> {
     // Get the old data first for audit logging
-    const oldItem = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
+    const oldItem = await this.wardrobeItemModel
+      .findById(id)
+      .populate('retailerId')
+      .exec();
     if (!oldItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -150,7 +177,12 @@ export class WardrobeService {
     // Convert retailerId string to ObjectId if provided
     const updateData: any = {
       ...updateWardrobeItemDto,
-      retailerId: updateWardrobeItemDto.retailerId ? new Types.ObjectId(updateWardrobeItemDto.retailerId) : undefined,
+      retailerId: updateWardrobeItemDto.retailerId
+        ? new Types.ObjectId(updateWardrobeItemDto.retailerId)
+        : undefined,
+      brandId: updateWardrobeItemDto.brandId
+        ? new Types.ObjectId(updateWardrobeItemDto.brandId)
+        : undefined,
     };
 
     // Only update palette scores if colors were provided
@@ -158,22 +190,25 @@ export class WardrobeService {
       updateData.seasonalPaletteScores = seasonalPaletteScores;
       this.logger.log(`Recalculating seasonal palette scores for item ${id}`);
     }
-    
+
     const updatedItem = await this.wardrobeItemModel
       .findByIdAndUpdate(id, updateData, { new: true })
       .populate('retailerId')
       .exec();
-    
+
     if (!updatedItem) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
-    
+
     return { updated: updatedItem, oldData: oldItem };
   }
 
   async remove(id: string): Promise<WardrobeItem> {
     // Find the item first to get the image URL and return it for audit logging
-    const item = await this.wardrobeItemModel.findById(id).populate('retailerId').exec();
+    const item = await this.wardrobeItemModel
+      .findById(id)
+      .populate('retailerId')
+      .exec();
     if (!item) {
       throw new NotFoundException(`Wardrobe item with ID ${id} not found`);
     }
@@ -186,7 +221,9 @@ export class WardrobeService {
         await this.azureStorageService.deleteImage(item.imageUrl);
       } catch (error) {
         // Log error but don't fail the deletion
-        this.logger.error(`Failed to delete image for item ${id}: ${error.message}`);
+        this.logger.error(
+          `Failed to delete image for item ${id}: ${error.message}`,
+        );
       }
     }
 
@@ -195,15 +232,17 @@ export class WardrobeService {
       try {
         await this.azureStorageService.deleteImage(item.processedImageUrl);
       } catch (error) {
-        this.logger.error(`Failed to delete processed image for item ${id}: ${error.message}`);
+        this.logger.error(
+          `Failed to delete processed image for item ${id}: ${error.message}`,
+        );
       }
     }
 
     // Delete the database record
     await this.wardrobeItemModel.findByIdAndDelete(id).exec();
-    
+
     this.logger.log(`Wardrobe item ${id} deleted successfully`);
-    
+
     return item;
   }
 
@@ -211,7 +250,12 @@ export class WardrobeService {
     userId: string,
     limit = 20,
     offset = 0,
-  ): Promise<{ items: Array<{ item: WardrobeItem; feedback: any }>; total: number; limit: number; offset: number }> {
+  ): Promise<{
+    items: Array<{ item: WardrobeItem; feedback: any }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const cappedLimit = Math.min(Math.max(limit, 1), 50);
     const safeOffset = Math.max(offset, 0);
 
@@ -295,8 +339,9 @@ export class WardrobeService {
   }
 
   async deleteItemFeedback(userId: string, itemId: string): Promise<boolean> {
-    const result = await this.itemFeedbackModel.deleteOne({ user_id: userId, item_id: itemId }).exec();
+    const result = await this.itemFeedbackModel
+      .deleteOne({ user_id: userId, item_id: itemId })
+      .exec();
     return (result?.deletedCount ?? 0) > 0;
   }
 }
-

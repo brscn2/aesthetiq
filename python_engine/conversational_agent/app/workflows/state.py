@@ -358,6 +358,8 @@ class ConversationState(TypedDict, total=False):
     # {
     #     "id": "user_123",
     #     "email": "user@example.com",
+    #     "gender": "female",
+    #     "birth_date": "1995-08-21",
     #     "preferences": {"sizes": {"top": "M"}, "brands": ["Zara"]},
     # }
 

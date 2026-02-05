@@ -191,8 +191,9 @@ NEVER use categories like "CLOTHING", "APPAREL" - these are INVALID. Use exactly
    - SubCategory is the specific item type (use title case, e.g., "Bag", "Jacket", "Jeans")
    - **IMPORTANT: Only include filter fields that have actual values**
    - DO NOT pass None or empty values for optional list fields (colors, disliked_item_ids)
-   - Only include: category (required), subCategory (required) in the filters dict
+    - Only include: category (required), subCategory (required) in the filters dict
    - Omit optional fields like colors, brand if not being used
+    - If user profile or request indicates gender, include `gender` in filters (MEN/WOMEN/KIDS). UNISEX items should be included for any gender.
    - Example correct filters: {"category": "ACCESSORY", "subCategory": "Bag"}
    - Example WRONG filters: {"category": "ACCESSORY", "subCategory": "Bag", "colors": None} ← Do NOT do this
    - NEVER call search_retailer_items or search_wardrobe_items without the filters parameter
@@ -543,12 +544,40 @@ def _normalize_item_to_clothing_item(
     if "brand" in item:
         normalized["brand"] = item["brand"]
 
+    # Map name/description/material/gender/tags/sizes
+    if "name" in item:
+        normalized["name"] = item["name"]
+    if "description" in item:
+        normalized["description"] = item["description"]
+    if "material" in item:
+        normalized["material"] = item["material"]
+    if "gender" in item:
+        normalized["gender"] = item["gender"]
+    if "tags" in item:
+        normalized["tags"] = item["tags"]
+    if "sizes" in item:
+        normalized["sizes"] = item["sizes"]
+
+    # Map additional image fields
+    if "imageUrls" in item:
+        normalized["imageUrls"] = item["imageUrls"]
+    if "primaryImageUrl" in item:
+        normalized["primaryImageUrl"] = item["primaryImageUrl"]
+
     # Map colors to colorHex (first color if array) and convert to color name
     colors = item.get("colors") or []
+    color_variants = item.get("colorVariants") or []
     color_hex = None
     if colors and isinstance(colors, list) and len(colors) > 0:
         color_hex = colors[0]
         normalized["colorHex"] = color_hex
+        normalized["colorVariants"] = colors
+    elif (
+        color_variants and isinstance(color_variants, list) and len(color_variants) > 0
+    ):
+        color_hex = color_variants[0]
+        normalized["colorHex"] = color_hex
+        normalized["colorVariants"] = color_variants
     elif "colorHex" in item:
         color_hex = item["colorHex"]
         normalized["colorHex"] = color_hex
@@ -1254,7 +1283,9 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                 context_parts.append(f" User profile: {cached_user_profile}.")
             if cached_style_dna:
                 context_parts.append(f" Style DNA: {cached_style_dna}.")
-            context_parts.append(" Do NOT call get_user_profile or get_style_dna for this request.")
+            context_parts.append(
+                " Do NOT call get_user_profile or get_style_dna for this request."
+            )
             context_block = "".join(context_parts)
         else:
             context_block = "\n\nBy default fetch user profile (and get_style_dna / get_disliked_items_for_search as needed) for product requests (e.g. t-shirt, jacket) when not cached; only skip for clearly generic requests (e.g. 'show me black jackets', 'what's trending')."

@@ -27,9 +27,18 @@ export class AnalyzeClothingDto {
 
 export interface ClothingAnalysisResult {
   category: 'TOP' | 'BOTTOM' | 'OUTERWEAR' | 'FOOTWEAR' | 'ACCESSORY' | 'DRESS';
+  name?: string;
+  description?: string;
   subCategory?: string;
   brand?: string;
+  color?: string;
+  colorHex?: string;
+  colorVariants?: string[];
   colors: string[];
+  material?: string;
+  gender?: string;
+  sizes?: string[];
+  tags?: string[];
   styleNotes?: string;
   confidence: number;
 }

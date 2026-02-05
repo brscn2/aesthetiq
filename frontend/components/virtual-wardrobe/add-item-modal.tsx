@@ -28,12 +28,18 @@ interface AddItemModalProps {
 }
 
 interface FormData {
+  name?: string
+  description?: string
   imageUrl: string
   processedImageUrl?: string
   category: Category
   brand?: string
   subCategory?: string
   colors: string[]
+  material?: string
+  gender?: string
+  sizes?: string
+  tags?: string
   notes?: string
   removeBackground: boolean
 }
@@ -350,7 +356,7 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       }
 
       if (response?.success && response.data) {
-        const { category, subCategory, brand, colors, styleNotes } = response.data
+        const { category, subCategory, brand, colors, colorHex, colorVariants, styleNotes, name, description, material, gender, sizes, tags } = response.data
         
         // Update form with AI results
         setValue("category", category, { shouldValidate: true })
@@ -362,8 +368,30 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
           setValue("brand", brand)
           setBrandSearch(brand)
         }
+        if (name) {
+          setValue("name", name)
+        }
+        if (description) {
+          setValue("description", description)
+        }
+        if (material) {
+          setValue("material", material)
+        }
+        if (gender) {
+          setValue("gender", gender)
+        }
+        if (sizes && sizes.length > 0) {
+          setValue("sizes", sizes.join(", "))
+        }
+        if (tags && tags.length > 0) {
+          setValue("tags", tags.join(", "))
+        }
         if (colors && colors.length > 0) {
           setValue("colors", colors, { shouldValidate: true })
+        } else if (colorVariants && colorVariants.length > 0) {
+          setValue("colors", colorVariants, { shouldValidate: true })
+        } else if (colorHex) {
+          setValue("colors", [colorHex], { shouldValidate: true })
         }
         // Set AI style notes directly into the notes field
         if (styleNotes) {
@@ -394,10 +422,16 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   } = useForm<FormData>({
     defaultValues: {
       imageUrl: "",
+      name: "",
+      description: "",
       category: Category.TOP,
       brand: "",
       subCategory: "",
       colors: [],
+      material: "",
+      gender: "",
+      sizes: "",
+      tags: "",
       notes: "",
       removeBackground: false,
     },
@@ -416,9 +450,15 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
   const hasUnsavedChanges = () => {
     return (
       formValues.imageUrl !== "" ||
+      formValues.name !== "" ||
+      formValues.description !== "" ||
       formValues.brand !== "" ||
       formValues.subCategory !== "" ||
       (formValues.colors && formValues.colors.length > 0) ||
+      formValues.material !== "" ||
+      formValues.gender !== "" ||
+      formValues.sizes !== "" ||
+      formValues.tags !== "" ||
       formValues.notes !== "" ||
       imagePreview !== null
     )
@@ -538,13 +578,32 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
         setIsUploading(false)
 
         // Now create the wardrobe item with uploaded URLs
+        const sizes = data.sizes
+          ? data.sizes.split(",").map((s) => s.trim()).filter(Boolean)
+          : undefined
+        const tags = data.tags
+          ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
+          : undefined
+        const primaryColorHex = data.colors?.[0]
+
         const createData: CreateWardrobeItemDto = {
           imageUrl: originalUrl,
           processedImageUrl: processedUrl,
           category: data.category,
+          name: data.name || undefined,
+          description: data.description || undefined,
           brand: data.brand || undefined,
           subCategory: data.subCategory || undefined,
           colors: data.colors,
+          colorHex: primaryColorHex || undefined,
+          color: primaryColorHex ? getClosestColorName(primaryColorHex) : undefined,
+          colorVariants: data.colors?.length ? data.colors : undefined,
+          material: data.material || undefined,
+          gender: data.gender || undefined,
+          sizes: sizes && sizes.length > 0 ? sizes : undefined,
+          tags: tags && tags.length > 0 ? tags : undefined,
+          imageUrls: processedUrl ? [processedUrl, originalUrl] : [originalUrl],
+          primaryImageUrl: processedUrl || originalUrl,
           notes: data.notes || undefined,
           isFavorite: false,
         }
@@ -557,13 +616,32 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
       }
     } else {
       // Image URL was provided directly (not a file upload)
+      const sizes = data.sizes
+        ? data.sizes.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined
+      const tags = data.tags
+        ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
+        : undefined
+      const primaryColorHex = data.colors?.[0]
+
       const createData: CreateWardrobeItemDto = {
         imageUrl: data.imageUrl || "/placeholder.svg",
         processedImageUrl: data.processedImageUrl || undefined,
         category: data.category,
+        name: data.name || undefined,
+        description: data.description || undefined,
         brand: data.brand || undefined,
         subCategory: data.subCategory || undefined,
         colors: data.colors,
+        colorHex: primaryColorHex || undefined,
+        color: primaryColorHex ? getClosestColorName(primaryColorHex) : undefined,
+        colorVariants: data.colors?.length ? data.colors : undefined,
+        material: data.material || undefined,
+        gender: data.gender || undefined,
+        sizes: sizes && sizes.length > 0 ? sizes : undefined,
+        tags: tags && tags.length > 0 ? tags : undefined,
+        imageUrls: data.processedImageUrl ? [data.processedImageUrl, data.imageUrl] : [data.imageUrl],
+        primaryImageUrl: data.processedImageUrl || data.imageUrl,
         notes: data.notes || undefined,
         isFavorite: false,
       }
@@ -1250,6 +1328,87 @@ export function AddItemModal({ isOpen, onClose }: AddItemModalProps) {
                 {errors.brand && (
                   <p className="text-xs text-red-400">{errors.brand.message}</p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., Ribbed Knit Sweater"
+                  className="border-border bg-card text-foreground"
+                  {...register("name")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  placeholder="Short description (material, fit, season)"
+                  className="border-border bg-card text-foreground resize-none"
+                  rows={2}
+                  {...register("description")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="material" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Material
+                </Label>
+                <Input
+                  id="material"
+                  placeholder="e.g., Cotton, Denim, Leather"
+                  className="border-border bg-card text-foreground"
+                  {...register("material")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Gender
+                </Label>
+                <Select
+                  value={watch("gender") || ""}
+                  onValueChange={(value) => setValue("gender", value)}
+                >
+                  <SelectTrigger className="border-border bg-card text-foreground">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-background text-foreground">
+                    <SelectItem value="WOMEN">Women</SelectItem>
+                    <SelectItem value="MEN">Men</SelectItem>
+                    <SelectItem value="UNISEX">Unisex</SelectItem>
+                    <SelectItem value="KIDS">Kids</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sizes" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Sizes (comma-separated)
+                </Label>
+                <Input
+                  id="sizes"
+                  placeholder="e.g., S, M, L"
+                  className="border-border bg-card text-foreground"
+                  {...register("sizes")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tags" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Tags (comma-separated)
+                </Label>
+                <Input
+                  id="tags"
+                  placeholder="e.g., casual, summer, minimalist"
+                  className="border-border bg-card text-foreground"
+                  {...register("tags")}
+                />
               </div>
 
               <div className="space-y-2">
