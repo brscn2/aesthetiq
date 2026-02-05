@@ -114,7 +114,17 @@ jobs:
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'DEPLOY'
           set -e
           cd /srv/aesthetiq/project
+          
+          # Clean up old Docker images and containers
+          echo "Cleaning up Docker resources..."
+          docker system prune -a -f
+          docker volume prune -f
+          df -h
+          
+          # Pull new images
           docker compose -f docker-compose.prod.yml pull
+          
+          # Restart services
           docker compose -f docker-compose.prod.yml up -d --force-recreate
           docker compose -f docker-compose.prod.yml ps
           DEPLOY
