@@ -25,12 +25,17 @@ export function DashboardSidebar({ onClose }: DashboardSidebarProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-sidebar" suppressHydrationWarning>
-      {/* Logo */}
-      <div className="flex h-16 items-center border-b border-sidebar-border px-6" suppressHydrationWarning>
+      {/* Logo - click to go to dashboard */}
+      <Link
+        href="/"
+        onClick={onClose}
+        className="flex h-16 items-center border-b border-sidebar-border px-6 hover:opacity-90 transition-opacity"
+        suppressHydrationWarning
+      >
         <h1 className="font-serif text-2xl font-bold tracking-tight text-sidebar-foreground">
           Aesthet<span className="text-gradient-ai">IQ</span>
         </h1>
-      </div>
+      </Link>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-6">
