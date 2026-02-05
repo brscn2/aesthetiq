@@ -19,6 +19,7 @@ import { useAuth } from "@clerk/nextjs"
 import { useChatApi, generateMessageId } from "@/lib/chat-api"
 import { useApi } from "@/lib/api"
 import { getClosestColorName } from "@/lib/colors"
+import { useWardrobeRecommendation } from "@/contexts/wardrobe-recommendation-context"
 import type { ClothingItem, DoneEvent, OutfitAttachment, OutfitSwapIntent } from "@/types/chat"
 import type { Outfit, WardrobeItem, UpdateOutfitDto } from "@/types/api"
 
@@ -116,6 +117,7 @@ export function ChatStylist({
 }: ChatStylistProps = {}) {
   const router = useRouter()
   const { outfitApi, wardrobeApi } = useApi()
+  const { recommendation, clearRecommendation } = useWardrobeRecommendation()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [attachedImages, setAttachedImages] = useState<string[]>([])
@@ -431,6 +433,17 @@ export function ChatStylist({
       setMessages([])
     }
   }, [activeSessionId, initialMessages, resetTrigger, setPendingClarification, resetSession])
+
+  useEffect(() => {
+    if (!recommendation) return
+
+    if (input.trim().length === 0) {
+      const message = `Find me a ${recommendation.category ? `${recommendation.category} ` : ""}${recommendation.title}.`
+      setInput(message)
+    }
+
+    clearRecommendation()
+  }, [recommendation, input, clearRecommendation])
 
   useEffect(() => {
     if (!isOutfitDialogOpen) return

@@ -1,11 +1,14 @@
 'use client'
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
 import { useWardrobeGapAnalysis } from '@/hooks/use-wardrobe-gap-analysis'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Lightbulb, ArrowRight, RefreshCw } from 'lucide-react'
+import { useWardrobeRecommendation } from '@/contexts/wardrobe-recommendation-context'
+import type { GapRecommendation } from '@/types/wardrobe-intelligence'
 
 interface SmartGapAnalysisProps {
   archetypeAlignment: number
@@ -18,8 +21,19 @@ interface SmartGapAnalysisProps {
 export function SmartGapAnalysis({
   archetypeAlignment,
 }: SmartGapAnalysisProps) {
+  const router = useRouter()
+  const { setRecommendation } = useWardrobeRecommendation()
   const { data, isLoading, isError, refetch, isFetching } = useWardrobeGapAnalysis(true)
   const recommendations = data?.recommendations || []
+
+  const handleFindItem = (rec: GapRecommendation) => {
+    setRecommendation({
+      title: rec.title,
+      reason: rec.reason,
+      category: rec.category,
+    })
+    router.push('/dashboard')
+  }
 
   return (
     <Card className='border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-transparent'>
@@ -104,6 +118,7 @@ export function SmartGapAnalysis({
                   size='sm'
                   variant='ghost'
                   className='gap-2 text-purple-400 hover:text-purple-300'
+                  onClick={() => handleFindItem(rec)}
                 >
                   Find Item
                   <ArrowRight className='h-4 w-4' />
