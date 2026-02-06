@@ -28,7 +28,11 @@ jobs:
             if git diff HEAD~1 --quiet -- python_engine/$service/ 2>/dev/null; then
               echo "No changes in $service"
             else
-              CHANGED_SERVICES="$CHANGED_SERVICES $service"
+              if [ -z "$CHANGED_SERVICES" ]; then
+                CHANGED_SERVICES="$service"
+              else
+                CHANGED_SERVICES="$CHANGED_SERVICES $service"
+              fi
               echo "Changes detected in $service"
             fi
           done
