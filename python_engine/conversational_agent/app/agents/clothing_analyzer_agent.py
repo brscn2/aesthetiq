@@ -139,6 +139,7 @@ If user profile data is available (e.g., gender or birth_date), use it when rele
 
 def _normalize_tool_result(result: Any) -> Optional[Dict[str, Any]]:
     if isinstance(result, dict):
+        result["user_profile"] = user_profile
         return result
     if isinstance(result, list) and result:
         first = result[0]
@@ -509,5 +510,6 @@ Consider that this is iteration {iteration + 1} - be more lenient with approval 
             },
             "iteration": iteration + 1,
             "needs_clarification": False,
+            "user_profile": user_profile,
             "metadata": {**state.get("metadata", {}), "analyzer_error": str(e)},
         }

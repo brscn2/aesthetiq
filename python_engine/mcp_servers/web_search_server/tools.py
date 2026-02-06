@@ -434,6 +434,10 @@ async def search_retailer_items(
             for result in commerce_results:
                 item = result["item"]
                 item_gender = getattr(item, "gender", None)
+                item_category = getattr(item, "category", None)
+                item_subcategory = getattr(item, "subCategory", None)
+                if item_category and hasattr(item_category, "value"):
+                    item_category = item_category.value
                 results.append(
                     WebSearchResult(
                         title=item.name,
@@ -441,6 +445,8 @@ async def search_retailer_items(
                         content=item.description or "",
                         score=result.get("score"),
                         gender=item_gender,
+                        category=item_category,
+                        subCategory=item_subcategory,
                         raw={},
                         og_image=item.imageUrl,
                         og_title=item.name,
@@ -554,6 +560,14 @@ async def search_retailer_items(
                     og_description=description,
                     gender=(
                         filters.gender.upper() if filters and filters.gender else None
+                    ),
+                    category=(
+                        filters.category.value
+                        if filters and filters.category
+                        else None
+                    ),
+                    subCategory=(
+                        filters.subCategory if filters and filters.subCategory else None
                     ),
                 )
             )

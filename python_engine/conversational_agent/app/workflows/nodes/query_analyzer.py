@@ -289,6 +289,13 @@ async def query_analyzer_node(state: ConversationState) -> Dict[str, Any]:
                 else:
                     logger.warning(f"No decomposition found for occasion '{occasion}'")
 
+        if filters_dict.get("sub_categories") and filters_dict.get("category"):
+            if not filters_dict.get("sub_category"):
+                logger.info(
+                    "Clearing category filter for outfit decomposition to avoid narrowing"
+                )
+                filters_dict.pop("category", None)
+
         # === OUTFIT ATTACHMENT CONTEXT ===
         attached_outfits = state.get("attached_outfits") or []
         swap_intents = state.get("swap_intents") or []

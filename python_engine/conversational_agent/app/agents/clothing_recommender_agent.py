@@ -1072,6 +1072,45 @@ def _extract_items_from_result(tool_result: Any, source: str) -> List[Dict[str, 
     return normalized_items
 
 
+def _interleave_items_by_subcategory(
+    items: List[Dict[str, Any]], target_subcategories: List[str]
+) -> List[Dict[str, Any]]:
+    if not items or not target_subcategories:
+        return items
+
+    normalized_targets = [str(sub).strip().lower() for sub in target_subcategories]
+    target_set = {sub for sub in normalized_targets if sub}
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {sub: [] for sub in normalized_targets}
+    leftovers: List[Dict[str, Any]] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            leftovers.append(item)
+            continue
+        sub_category = item.get("subCategory") or item.get("sub_category")
+        if not sub_category:
+            leftovers.append(item)
+            continue
+        normalized = str(sub_category).strip().lower()
+        if normalized in target_set:
+            buckets.setdefault(normalized, []).append(item)
+        else:
+            leftovers.append(item)
+
+    interleaved: List[Dict[str, Any]] = []
+    while True:
+        added_any = False
+        for sub in normalized_targets:
+            if buckets.get(sub):
+                interleaved.append(buckets[sub].pop(0))
+                added_any = True
+        if not added_any:
+            break
+
+    return interleaved + leftovers
+
+
 def _extract_dict_value(tool_result: Any, *keys: str) -> Optional[Dict[str, Any]]:
     """
     Extract a dict value from various result formats.
@@ -1696,6 +1735,16 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                                 items = _extract_items_from_result(
                                     tool_result, "commerce"
                                 )
+                                if items:
+                                    for item in items:
+                                        if not isinstance(item, dict):
+                                            continue
+                                        if category and not item.get("category"):
+                                            item["category"] = category
+                                        if sub_category_str and not item.get(
+                                            "subCategory"
+                                        ):
+                                            item["subCategory"] = sub_category_str
                                 if not items:
                                     relaxed_filters = {
                                         k: v
@@ -1723,6 +1772,16 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                                         tool_result, "commerce"
                                     )
                                     if items:
+                                        for item in items:
+                                            if not isinstance(item, dict):
+                                                continue
+                                            if category and not item.get("category"):
+                                                item["category"] = category
+                                            if sub_category_str and not item.get(
+                                                "subCategory"
+                                            ):
+                                                item["subCategory"] = sub_category_str
+                                    if items:
                                         logger.info(
                                             f"[RECOMMENDER] Fallback commerce search relaxed subCategory for {sub_category_str}"
                                         )
@@ -1747,6 +1806,16 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
                                     items = _extract_items_from_result(
                                         tool_result, "commerce"
                                     )
+                                    if items:
+                                        for item in items:
+                                            if not isinstance(item, dict):
+                                                continue
+                                            if category and not item.get("category"):
+                                                item["category"] = category
+                                            if sub_category_str and not item.get(
+                                                "subCategory"
+                                            ):
+                                                item["subCategory"] = sub_category_str
                                     if items:
                                         logger.info(
                                             f"[RECOMMENDER] Fallback commerce search relaxed all filters for {sub_category_str}"
@@ -1866,6 +1935,12 @@ async def clothing_recommender_node(state: ConversationState) -> Dict[str, Any]:
             )
 
         retrieved_items = deduplicated_items
+
+        decomposed_items = extracted_filters.get("sub_categories", []) or []
+        if decomposed_items:
+            retrieved_items = _interleave_items_by_subcategory(
+                retrieved_items, decomposed_items
+            )
 
         if excluded_item_ids:
             before_count = len(retrieved_items)
