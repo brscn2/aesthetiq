@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { StyleItemCard } from "@/components/style-item-card";
 import { GenerateButton } from "@/components/try-on/generate-button";
-import { TryOnResultModal } from "@/components/try-on/try-on-result-modal";
 import { PhotoRequiredModal } from "@/components/try-on/photo-required-modal";
 import {
   findYourStyle,
   StyleItem,
   FindStyleItemsParams,
 } from "@/lib/style-api";
-import { generateTryOn } from "@/lib/try-on-api";
 import { useApi } from "@/lib/api";
 import type { WardrobeItem } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ import { Loader2, ShoppingBag, Shirt } from "lucide-react";
 export default function FindYourStylePage() {
   const { getToken } = useAuth();
   const { user: clerkUser } = useUser();
+  const router = useRouter();
   const api = useApi();
 
   // Tab state
@@ -58,8 +58,6 @@ export default function FindYourStylePage() {
   // Virtual Try-On State (unified for both types)
   const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [showResultModal, setShowResultModal] = useState(false);
 
   // Check if user has uploaded a photo
   const checkUserPhoto = async () => {
@@ -87,6 +85,23 @@ export default function FindYourStylePage() {
 
       const user = await userResponse.json();
       setHasPhoto(!!user.tryOnPhotoUrl);
+
+      const genderMap: Record<string, string> = {
+        MALE: "MEN",
+        FEMALE: "WOMEN",
+        MEN: "MEN",
+        WOMEN: "WOMEN",
+      };
+
+      setFilters((prev) => {
+        if (prev.gender) return prev;
+        const mappedGender = user.gender ? genderMap[user.gender] : undefined;
+        if (!mappedGender) return prev;
+        return {
+          ...prev,
+          gender: mappedGender,
+        };
+      });
     } catch (err) {
       console.error("Error checking user photo:", err);
       setHasPhoto(false);
@@ -224,14 +239,12 @@ export default function FindYourStylePage() {
         return;
       }
 
-      const response = await generateTryOn(token, userPhotoUrl, selectedItems);
-
-      if (response.success && response.imageBase64) {
-        setGeneratedImage(response.imageBase64);
-        setShowResultModal(true);
-      } else {
-        setError(response.error || "Failed to generate try-on image");
-      }
+      sessionStorage.setItem(
+        "try-on:selected-items",
+        JSON.stringify(selectedItems),
+      );
+      sessionStorage.setItem("try-on:user-photo", userPhotoUrl);
+      router.push("/try-on/generate");
     } catch (err: any) {
       console.error("Error generating try-on:", err);
       setError(err.message || "Failed to generate try-on image");
@@ -507,15 +520,6 @@ export default function FindYourStylePage() {
         )}
       </div>
 
-      {/* Try-On Result Modal */}
-      {generatedImage && (
-        <TryOnResultModal
-          isOpen={showResultModal}
-          onClose={() => setShowResultModal(false)}
-          imageBase64={generatedImage}
-          selectedItems={selectedItems}
-        />
-      )}
     </DashboardLayout>
   );
 }

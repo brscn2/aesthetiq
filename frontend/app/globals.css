@@ -160,6 +160,12 @@
     50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.6); }
   }
 
+  @keyframes mistDrift {
+    0% { transform: translate(-8%, -6%) scale(1); opacity: 0.15; }
+    50% { transform: translate(6%, 4%) scale(1.05); opacity: 0.35; }
+    100% { transform: translate(-6%, -4%) scale(1); opacity: 0.2; }
+  }
+
   @keyframes dnaRotate {
     0% {
       transform: translateX(-50%) rotate(0deg) scaleY(1);
@@ -178,6 +184,10 @@
 
   .animate-glow {
     animation: glow 2s ease-in-out infinite;
+  }
+
+  .animate-mist-drift {
+    animation: mistDrift 6s ease-in-out infinite;
   }
 
   .animate-dna-rotate {
