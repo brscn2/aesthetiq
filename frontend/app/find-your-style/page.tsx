@@ -305,7 +305,7 @@ export default function FindYourStylePage() {
             <TabsList>
               <TabsTrigger value="commerce" className="gap-2">
                 <ShoppingBag className="h-4 w-4" />
-                Find Your Style
+                Shop Items
               </TabsTrigger>
               <TabsTrigger value="wardrobe" className="gap-2">
                 <Shirt className="h-4 w-4" />
