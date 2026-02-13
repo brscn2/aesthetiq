@@ -271,7 +271,7 @@ export default function FindYourStylePage() {
         <div className="space-y-6">
           <div>
             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">
-              Find Your Own Style
+              Virtual Try-On
             </h1>
             <p className="mt-2 text-muted-foreground">
               Discover fashion items that match your unique style
@@ -289,7 +289,7 @@ export default function FindYourStylePage() {
         {/* Header */}
         <div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">
-            Find Your Own Style
+            Virtual Try-On
           </h1>
           <p className="mt-2 text-muted-foreground">
             Discover fashion items that match your unique style
@@ -519,7 +519,6 @@ export default function FindYourStylePage() {
           </div>
         )}
       </div>
-
     </DashboardLayout>
   );
 }
