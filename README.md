@@ -148,8 +148,11 @@ Load it as an unpacked extension in Chrome. See `chrome-extension/README.md` for
 - `FRONTEND_URL` (optional, used for CORS)
 - `MONGODB_URI` or `MONGO_URI`
 - `OPENAI_API_KEY` (AI features)
+- `AZURE_STORAGE_CONNECTION_STRING` (image storage)
 - `PYTHON_ENGINE_URL` (default http://localhost:8000)
 - `CLERK_SECRET_KEY` (auth)
+- `CLERK_WEBHOOK_SECRET` (Clerk webhooks)
+- `JWT_SECRET` (token signing)
 - `APP_VERSION`, `NODE_ENV` (optional)
 
 ### Frontend (`frontend/.env.local`)
