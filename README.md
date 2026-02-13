@@ -1,6 +1,6 @@
-# Aesthetiq
+# AesthetIQ
 
-Aesthetiq is an agentic fashion platform that combines a personalized style profile, a virtual wardrobe, retailer search, and a multi-agent conversational system. The product includes a web app, a NestJS backend, a Python microservices engine, and a Chrome extension for quick wardrobe capture.
+AesthetIQ is an agentic fashion platform that combines a personalized style profile, a virtual wardrobe, retailer search, and a multi-agent conversational system. The product includes a web app, a NestJS backend, a Python microservices engine, and a Chrome extension for quick wardrobe capture.
 
 ## Key features
 
